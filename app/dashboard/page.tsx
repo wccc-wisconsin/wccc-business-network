@@ -33,8 +33,8 @@ export default async function DashboardPage() {
   const clerkUser = await currentUser();
   const member = await getMemberById(userId);
 
-  // First-time user — send to dedicated onboarding page
-  if (!member) redirect("/onboarding");
+  // No member record or incomplete intake form — send to onboarding
+  if (!member || !member.industry) redirect("/onboarding");
 
   const headerStore = await headers();
   await recordMemberSignIn({
