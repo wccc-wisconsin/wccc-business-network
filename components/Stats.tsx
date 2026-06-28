@@ -2,8 +2,8 @@ import { stats } from "@/data/stats";
 
 export default function Stats() {
   return (
-    <section className="bg-[#07172b] px-6 pb-12 pt-3" aria-label="WCCC impact">
-      <div className="mx-auto grid max-w-7xl gap-4 rounded-[8px] border border-[#d7a84d]/25 bg-[#0b2544] p-4 sm:grid-cols-2 lg:grid-cols-4">
+    <section className="bg-[#0f2d4a] px-6 pb-12 pt-3" aria-label="WCCC impact">
+      <div className="mx-auto grid max-w-7xl gap-4 rounded-[8px] border border-[#d7a84d]/25 bg-[#132f52] p-4 sm:grid-cols-2 lg:grid-cols-4">
         {stats.map((stat) => (
           <div
             key={stat.label}

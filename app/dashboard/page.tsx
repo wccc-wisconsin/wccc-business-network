@@ -32,8 +32,8 @@ export default async function DashboardPage() {
   // First-time user: show profile completion form
   if (!member) {
     return (
-      <main className="min-h-screen bg-[#07172b] text-white flex items-center justify-center px-6 py-10">
-        <div className="max-w-lg w-full rounded-[8px] border border-[#d7a84d]/30 bg-[#0b2544] p-8 shadow-2xl">
+      <main className="min-h-screen bg-[#0f2d4a] text-white flex items-center justify-center px-6 py-10">
+        <div className="max-w-lg w-full rounded-[8px] border border-[#d7a84d]/30 bg-[#132f52] p-8 shadow-2xl">
           <p className="text-xs font-bold uppercase tracking-[0.3em] text-[#d7a84d]">
             Welcome to WCCC
           </p>
@@ -50,7 +50,7 @@ export default async function DashboardPage() {
                 name="name"
                 type="text"
                 defaultValue={clerkUser?.fullName ?? ""}
-                className="mt-2 w-full rounded-[8px] border border-white/10 bg-white px-4 py-3 text-[#07172b] outline-none ring-[#d7a84d] transition focus:ring-2"
+                className="mt-2 w-full rounded-[8px] border border-white/10 bg-white px-4 py-3 text-[#0f2d4a] outline-none ring-[#d7a84d] transition focus:ring-2"
                 placeholder="Jane Smith"
               />
             </label>
@@ -62,7 +62,7 @@ export default async function DashboardPage() {
               <input
                 name="businessName"
                 type="text"
-                className="mt-2 w-full rounded-[8px] border border-white/10 bg-white px-4 py-3 text-[#07172b] outline-none ring-[#d7a84d] transition focus:ring-2"
+                className="mt-2 w-full rounded-[8px] border border-white/10 bg-white px-4 py-3 text-[#0f2d4a] outline-none ring-[#d7a84d] transition focus:ring-2"
                 placeholder="Smith Studio"
               />
             </label>
@@ -94,7 +94,7 @@ export default async function DashboardPage() {
 
             <button
               type="submit"
-              className="w-full rounded-full bg-[#d7a84d] px-6 py-3 text-sm font-bold uppercase tracking-[0.14em] text-[#07172b] transition hover:bg-[#f1c864]"
+              className="w-full rounded-full bg-[#d7a84d] px-6 py-3 text-sm font-bold uppercase tracking-[0.14em] text-[#0f2d4a] transition hover:bg-[#f1c864]"
             >
               Go to dashboard
             </button>
@@ -113,11 +113,11 @@ export default async function DashboardPage() {
   );
 
   return (
-    <main className="min-h-screen bg-[#07172b] text-white">
-      <header className="border-b border-white/10 bg-[#061426] px-6 py-4">
+    <main className="min-h-screen bg-[#0f2d4a] text-white">
+      <header className="border-b border-white/10 bg-[#091e33] px-6 py-4">
         <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-4">
           <Link href="/" className="flex items-center gap-3">
-            <span className="flex h-11 w-11 items-center justify-center rounded-[8px] bg-[#d7a84d] font-serif text-xl font-bold text-[#07172b]">
+            <span className="flex h-11 w-11 items-center justify-center rounded-[8px] bg-[#d7a84d] font-serif text-xl font-bold text-[#0f2d4a]">
               W
             </span>
             <span>
@@ -137,7 +137,7 @@ export default async function DashboardPage() {
 
       <div className="mx-auto max-w-7xl px-6 py-8">
         <section className="grid gap-5 lg:grid-cols-[1.2fr_0.8fr]">
-          <div className="rounded-[8px] border border-[#d7a84d]/30 bg-[#0b2544] p-6">
+          <div className="rounded-[8px] border border-[#d7a84d]/30 bg-[#132f52] p-6">
             <p className="text-xs font-bold uppercase tracking-[0.3em] text-[#d7a84d]">
               Welcome back
             </p>
@@ -188,7 +188,7 @@ export default async function DashboardPage() {
         </section>
 
         <section className="mt-6 grid gap-6 lg:grid-cols-2">
-          <div className="rounded-[8px] bg-[#f8f1e7] p-5 text-[#07172b]">
+          <div className="rounded-[8px] bg-[#f8f1e7] p-5 text-[#0f2d4a]">
             <h2 className="font-serif text-3xl font-bold">Events</h2>
             <div className="mt-5 space-y-3">
               {events.map((event) => {
@@ -196,7 +196,7 @@ export default async function DashboardPage() {
                 return (
                   <article
                     key={event.title}
-                    className="rounded-[8px] border border-[#07172b]/10 bg-white p-4"
+                    className="rounded-[8px] border border-[#0f2d4a]/10 bg-white p-4"
                   >
                     <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#9b6b1f]">
                       {event.category} · {event.date}
@@ -210,7 +210,7 @@ export default async function DashboardPage() {
                       <button
                         disabled={isRegistered}
                         type="submit"
-                        className="rounded-full bg-[#07172b] px-4 py-2 text-sm font-bold text-white transition hover:bg-[#13345f] disabled:bg-slate-300 disabled:text-slate-600"
+                        className="rounded-full bg-[#0f2d4a] px-4 py-2 text-sm font-bold text-white transition hover:bg-[#13345f] disabled:bg-slate-300 disabled:text-slate-600"
                       >
                         {isRegistered ? "Registered" : "Register"}
                       </button>
@@ -221,7 +221,7 @@ export default async function DashboardPage() {
             </div>
           </div>
 
-          <div className="rounded-[8px] bg-[#f8f1e7] p-5 text-[#07172b]">
+          <div className="rounded-[8px] bg-[#f8f1e7] p-5 text-[#0f2d4a]">
             <h2 className="font-serif text-3xl font-bold">Programs</h2>
             <div className="mt-5 grid gap-3 sm:grid-cols-2">
               {programs.map((program) => {
@@ -229,7 +229,7 @@ export default async function DashboardPage() {
                 return (
                   <article
                     key={program.title}
-                    className="rounded-[8px] border border-[#07172b]/10 bg-white p-4"
+                    className="rounded-[8px] border border-[#0f2d4a]/10 bg-white p-4"
                   >
                     <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#9b6b1f]">
                       {program.track}
@@ -243,7 +243,7 @@ export default async function DashboardPage() {
                       <button
                         disabled={isEnrolled}
                         type="submit"
-                        className="rounded-full bg-[#07172b] px-4 py-2 text-sm font-bold text-white transition hover:bg-[#13345f] disabled:bg-slate-300 disabled:text-slate-600"
+                        className="rounded-full bg-[#0f2d4a] px-4 py-2 text-sm font-bold text-white transition hover:bg-[#13345f] disabled:bg-slate-300 disabled:text-slate-600"
                       >
                         {isEnrolled ? "Enrolled" : "Enroll"}
                       </button>
@@ -256,7 +256,7 @@ export default async function DashboardPage() {
         </section>
 
         <section className="mt-6 grid gap-6 lg:grid-cols-[1fr_0.8fr]">
-          <div className="rounded-[8px] border border-white/10 bg-[#0b2544] p-5">
+          <div className="rounded-[8px] border border-white/10 bg-[#132f52] p-5">
             <h2 className="font-serif text-3xl font-bold">Recent activity</h2>
             <div className="mt-5 space-y-3">
               {dashboard.activities.length ? (
@@ -280,7 +280,7 @@ export default async function DashboardPage() {
             </div>
           </div>
 
-          <div className="rounded-[8px] border border-white/10 bg-[#0b2544] p-5">
+          <div className="rounded-[8px] border border-white/10 bg-[#132f52] p-5">
             <h2 className="font-serif text-3xl font-bold">Login audit</h2>
             <div className="mt-5 space-y-3">
               {dashboard.loginEvents.slice(0, 5).map((event) => (

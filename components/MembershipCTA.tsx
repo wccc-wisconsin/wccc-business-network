@@ -1,6 +1,6 @@
 export default function MembershipCTA() {
   return (
-    <section className="bg-[#07172b] px-6 py-16">
+    <section className="bg-[#0f2d4a] px-6 py-16">
       <div className="mx-auto max-w-7xl grid gap-10 lg:grid-cols-2 items-center">
         <div>
           <p className="text-xs font-bold uppercase tracking-[0.3em] text-[#d7a84d]">
@@ -17,7 +17,7 @@ export default function MembershipCTA() {
           <div className="mt-8 flex flex-wrap gap-4">
             <a
               href="/login"
-              className="rounded-full bg-[#d7a84d] px-8 py-4 text-sm font-bold uppercase tracking-[0.12em] text-[#07172b] transition hover:bg-[#f1c864]"
+              className="rounded-full bg-[#d7a84d] px-8 py-4 text-sm font-bold uppercase tracking-[0.12em] text-[#0f2d4a] transition hover:bg-[#f1c864]"
             >
               Join Us
             </a>

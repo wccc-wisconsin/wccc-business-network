@@ -37,7 +37,7 @@ export default function Hero() {
               alt={photo.alt}
               className="h-full w-full object-cover transition duration-500 hover:scale-105"
             />
-            <div className="absolute inset-0 bg-[#07172b]/30" />
+            <div className="absolute inset-0 bg-[#0f2d4a]/30" />
           </div>
         ))}
       </div>
@@ -45,7 +45,7 @@ export default function Hero() {
       {/* Overlay headline bar */}
       <div className="relative -mt-28 px-6 pb-0 z-10">
         <div className="mx-auto max-w-7xl">
-          <div className="rounded-[12px] bg-[#07172b]/90 backdrop-blur-sm border border-[#d7a84d]/30 px-8 py-8 shadow-2xl">
+          <div className="rounded-[12px] bg-[#0f2d4a]/90 backdrop-blur-sm border border-[#d7a84d]/30 px-8 py-8 shadow-2xl">
             <p className="text-xs font-bold uppercase tracking-[0.32em] text-[#f1c864]">
               Wisconsin Chinese Chamber of Commerce
             </p>
@@ -58,7 +58,7 @@ export default function Hero() {
             <div className="mt-6 flex flex-wrap gap-3">
               <a
                 href="#programs"
-                className="rounded-full bg-[#d7a84d] px-6 py-3 text-sm font-bold uppercase tracking-[0.12em] text-[#07172b] transition hover:bg-[#f1c864]"
+                className="rounded-full bg-[#d7a84d] px-6 py-3 text-sm font-bold uppercase tracking-[0.12em] text-[#0f2d4a] transition hover:bg-[#f1c864]"
               >
                 View Programs
               </a>
@@ -70,7 +70,7 @@ export default function Hero() {
               </a>
               <a
                 href="/login"
-                className="rounded-full border border-[#d7a84d]/60 px-6 py-3 text-sm font-bold uppercase tracking-[0.12em] text-[#d7a84d] transition hover:bg-[#d7a84d] hover:text-[#07172b]"
+                className="rounded-full border border-[#d7a84d]/60 px-6 py-3 text-sm font-bold uppercase tracking-[0.12em] text-[#d7a84d] transition hover:bg-[#d7a84d] hover:text-[#0f2d4a]"
               >
                 Become a Member
               </a>

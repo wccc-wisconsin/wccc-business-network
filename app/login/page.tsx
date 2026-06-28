@@ -4,7 +4,7 @@ export const dynamic = "force-dynamic";
 
 export default function LoginPage() {
   return (
-    <main className="min-h-screen bg-[#07172b] flex items-center justify-center px-6 py-10">
+    <main className="min-h-screen bg-[#0f2d4a] flex items-center justify-center px-6 py-10">
       <div className="grid gap-12 lg:grid-cols-[1fr_auto] lg:items-center max-w-5xl w-full">
         <section className="text-white">
           <p className="text-xs font-bold uppercase tracking-[0.3em] text-[#d7a84d]">

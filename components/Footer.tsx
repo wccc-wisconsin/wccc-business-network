@@ -16,13 +16,13 @@ const footerLinks = [
 
 export default function Footer() {
   return (
-    <footer className="bg-[#061426] border-t border-white/10 px-6 py-12">
+    <footer className="bg-[#091e33] border-t border-white/10 px-6 py-12">
       <div className="mx-auto max-w-7xl">
         <div className="grid gap-10 lg:grid-cols-3">
           {/* Brand */}
           <div>
             <div className="flex items-center gap-3">
-              <span className="flex h-12 w-12 items-center justify-center rounded-[8px] bg-[#d7a84d] font-serif text-2xl font-bold text-[#07172b]">
+              <span className="flex h-12 w-12 items-center justify-center rounded-[8px] bg-[#d7a84d] font-serif text-2xl font-bold text-[#0f2d4a]">
                 W
               </span>
               <span>

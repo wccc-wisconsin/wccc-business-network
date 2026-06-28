@@ -7,7 +7,7 @@ const accentStyles = {
 
 export default function JourneyCards() {
   return (
-    <section className="bg-[#07172b] px-6 py-8" aria-labelledby="journeys">
+    <section className="bg-[#0f2d4a] px-6 py-8" aria-labelledby="journeys">
       <div className="mx-auto max-w-7xl">
         <div className="mb-5 flex flex-wrap items-center gap-4">
           <div className="h-px w-20 bg-[#d7a84d]" />
@@ -55,7 +55,7 @@ export default function JourneyCards() {
 
               <a
                 href="#assistant"
-                className="mt-7 inline-flex rounded-full bg-white px-5 py-3 text-sm font-bold uppercase tracking-[0.12em] text-[#07172b] transition hover:bg-[#f1c864]"
+                className="mt-7 inline-flex rounded-full bg-white px-5 py-3 text-sm font-bold uppercase tracking-[0.12em] text-[#0f2d4a] transition hover:bg-[#f1c864]"
               >
                 {journey.cta}
               </a>

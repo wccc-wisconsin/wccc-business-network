@@ -12,11 +12,11 @@ export default function AiAssistantPanel() {
   return (
     <section
       id="assistant"
-      className="bg-[#07172b] px-6 py-12"
+      className="bg-[#0f2d4a] px-6 py-12"
       aria-labelledby="assistant-heading"
     >
       <div className="mx-auto grid max-w-7xl gap-5 lg:grid-cols-[1.15fr_0.85fr]">
-        <div className="rounded-[8px] border border-[#d7a84d]/35 bg-[#0b2544] p-6">
+        <div className="rounded-[8px] border border-[#d7a84d]/35 bg-[#132f52] p-6">
           <p className="text-xs font-bold uppercase tracking-[0.28em] text-[#d7a84d]">
             WCCC AI Assistant
           </p>
@@ -39,7 +39,7 @@ export default function AiAssistantPanel() {
             />
             <button
               type="submit"
-              className="rounded-full bg-[#d7a84d] px-5 py-3 text-sm font-bold text-[#07172b] transition hover:bg-[#f1c864]"
+              className="rounded-full bg-[#d7a84d] px-5 py-3 text-sm font-bold text-[#0f2d4a] transition hover:bg-[#f1c864]"
             >
               Send
             </button>
@@ -58,7 +58,7 @@ export default function AiAssistantPanel() {
           </div>
         </div>
 
-        <div className="rounded-[8px] border border-[#d7a84d]/35 bg-[#0b2544] p-6">
+        <div className="rounded-[8px] border border-[#d7a84d]/35 bg-[#132f52] p-6">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <h2 className="font-serif text-2xl font-bold text-white">
               Journey Summary
@@ -93,7 +93,7 @@ export default function AiAssistantPanel() {
           </div>
         </div>
 
-        <div className="rounded-[8px] border border-[#d7a84d]/35 bg-[#0b2544] p-6 lg:col-span-2">
+        <div className="rounded-[8px] border border-[#d7a84d]/35 bg-[#132f52] p-6 lg:col-span-2">
           <h2 className="font-serif text-2xl font-bold text-white">
             Recommended for You
           </h2>

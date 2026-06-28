@@ -11,13 +11,13 @@ import Footer from "@/components/Footer";
 
 export default function Home() {
   return (
-    <main className="min-h-screen bg-[#07172b] text-white">
+    <main className="min-h-screen bg-[#0f2d4a] text-white">
       <Header />
       <Hero />
       <EventTicker />
       <JourneyCards />
 
-      <section id="events" className="bg-[#f8f1e7] px-6 py-12 text-[#07172b]">
+      <section id="events" className="bg-[#f8f1e7] px-6 py-12 text-[#0f2d4a]">
         <div className="mx-auto grid max-w-7xl gap-8 lg:grid-cols-2">
           <UpcomingEvents />
           <ProgramGrid />

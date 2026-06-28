@@ -12,10 +12,10 @@ export default async function Header() {
   const { userId } = await auth();
 
   return (
-    <header className="sticky top-0 z-20 border-b border-white/10 bg-[#07172b]/95 backdrop-blur">
+    <header className="sticky top-0 z-20 border-b border-white/10 bg-[#0f2d4a]/95 backdrop-blur">
       <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-4 px-6 py-4">
         <a href="#top" className="flex items-center gap-4" aria-label="WCCC home">
-          <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-[8px] bg-[#d7a84d] font-serif text-2xl font-bold text-[#07172b]">
+          <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-[8px] bg-[#d7a84d] font-serif text-2xl font-bold text-[#0f2d4a]">
             W
           </span>
           <span>
@@ -54,7 +54,7 @@ export default async function Header() {
             <div className="flex items-center gap-3">
               <a
                 href="/dashboard"
-                className="rounded-full bg-[#d7a84d] px-4 py-2 font-bold text-[#07172b] transition hover:bg-[#f1c864]"
+                className="rounded-full bg-[#d7a84d] px-4 py-2 font-bold text-[#0f2d4a] transition hover:bg-[#f1c864]"
               >
                 Dashboard
               </a>
@@ -63,7 +63,7 @@ export default async function Header() {
           ) : (
             <a
               href="/login"
-              className="rounded-full bg-[#d7a84d] px-4 py-2 font-bold text-[#07172b] transition hover:bg-[#f1c864]"
+              className="rounded-full bg-[#d7a84d] px-4 py-2 font-bold text-[#0f2d4a] transition hover:bg-[#f1c864]"
             >
               Sign in
             </a>
