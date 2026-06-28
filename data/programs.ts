@@ -42,14 +42,14 @@ export const journeyCards: JourneyCard[] = [
   {
     eyebrow: "Entrepreneur Journey",
     title: "Know Your Business",
-    subtitle: "Move from idea to durable growth",
+    subtitle: "Launch, grow, and scale your enterprise",
     description:
-      "Practical programs for starting, funding, scaling, and modernizing a business with trusted local partners.",
+      "Practical programs for startups, growing businesses, and established enterprises — from first idea to lasting impact.",
     items: [
+      "Startup support",
       "Start a business",
       "Access capital",
       "AI and technology",
-      "Marketing",
       "Scale and grow",
       "Government contracts",
     ],
