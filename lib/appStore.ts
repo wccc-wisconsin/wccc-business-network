@@ -2,6 +2,7 @@ import "server-only";
 import { createClient } from "@supabase/supabase-js";
 
 export type JourneyType = "business" | "personal" | "both";
+export type MembershipTier = "network" | "individual" | "business" | "corporate";
 
 export type Member = {
   id: string;
@@ -11,6 +12,8 @@ export type Member = {
   industry: string;
   city: string;
   journey: JourneyType;
+  membershipTier: MembershipTier;
+  membershipExpiresAt: string | null;
   createdAt: string;
   updatedAt: string;
   lastLoginAt: string;
@@ -71,6 +74,7 @@ type UpsertMemberInput = {
   industry: string;
   city: string;
   journey: JourneyType;
+  membershipTier: MembershipTier;
 };
 
 export async function upsertMember(input: UpsertMemberInput) {
@@ -92,6 +96,7 @@ export async function upsertMember(input: UpsertMemberInput) {
         industry: input.industry || existing.industry,
         city: input.city || existing.city,
         journey: input.journey,
+        membership_tier: input.membershipTier,
         updated_at: now,
         last_login_at: now,
       })
@@ -105,6 +110,7 @@ export async function upsertMember(input: UpsertMemberInput) {
       industry: input.industry,
       city: input.city,
       journey: input.journey,
+      membership_tier: input.membershipTier,
       created_at: now,
       updated_at: now,
       last_login_at: now,
@@ -170,6 +176,8 @@ export async function getMemberById(clerkId: string): Promise<Member | null> {
     industry: data.industry ?? "",
     city: data.city ?? "",
     journey: data.journey,
+    membershipTier: (data.membership_tier ?? "network") as MembershipTier,
+    membershipExpiresAt: data.membership_expires_at ?? null,
     createdAt: data.created_at,
     updatedAt: data.updated_at,
     lastLoginAt: data.last_login_at,

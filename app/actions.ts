@@ -8,6 +8,7 @@ import {
   registerForEvent,
   upsertMember,
   type JourneyType,
+  type MembershipTier,
 } from "@/lib/appStore";
 
 function fieldValue(formData: FormData, name: string) {
@@ -19,6 +20,13 @@ function journeyValue(value: string): JourneyType {
   if (value === "personal") return "personal";
   if (value === "both") return "both";
   return "business";
+}
+
+function tierValue(value: string): MembershipTier {
+  if (value === "individual") return "individual";
+  if (value === "business") return "business";
+  if (value === "corporate") return "corporate";
+  return "network";
 }
 
 export async function completeProfileAction(formData: FormData) {
@@ -35,6 +43,7 @@ export async function completeProfileAction(formData: FormData) {
     industry: fieldValue(formData, "industry"),
     city: fieldValue(formData, "city"),
     journey: journeyValue(fieldValue(formData, "journey")),
+    membershipTier: tierValue(fieldValue(formData, "membershipTier")),
   });
 
   revalidatePath("/dashboard");

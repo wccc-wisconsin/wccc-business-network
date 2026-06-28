@@ -96,6 +96,20 @@ export default async function DashboardPage() {
                   📍 {member.city}, WI
                 </span>
               )}
+              <span className={`rounded px-3 py-1 text-xs font-bold uppercase tracking-[0.15em] ${
+                member.membershipTier === "network"
+                  ? "bg-white/10 text-white/50"
+                  : member.membershipTier === "individual"
+                  ? "bg-[#d7a84d]/20 text-[#d7a84d]"
+                  : member.membershipTier === "business"
+                  ? "bg-[#d7a84d]/30 text-[#d7a84d]"
+                  : "bg-[#d7a84d] text-[#0f2d4a]"
+              }`}>
+                {member.membershipTier === "network" ? "Network (Free)" :
+                 member.membershipTier === "individual" ? "Individual Member" :
+                 member.membershipTier === "business" ? "Business Member" :
+                 "Corporate Member"}
+              </span>
             </div>
 
             <div className="mt-7">
@@ -192,22 +206,56 @@ export default async function DashboardPage() {
                     <p className="mt-2 text-sm leading-6 text-slate-600">
                       {program.description}
                     </p>
-                    <form action={enrollInProgramAction} className="mt-4">
-                      <input name="programTitle" type="hidden" value={program.title} />
-                      <button
-                        disabled={isEnrolled}
-                        type="submit"
-                        className="rounded-full bg-[#0f2d4a] px-4 py-2 text-sm font-bold text-white transition hover:bg-[#13345f] disabled:bg-slate-300 disabled:text-slate-600"
-                      >
-                        {isEnrolled ? "Enrolled" : "Enroll"}
-                      </button>
-                    </form>
+                    {member.membershipTier === "network" ? (
+                      <div className="mt-4 rounded border border-[#d7a84d]/30 bg-[#fdf6ec] px-3 py-2 text-xs text-[#9b6b1f]">
+                        🔒 Upgrade to access programs
+                      </div>
+                    ) : (
+                      <form action={enrollInProgramAction} className="mt-4">
+                        <input name="programTitle" type="hidden" value={program.title} />
+                        <button
+                          disabled={isEnrolled}
+                          type="submit"
+                          className="rounded-full bg-[#0f2d4a] px-4 py-2 text-sm font-bold text-white transition hover:bg-[#13345f] disabled:bg-slate-300 disabled:text-slate-600"
+                        >
+                          {isEnrolled ? "Enrolled" : "Enroll"}
+                        </button>
+                      </form>
+                    )}
                   </article>
                 );
               })}
             </div>
           </div>
         </section>
+
+        {/* Upgrade banner for network (free) members */}
+        {member.membershipTier === "network" && (
+          <section className="mt-6 rounded-[8px] border border-[#d7a84d]/40 bg-gradient-to-r from-[#d7a84d]/10 to-transparent p-6">
+            <div className="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <p className="text-xs font-bold uppercase tracking-[0.25em] text-[#d7a84d] mb-1">Unlock Full Membership</p>
+                <h3 className="font-serif text-xl font-bold text-white">You're on the free network tier</h3>
+                <p className="mt-1 text-sm text-white/60">Upgrade to access programs, Office Hours, mentorship, and member-only events.</p>
+              </div>
+              <div className="flex flex-wrap gap-3 shrink-0">
+                {[
+                  { label: "Individual", price: "$150/yr" },
+                  { label: "Business", price: "$300/yr" },
+                  { label: "Corporate", price: "$1,500/yr" },
+                ].map((t) => (
+                  <a
+                    key={t.label}
+                    href={`mailto:info@wisccc.org?subject=Membership Upgrade - ${t.label}&body=I'd like to upgrade to ${t.label} membership (${ t.price}).`}
+                    className="rounded border border-[#d7a84d]/50 px-4 py-2 text-xs font-bold text-[#d7a84d] transition hover:bg-[#d7a84d] hover:text-[#0f2d4a]"
+                  >
+                    {t.label} — {t.price}
+                  </a>
+                ))}
+              </div>
+            </div>
+          </section>
+        )}
 
         <section className="mt-6 grid gap-6 lg:grid-cols-[1fr_0.8fr]">
           <div className="rounded-[8px] border border-white/10 bg-[#132f52] p-5">
