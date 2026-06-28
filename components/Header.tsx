@@ -16,9 +16,8 @@ export default async function Header() {
       <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-4">
         {/* Logo */}
         <a href="#top" className="flex items-center gap-3" aria-label="WCCC home">
-          <span className="flex h-10 w-10 items-center justify-center rounded bg-[#0c1e3a] font-serif text-lg font-bold text-[#c9993a]">
-            W
-          </span>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/wccc-logo.jpg" alt="WCCC logo" className="h-10 w-10 rounded-full object-cover" />
           <span className="hidden sm:block">
             <span className="block font-serif text-lg font-bold leading-none tracking-tight text-[#0c1e3a]">WCCC</span>
             <span className="block text-[9px] font-semibold uppercase tracking-[0.3em] text-[#a07830]">

@@ -22,7 +22,8 @@ export default function Footer() {
           {/* Brand */}
           <div>
             <div className="flex items-center gap-3 mb-5">
-              <span className="flex h-9 w-9 items-center justify-center rounded bg-[#0c1e3a] font-serif text-base font-bold text-[#c9993a]">W</span>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src="/wccc-logo.jpg" alt="WCCC logo" className="h-9 w-9 rounded-full object-cover" />
               <div>
                 <div className="font-serif text-base font-bold text-[#0c1e3a]">WCCC</div>
                 <div className="text-[9px] font-semibold uppercase tracking-[0.28em] text-[#a07830]">Community &amp; Growth Network</div>
