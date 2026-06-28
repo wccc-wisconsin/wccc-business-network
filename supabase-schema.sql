@@ -5,19 +5,30 @@ create table if not exists members (
   email text not null unique,
   name text not null default '',
   business_name text not null default '',
+  industry text not null default '',
+  city text not null default '',
   journey text not null default 'business',
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   last_login_at timestamptz not null default now()
 );
 
+-- Migration: add industry and city if upgrading an existing database
+alter table members add column if not exists industry text not null default '';
+alter table members add column if not exists city text not null default '';
+
 create table if not exists login_events (
   id uuid primary key default gen_random_uuid(),
   member_id text not null references members(id) on delete cascade,
+  session_id text not null default '',
   email text not null,
   user_agent text not null default '',
   created_at timestamptz not null default now()
 );
+
+create unique index if not exists login_events_member_session_idx
+  on login_events(member_id, session_id)
+  where session_id <> '';
 
 create table if not exists event_registrations (
   id uuid primary key default gen_random_uuid(),

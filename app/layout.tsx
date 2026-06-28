@@ -14,9 +14,9 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "WCCC Business Network",
+  title: "WCCC — Wisconsin's Diverse Chamber",
   description:
-    "A member hub for WCCC programs, events, partners, and business resources.",
+    "Wisconsin Chinese Chamber of Commerce — a diverse chamber rooted in Asian-American heritage, open to all. Programs, mentorship, and community for Wisconsin professionals.",
 };
 
 export default function RootLayout({
@@ -25,7 +25,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <ClerkProvider>
+    <ClerkProvider afterSignUpUrl="/onboarding" afterSignInUrl="/dashboard">
       <html
         lang="en"
         data-scroll-behavior="smooth"

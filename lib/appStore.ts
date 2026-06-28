@@ -1,3 +1,4 @@
+import "server-only";
 import { createClient } from "@supabase/supabase-js";
 
 export type JourneyType = "business" | "personal";
@@ -7,6 +8,8 @@ export type Member = {
   email: string;
   name: string;
   businessName: string;
+  industry: string;
+  city: string;
   journey: JourneyType;
   createdAt: string;
   updatedAt: string;
@@ -39,6 +42,7 @@ export type MemberActivity = {
 export type LoginEvent = {
   id: string;
   memberId: string;
+  sessionId: string;
   email: string;
   at: string;
   userAgent: string;
@@ -64,8 +68,9 @@ type UpsertMemberInput = {
   email: string;
   name: string;
   businessName: string;
+  industry: string;
+  city: string;
   journey: JourneyType;
-  userAgent: string;
 };
 
 export async function upsertMember(input: UpsertMemberInput) {
@@ -84,6 +89,8 @@ export async function upsertMember(input: UpsertMemberInput) {
       .update({
         name: input.name || existing.name,
         business_name: input.businessName || existing.business_name,
+        industry: input.industry || existing.industry,
+        city: input.city || existing.city,
         journey: input.journey,
         updated_at: now,
         last_login_at: now,
@@ -95,6 +102,8 @@ export async function upsertMember(input: UpsertMemberInput) {
       email: input.email,
       name: input.name,
       business_name: input.businessName,
+      industry: input.industry,
+      city: input.city,
       journey: input.journey,
       created_at: now,
       updated_at: now,
@@ -102,20 +111,52 @@ export async function upsertMember(input: UpsertMemberInput) {
     });
   }
 
-  await supabase.from("login_events").insert({
+}
+
+type RecordMemberSignInInput = {
+  clerkId: string;
+  email: string;
+  sessionId: string | null;
+  userAgent: string;
+};
+
+export async function recordMemberSignIn(input: RecordMemberSignInInput) {
+  if (!input.sessionId) return;
+
+  const supabase = db();
+  const now = new Date().toISOString();
+
+  const { data: existing } = await supabase
+    .from("login_events")
+    .select("id")
+    .eq("member_id", input.clerkId)
+    .eq("session_id", input.sessionId)
+    .maybeSingle();
+
+  if (existing) return;
+
+  await supabase
+    .from("members")
+    .update({ last_login_at: now })
+    .eq("id", input.clerkId);
+
+  const { error } = await supabase.from("login_events").insert({
     member_id: input.clerkId,
+    session_id: input.sessionId,
     email: input.email,
     user_agent: input.userAgent,
     created_at: now,
   });
 
-  await supabase.from("activities").insert({
-    member_id: input.clerkId,
-    type: "login",
-    title: "Signed in",
-    detail: "Member session started",
-    created_at: now,
-  });
+  if (!error) {
+    await supabase.from("activities").insert({
+      member_id: input.clerkId,
+      type: "login",
+      title: "Signed in",
+      detail: "Member session started",
+      created_at: now,
+    });
+  }
 }
 
 export async function getMemberById(clerkId: string): Promise<Member | null> {
@@ -126,6 +167,8 @@ export async function getMemberById(clerkId: string): Promise<Member | null> {
     email: data.email,
     name: data.name,
     businessName: data.business_name,
+    industry: data.industry ?? "",
+    city: data.city ?? "",
     journey: data.journey,
     createdAt: data.created_at,
     updatedAt: data.updated_at,
@@ -182,6 +225,7 @@ export async function getMemberDashboard(memberId: string): Promise<MemberDashbo
   const loginEvents: LoginEvent[] = (loginRows ?? []).map((r) => ({
     id: r.id,
     memberId: r.member_id,
+    sessionId: r.session_id,
     email: r.email,
     at: r.created_at,
     userAgent: r.user_agent,

@@ -1,15 +1,19 @@
 import { auth, currentUser } from "@clerk/nextjs/server";
 import { UserButton } from "@clerk/nextjs";
 import Link from "next/link";
+import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import {
   enrollInProgramAction,
   registerForEventAction,
-  completeProfileAction,
 } from "@/app/actions";
 import { events } from "@/data/events";
 import { programs } from "@/data/programs";
-import { getMemberById, getMemberDashboard } from "@/lib/appStore";
+import {
+  getMemberById,
+  getMemberDashboard,
+  recordMemberSignIn,
+} from "@/lib/appStore";
 
 export const dynamic = "force-dynamic";
 
@@ -23,86 +27,22 @@ function formatDate(value: string) {
 }
 
 export default async function DashboardPage() {
-  const { userId } = await auth();
+  const { userId, sessionId } = await auth();
   if (!userId) redirect("/login");
 
   const clerkUser = await currentUser();
   const member = await getMemberById(userId);
 
-  // First-time user: show profile completion form
-  if (!member) {
-    return (
-      <main className="min-h-screen bg-[#0f2d4a] text-white flex items-center justify-center px-6 py-10">
-        <div className="max-w-lg w-full rounded-[8px] border border-[#d7a84d]/30 bg-[#132f52] p-8 shadow-2xl">
-          <p className="text-xs font-bold uppercase tracking-[0.3em] text-[#d7a84d]">
-            Welcome to WCCC
-          </p>
-          <h1 className="mt-3 font-serif text-3xl font-bold">Complete your profile</h1>
-          <p className="mt-2 text-sm text-white/65">
-            Tell us a bit about yourself to get started.
-          </p>
+  // First-time user — send to dedicated onboarding page
+  if (!member) redirect("/onboarding");
 
-          <form action={completeProfileAction} className="mt-6 space-y-5">
-            <label className="block">
-              <span className="text-sm font-semibold text-white/80">Name</span>
-              <input
-                required
-                name="name"
-                type="text"
-                defaultValue={clerkUser?.fullName ?? ""}
-                className="mt-2 w-full rounded-[8px] border border-white/10 bg-white px-4 py-3 text-[#0f2d4a] outline-none ring-[#d7a84d] transition focus:ring-2"
-                placeholder="Jane Smith"
-              />
-            </label>
-
-            <label className="block">
-              <span className="text-sm font-semibold text-white/80">
-                Business or organization
-              </span>
-              <input
-                name="businessName"
-                type="text"
-                className="mt-2 w-full rounded-[8px] border border-white/10 bg-white px-4 py-3 text-[#0f2d4a] outline-none ring-[#d7a84d] transition focus:ring-2"
-                placeholder="Smith Studio"
-              />
-            </label>
-
-            <fieldset>
-              <legend className="text-sm font-semibold text-white/80">Primary journey</legend>
-              <div className="mt-2 grid gap-3 sm:grid-cols-2">
-                <label className="flex cursor-pointer items-center gap-3 rounded-[8px] border border-white/12 bg-white/5 px-4 py-3">
-                  <input
-                    defaultChecked
-                    name="journey"
-                    type="radio"
-                    value="business"
-                    className="h-4 w-4 accent-[#d7a84d]"
-                  />
-                  <span>Know Your Business</span>
-                </label>
-                <label className="flex cursor-pointer items-center gap-3 rounded-[8px] border border-white/12 bg-white/5 px-4 py-3">
-                  <input
-                    name="journey"
-                    type="radio"
-                    value="personal"
-                    className="h-4 w-4 accent-[#d7a84d]"
-                  />
-                  <span>Know Yourself</span>
-                </label>
-              </div>
-            </fieldset>
-
-            <button
-              type="submit"
-              className="w-full rounded-full bg-[#d7a84d] px-6 py-3 text-sm font-bold uppercase tracking-[0.14em] text-[#0f2d4a] transition hover:bg-[#f1c864]"
-            >
-              Go to dashboard
-            </button>
-          </form>
-        </div>
-      </main>
-    );
-  }
+  const headerStore = await headers();
+  await recordMemberSignIn({
+    clerkId: userId,
+    email: member.email,
+    sessionId,
+    userAgent: headerStore.get("user-agent") ?? "Unknown browser",
+  });
 
   const dashboard = await getMemberDashboard(userId);
   const registeredTitles = new Set(

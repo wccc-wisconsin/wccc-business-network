@@ -2,7 +2,6 @@
 
 import { auth, currentUser } from "@clerk/nextjs/server";
 import { revalidatePath } from "next/cache";
-import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import {
   enrollInProgram,
@@ -25,15 +24,15 @@ export async function completeProfileAction(formData: FormData) {
   if (!userId) redirect("/login");
 
   const user = await currentUser();
-  const headerStore = await headers();
 
   await upsertMember({
     clerkId: userId,
     email: user?.emailAddresses[0]?.emailAddress ?? "",
     name: fieldValue(formData, "name") || user?.fullName || "",
     businessName: fieldValue(formData, "businessName"),
+    industry: fieldValue(formData, "industry"),
+    city: fieldValue(formData, "city"),
     journey: journeyValue(fieldValue(formData, "journey")),
-    userAgent: headerStore.get("user-agent") ?? "Unknown browser",
   });
 
   revalidatePath("/dashboard");
