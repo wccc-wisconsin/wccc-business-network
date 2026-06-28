@@ -25,7 +25,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <ClerkProvider afterSignUpUrl="/onboarding" afterSignInUrl="/dashboard">
+    <ClerkProvider>
       <html
         lang="en"
         data-scroll-behavior="smooth"
