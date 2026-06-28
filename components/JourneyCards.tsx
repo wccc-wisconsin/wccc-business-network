@@ -2,52 +2,47 @@ import { journeyCards } from "@/data/programs";
 
 export default function JourneyCards() {
   return (
-    <section className="bg-[#f8fafc] px-6 py-16" aria-labelledby="journeys">
+    <section className="bg-[#faf8f5] px-6 py-20" aria-labelledby="journeys">
       <div className="mx-auto max-w-7xl">
-        <div className="mb-10 text-center">
-          <p className="text-xs font-bold uppercase tracking-[0.35em] text-[#38bdf8] mb-3">Your Path Forward</p>
-          <h2 id="journeys" className="font-serif text-4xl font-bold text-[#0f1e35] sm:text-5xl">
-            Choose Your Journey
-          </h2>
+        {/* Section header */}
+        <div className="mb-12 flex items-end justify-between border-b border-[#e8e3db] pb-6">
+          <div>
+            <p className="text-[10px] font-bold uppercase tracking-[0.38em] text-[#a07830] mb-2">Pathways</p>
+            <h2 id="journeys" className="font-serif text-4xl font-bold text-[#0c1e3a]">
+              Choose Your Journey
+            </h2>
+          </div>
+          <a href="#assistant" className="hidden text-[11px] font-semibold uppercase tracking-[0.2em] text-[#a07830] hover:text-[#0c1e3a] transition sm:block">
+            Talk to an Advisor →
+          </a>
         </div>
 
         <div className="grid gap-6 lg:grid-cols-2">
-          {journeyCards.map((journey) => (
-            <article
-              key={journey.title}
-              className="rounded-2xl border border-slate-200 bg-white p-8 transition duration-300 hover:shadow-lg hover:border-[#d7a84d]/30"
-            >
-              <p className="text-xs font-bold uppercase tracking-[0.28em] text-[#38bdf8]">
-                {journey.eyebrow}
-              </p>
-              <h3 className="mt-3 font-serif text-3xl font-bold text-[#0f1e35]">
-                {journey.title}
-              </h3>
-              <p className="mt-2 text-base font-semibold text-[#d7a84d]">
-                {journey.subtitle}
-              </p>
-              <p className="mt-3 max-w-xl text-sm leading-7 text-slate-500">
-                {journey.description}
-              </p>
+          {journeyCards.map((journey, i) => (
+            <article key={journey.title} className="card p-8">
+              {/* Number + eyebrow */}
+              <div className="flex items-center gap-3 mb-5">
+                <span className="font-serif text-4xl font-bold text-[#e8e3db]">0{i + 1}</span>
+                <div className="h-px flex-1 bg-[#e8e3db]" />
+                <span className="text-[9px] font-bold uppercase tracking-[0.3em] text-[#a07830]">{journey.eyebrow}</span>
+              </div>
 
-              <div className="mt-6 grid gap-2 text-sm sm:grid-cols-2">
+              <h3 className="font-serif text-3xl font-bold text-[#0c1e3a]">{journey.title}</h3>
+              <p className="mt-1 text-sm font-semibold text-[#a07830]">{journey.subtitle}</p>
+              <p className="mt-3 text-sm leading-7 text-[#64748b]">{journey.description}</p>
+
+              <div className="mt-6 grid gap-2 sm:grid-cols-2">
                 {journey.items.map((item) => (
-                  <span
-                    key={item}
-                    className="flex items-center gap-2 rounded-lg border border-slate-100 bg-slate-50 px-3 py-2 text-slate-600"
-                  >
-                    <span className="h-1.5 w-1.5 rounded-full bg-[#38bdf8] shrink-0" />
+                  <div key={item} className="flex items-center gap-2 text-sm text-[#0c1e3a]">
+                    <span className="h-1 w-4 flex-shrink-0 bg-[#a07830]" />
                     {item}
-                  </span>
+                  </div>
                 ))}
               </div>
 
-              <a
-                href="#assistant"
-                className="mt-8 inline-flex rounded-full border border-[#d7a84d] px-6 py-3 text-sm font-bold uppercase tracking-[0.12em] text-[#d7a84d] transition hover:bg-[#d7a84d] hover:text-white"
-              >
-                {journey.cta}
-              </a>
+              <div className="mt-8 pt-6 border-t border-[#e8e3db]">
+                <a href="#assistant" className="btn-gold-outline">{journey.cta}</a>
+              </div>
             </article>
           ))}
         </div>

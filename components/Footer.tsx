@@ -16,30 +16,29 @@ const socialLinks = [
 
 export default function Footer() {
   return (
-    <footer className="border-t border-slate-200 bg-white px-6 pt-16 pb-8">
+    <footer className="bg-[#faf8f5] border-t border-[#e8e3db] px-6 pt-16 pb-8">
       <div className="mx-auto max-w-7xl">
         <div className="grid gap-12 lg:grid-cols-3 mb-12">
+          {/* Brand */}
           <div>
-            <div className="flex items-center gap-3 mb-4">
-              <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-[#d7a84d] font-serif text-lg font-bold text-white">
-                W
-              </span>
+            <div className="flex items-center gap-3 mb-5">
+              <span className="flex h-9 w-9 items-center justify-center rounded bg-[#0c1e3a] font-serif text-base font-bold text-[#c9993a]">W</span>
               <div>
-                <div className="font-serif text-lg font-bold text-[#0f1e35]">WCCC</div>
-                <div className="text-[10px] font-semibold uppercase tracking-[0.25em] text-[#38bdf8]">Business Network</div>
+                <div className="font-serif text-base font-bold text-[#0c1e3a]">WCCC</div>
+                <div className="text-[9px] font-semibold uppercase tracking-[0.28em] text-[#a07830]">Business Network</div>
               </div>
             </div>
-            <p className="text-sm leading-7 text-slate-500 max-w-xs">
-              Wisconsin Chinese Chamber of Commerce — empowering entrepreneurs,
-              professionals, and partners across Wisconsin since 2017.
+            <p className="text-sm leading-7 text-[#64748b] max-w-xs">
+              Wisconsin Chinese Chamber of Commerce — empowering entrepreneurs and
+              professionals across Wisconsin since 2017.
             </p>
-            <div className="mt-5 flex gap-3">
+            <div className="mt-5 flex gap-2">
               {socialLinks.map((s) => (
                 <a
                   key={s.label}
                   href={s.href}
                   aria-label={s.label}
-                  className="flex h-8 w-8 items-center justify-center rounded-full border border-slate-200 text-[10px] font-bold text-slate-400 transition hover:border-[#d7a84d] hover:text-[#d7a84d]"
+                  className="flex h-8 w-8 items-center justify-center rounded border border-[#e8e3db] text-[10px] font-bold text-[#94a3b8] transition hover:border-[#a07830] hover:text-[#a07830]"
                 >
                   {s.icon}
                 </a>
@@ -47,43 +46,43 @@ export default function Footer() {
             </div>
           </div>
 
+          {/* Quick Links */}
           <div>
-            <h3 className="text-xs font-bold uppercase tracking-[0.3em] text-slate-400 mb-4">Quick Links</h3>
+            <h3 className="text-[10px] font-bold uppercase tracking-[0.3em] text-[#94a3b8] mb-4">Quick Links</h3>
             <ul className="space-y-2">
               {quickLinks.map((l) => (
                 <li key={l.label}>
-                  <a href={l.href} className="text-sm text-slate-500 transition hover:text-[#0f1e35]">
-                    {l.label}
-                  </a>
+                  <a href={l.href} className="text-sm text-[#64748b] transition hover:text-[#0c1e3a]">{l.label}</a>
                 </li>
               ))}
             </ul>
           </div>
 
+          {/* Contact */}
           <div>
-            <h3 className="text-xs font-bold uppercase tracking-[0.3em] text-slate-400 mb-4">Contact</h3>
-            <ul className="space-y-3 text-sm text-slate-500">
+            <h3 className="text-[10px] font-bold uppercase tracking-[0.3em] text-[#94a3b8] mb-4">Contact</h3>
+            <ul className="space-y-3 text-sm">
               <li>
-                <span className="block text-slate-400 text-[10px] uppercase tracking-widest mb-0.5">Email</span>
-                info@wisccc.org
+                <span className="block text-[9px] font-bold uppercase tracking-widest text-[#94a3b8] mb-0.5">Email</span>
+                <span className="text-[#64748b]">info@wisccc.org</span>
               </li>
               <li>
-                <span className="block text-slate-400 text-[10px] uppercase tracking-widest mb-0.5">Location</span>
-                Madison, Wisconsin
+                <span className="block text-[9px] font-bold uppercase tracking-widest text-[#94a3b8] mb-0.5">Location</span>
+                <span className="text-[#64748b]">Madison, Wisconsin</span>
               </li>
               <li>
-                <span className="block text-slate-400 text-[10px] uppercase tracking-widest mb-0.5">Membership</span>
-                <a href="/login" className="text-[#d7a84d] hover:text-[#c4953a] transition">Join or Sign In</a>
+                <span className="block text-[9px] font-bold uppercase tracking-widest text-[#94a3b8] mb-0.5">Membership</span>
+                <a href="/login" className="text-[#a07830] hover:text-[#0c1e3a] transition">Join or Sign In</a>
               </li>
             </ul>
           </div>
         </div>
 
-        <div className="border-t border-slate-100 pt-6 flex flex-wrap items-center justify-between gap-4 text-xs text-slate-400">
+        <div className="border-t border-[#e8e3db] pt-6 flex flex-wrap items-center justify-between gap-4 text-[11px] text-[#94a3b8]">
           <span>© {new Date().getFullYear()} Wisconsin Chinese Chamber of Commerce. All rights reserved.</span>
           <div className="flex gap-5">
-            <a href="#" className="hover:text-slate-600 transition">Privacy</a>
-            <a href="#" className="hover:text-slate-600 transition">Terms</a>
+            <a href="#" className="hover:text-[#64748b] transition">Privacy Policy</a>
+            <a href="#" className="hover:text-[#64748b] transition">Terms of Use</a>
           </div>
         </div>
       </div>

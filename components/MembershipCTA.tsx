@@ -7,45 +7,39 @@ const memberStats = [
 
 export default function MembershipCTA() {
   return (
-    <section className="bg-white px-6 py-24">
+    <section className="bg-[#0c1e3a] px-6 py-24">
       <div className="mx-auto max-w-5xl">
-        <div className="rounded-3xl border border-[#d7a84d]/25 bg-gradient-to-br from-[#fffbf0] to-white p-10 lg:p-16 shadow-sm">
-          <div className="flex flex-col items-start gap-10 lg:flex-row lg:items-center lg:justify-between">
-            <div className="max-w-xl">
-              <p className="text-xs font-bold uppercase tracking-[0.35em] text-[#d7a84d] mb-3">Membership</p>
-              <h2 className="font-serif text-4xl font-bold text-[#0f1e35] sm:text-5xl">
-                Become a{" "}
-                <span className="text-gradient-gold">WCCC Member</span>
-              </h2>
-              <p className="mt-4 text-base leading-7 text-slate-500">
-                Join Wisconsin&apos;s leading Chinese-American business network. Access programs,
-                events, mentorship, and a community of over 240 member businesses
-                driving economic growth across the state.
-              </p>
-              <div className="mt-8 flex flex-wrap gap-4">
-                <a
-                  href="/login"
-                  className="rounded-full bg-[#d7a84d] px-8 py-4 text-sm font-bold uppercase tracking-[0.12em] text-white transition hover:bg-[#c4953a] glow-gold"
-                >
-                  Join Us
-                </a>
-                <a
-                  href="#programs"
-                  className="rounded-full border border-[#d7a84d] px-8 py-4 text-sm font-bold uppercase tracking-[0.12em] text-[#d7a84d] transition hover:bg-[#d7a84d] hover:text-white"
-                >
-                  Support Us
-                </a>
-              </div>
+        <div className="flex flex-col gap-14 lg:flex-row lg:items-center lg:justify-between">
+          <div className="max-w-xl">
+            <div className="flex items-center gap-4 mb-8">
+              <div className="h-px w-12 bg-[#a07830]" />
+              <p className="text-[10px] font-bold uppercase tracking-[0.38em] text-[#a07830]">Membership</p>
             </div>
+            <h2 className="font-serif text-4xl font-bold text-white sm:text-5xl leading-[1.1]">
+              Join a network built for{" "}
+              <em className="not-italic text-[#c9993a]">Wisconsin's future.</em>
+            </h2>
+            <p className="mt-5 text-base leading-8 text-white/55">
+              Access exclusive programs, meaningful mentorship, and a trusted community
+              of over 240 business owners and professionals driving growth across the state.
+            </p>
+            <div className="mt-8 flex flex-wrap gap-4">
+              <a href="/login" className="rounded border border-[#c9993a] bg-[#c9993a] px-8 py-4 text-[11px] font-bold uppercase tracking-[0.14em] text-[#0c1e3a] transition hover:bg-[#a07830] hover:border-[#a07830]">
+                Become a Member
+              </a>
+              <a href="#programs" className="rounded border border-white/20 px-8 py-4 text-[11px] font-bold uppercase tracking-[0.14em] text-white/70 transition hover:border-white/50 hover:text-white">
+                Explore Programs
+              </a>
+            </div>
+          </div>
 
-            <div className="grid w-full max-w-xs gap-4 sm:grid-cols-2 lg:max-w-none lg:w-auto lg:min-w-[260px]">
-              {memberStats.map((s) => (
-                <div key={s.label} className="rounded-xl border border-[#d7a84d]/20 bg-white p-5 shadow-sm">
-                  <div className="text-gradient-gold font-serif text-3xl font-bold">{s.value}</div>
-                  <div className="mt-1 text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">{s.label}</div>
-                </div>
-              ))}
-            </div>
+          <div className="grid grid-cols-2 gap-3 lg:min-w-[260px]">
+            {memberStats.map((s) => (
+              <div key={s.label} className="rounded border border-white/10 bg-white/5 p-5">
+                <div className="font-serif text-3xl font-bold text-[#c9993a]">{s.value}</div>
+                <div className="mt-1 text-[10px] font-bold uppercase tracking-[0.2em] text-white/35">{s.label}</div>
+              </div>
+            ))}
           </div>
         </div>
       </div>

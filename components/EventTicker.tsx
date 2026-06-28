@@ -2,16 +2,17 @@ import { events } from "@/data/events";
 
 export default function EventTicker() {
   const items = [...events, ...events];
-
   return (
-    <div className="border-y border-[#d7a84d]/20 bg-[#d7a84d]/10 py-2.5 overflow-hidden">
+    <div className="overflow-hidden bg-[#0c1e3a] py-3">
       <div className="flex animate-marquee whitespace-nowrap">
         {items.map((event, i) => (
-          <span key={i} className="inline-flex items-center gap-3 mx-8 text-sm font-bold text-[#0f1e35]">
-            <span className="h-1.5 w-1.5 rounded-full bg-[#d7a84d]" />
-            <span className="text-slate-400 font-normal">{event.date}</span>
-            <span>{event.title}</span>
-            <a href="#events" className="text-[#0369a1] hover:text-[#38bdf8] transition">→</a>
+          <span key={i} className="inline-flex items-center gap-4 mx-10 text-[12px] font-medium text-white/60">
+            <span className="h-1 w-1 rounded-full bg-[#c9993a]" />
+            <span className="font-bold uppercase tracking-[0.14em] text-[#c9993a]">{event.date}</span>
+            <span className="text-white/80">{event.title}</span>
+            <a href="#events" className="text-white/40 hover:text-[#c9993a] transition text-xs uppercase tracking-widest">
+              Register →
+            </a>
           </span>
         ))}
       </div>
