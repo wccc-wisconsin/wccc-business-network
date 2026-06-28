@@ -4,14 +4,11 @@ export default function ProgramGrid() {
   return (
     <section id="programs" aria-labelledby="programs-heading">
       <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
-        <h2
-          id="programs-heading"
-          className="font-serif text-3xl font-bold text-[#0f2d4a]"
-        >
+        <h2 id="programs-heading" className="font-serif text-3xl font-bold text-white">
           Our Programs
         </h2>
-        <a className="text-sm font-bold text-[#9b6b1f]" href="#assistant">
-          View all programs
+        <a className="text-sm font-bold text-[#d7a84d] hover:text-[#f1c864] transition" href="#assistant">
+          View all →
         </a>
       </div>
 
@@ -19,18 +16,18 @@ export default function ProgramGrid() {
         {programs.map((program) => (
           <article
             key={program.title}
-            className="min-h-[168px] rounded-[8px] border border-[#0f2d4a]/10 bg-white p-5 shadow-sm"
+            className="glass min-h-[168px] rounded-xl p-5 transition hover:border-[#38bdf8]/20"
           >
-            <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#9b6b1f]">
+            <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#38bdf8]">
               {program.track}
             </p>
-            <h3 className="mt-3 text-lg font-bold text-[#0f2d4a]">
+            <h3 className="mt-3 text-base font-bold text-white">
               {program.title}
             </h3>
-            <p className="mt-1 text-sm font-semibold text-[#0f766e]">
+            <p className="mt-1 text-sm font-semibold text-[#d7a84d]">
               {program.subtitle}
             </p>
-            <p className="mt-3 text-sm leading-6 text-slate-600">
+            <p className="mt-3 text-sm leading-6 text-white/50">
               {program.description}
             </p>
           </article>

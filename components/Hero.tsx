@@ -1,81 +1,77 @@
-const photos = [
-  {
-    src: "https://images.unsplash.com/photo-1515187029135-18ee286d815b?q=80&w=800&auto=format&fit=crop",
-    alt: "Business networking event",
-  },
-  {
-    src: "https://images.unsplash.com/photo-1475721027785-f74eccf877e2?q=80&w=800&auto=format&fit=crop",
-    alt: "Speaker presenting at workshop",
-  },
-  {
-    src: "https://images.unsplash.com/photo-1556761175-b413da4baf72?q=80&w=800&auto=format&fit=crop",
-    alt: "Community business meeting",
-  },
-  {
-    src: "https://images.unsplash.com/photo-1522071820081-009f0129c71c?q=80&w=800&auto=format&fit=crop",
-    alt: "Team collaboration",
-  },
-  {
-    src: "https://images.unsplash.com/photo-1507537297725-24a1c029d3ca?q=80&w=800&auto=format&fit=crop",
-    alt: "Entrepreneurs networking",
-  },
-  {
-    src: "https://images.unsplash.com/photo-1540575467063-178a50c2df87?q=80&w=800&auto=format&fit=crop",
-    alt: "Conference and events",
-  },
-];
-
 export default function Hero() {
   return (
-    <section id="top" aria-labelledby="home-heading">
-      {/* Photo collage grid */}
-      <div className="grid grid-cols-3 grid-rows-2 h-[520px] lg:h-[600px]">
-        {photos.map((photo, i) => (
-          <div key={i} className="relative overflow-hidden">
-            <img
-              src={photo.src}
-              alt={photo.alt}
-              className="h-full w-full object-cover transition duration-500 hover:scale-105"
-            />
-            <div className="absolute inset-0 bg-[#0f2d4a]/30" />
-          </div>
-        ))}
-      </div>
+    <section id="top" aria-labelledby="home-heading" className="relative overflow-hidden bg-[#050d1a]">
+      {/* Dot grid background */}
+      <div className="absolute inset-0 dot-grid opacity-60" />
 
-      {/* Overlay headline bar */}
-      <div className="relative -mt-28 px-6 pb-0 z-10">
-        <div className="mx-auto max-w-7xl">
-          <div className="rounded-[12px] bg-[#0f2d4a]/90 backdrop-blur-sm border border-[#d7a84d]/30 px-8 py-8 shadow-2xl">
-            <p className="text-xs font-bold uppercase tracking-[0.32em] text-[#f1c864]">
-              Wisconsin Chinese Chamber of Commerce
-            </p>
-            <h1
-              id="home-heading"
-              className="mt-3 font-serif text-4xl font-bold leading-tight text-white sm:text-5xl lg:text-6xl"
-            >
-              We help Wisconsin small businesses grow — with programs, mentorship, and strategic connections.
-            </h1>
-            <div className="mt-6 flex flex-wrap gap-3">
-              <a
-                href="#programs"
-                className="rounded-full bg-[#d7a84d] px-6 py-3 text-sm font-bold uppercase tracking-[0.12em] text-[#0f2d4a] transition hover:bg-[#f1c864]"
-              >
-                View Programs
-              </a>
-              <a
-                href="#events"
-                className="rounded-full border border-white/30 px-6 py-3 text-sm font-bold uppercase tracking-[0.12em] text-white transition hover:border-[#d7a84d] hover:text-[#d7a84d]"
-              >
-                Upcoming Events
-              </a>
-              <a
-                href="/login"
-                className="rounded-full border border-[#d7a84d]/60 px-6 py-3 text-sm font-bold uppercase tracking-[0.12em] text-[#d7a84d] transition hover:bg-[#d7a84d] hover:text-[#0f2d4a]"
-              >
-                Become a Member
-              </a>
+      {/* Radial glow blobs */}
+      <div className="absolute -top-40 -left-40 h-[600px] w-[600px] rounded-full bg-[#38bdf8]/10 blur-[120px] pointer-events-none" />
+      <div className="absolute top-20 right-0 h-[500px] w-[500px] rounded-full bg-[#d7a84d]/8 blur-[120px] pointer-events-none" />
+      <div className="absolute bottom-0 left-1/2 -translate-x-1/2 h-[300px] w-[800px] rounded-full bg-[#6d28d9]/10 blur-[100px] pointer-events-none" />
+
+      {/* Scan line */}
+      <div className="scan-line absolute inset-x-0 h-px bg-gradient-to-r from-transparent via-[#38bdf8]/40 to-transparent pointer-events-none" />
+
+      <div className="relative mx-auto max-w-7xl px-6 py-28 lg:py-36">
+        {/* Eyebrow */}
+        <div className="fade-up flex items-center gap-3 mb-8">
+          <div className="h-px w-12 bg-gradient-to-r from-[#38bdf8] to-transparent" />
+          <span className="text-xs font-bold uppercase tracking-[0.35em] text-[#38bdf8]">
+            Wisconsin Chinese Chamber of Commerce
+          </span>
+          <div className="h-px flex-1 bg-gradient-to-l from-transparent via-[#38bdf8]/30 to-transparent" />
+        </div>
+
+        {/* Headline */}
+        <h1
+          id="home-heading"
+          className="fade-up fade-up-delay-1 font-serif text-5xl font-bold leading-[1.08] text-white sm:text-6xl lg:text-7xl max-w-4xl"
+        >
+          We help Wisconsin{" "}
+          <span className="text-gradient-gold">small businesses grow</span>
+          {" "}— with programs, mentorship, and strategic connections.
+        </h1>
+
+        <p className="fade-up fade-up-delay-2 mt-6 max-w-2xl text-lg leading-8 text-white/60">
+          A forward-looking member hub for entrepreneurs, professionals, and community
+          partners building stronger companies and careers across Wisconsin.
+        </p>
+
+        {/* CTAs */}
+        <div className="fade-up fade-up-delay-3 mt-10 flex flex-wrap gap-4">
+          <a
+            href="#programs"
+            className="group relative rounded-full bg-[#d7a84d] px-8 py-4 text-sm font-bold uppercase tracking-[0.12em] text-[#050d1a] transition hover:bg-[#f1c864] glow-gold"
+          >
+            View Programs
+          </a>
+          <a
+            href="#events"
+            className="rounded-full border border-[#38bdf8]/40 px-8 py-4 text-sm font-bold uppercase tracking-[0.12em] text-[#38bdf8] transition hover:bg-[#38bdf8]/10 hover:border-[#38bdf8]"
+          >
+            Upcoming Events
+          </a>
+          <a
+            href="/login"
+            className="rounded-full border border-white/15 px-8 py-4 text-sm font-bold uppercase tracking-[0.12em] text-white/70 transition hover:border-white/40 hover:text-white"
+          >
+            Become a Member
+          </a>
+        </div>
+
+        {/* Floating stat chips */}
+        <div className="fade-up fade-up-delay-3 mt-16 flex flex-wrap gap-4">
+          {[
+            { val: "240+", label: "Member Businesses" },
+            { val: "60+", label: "Community Partners" },
+            { val: "1,500+", label: "Event Participants" },
+            { val: "Est. 2017", label: "Serving Wisconsin" },
+          ].map((s) => (
+            <div key={s.label} className="glass rounded-full px-5 py-2 flex items-center gap-3">
+              <span className="font-bold text-[#d7a84d]">{s.val}</span>
+              <span className="text-xs text-white/50">{s.label}</span>
             </div>
-          </div>
+          ))}
         </div>
       </div>
     </section>
