@@ -121,19 +121,19 @@ type RecordMemberSignInInput = {
 };
 
 export async function recordMemberSignIn(input: RecordMemberSignInInput) {
-  if (!input.sessionId) return;
-
   const supabase = db();
   const now = new Date().toISOString();
 
-  const { data: existing } = await supabase
+  // Skip if there's already a login event in the last 30 minutes (prevents duplicate records on page refresh)
+  const thirtyMinsAgo = new Date(Date.now() - 30 * 60 * 1000).toISOString();
+  const { data: recent } = await supabase
     .from("login_events")
     .select("id")
     .eq("member_id", input.clerkId)
-    .eq("session_id", input.sessionId)
+    .gte("created_at", thirtyMinsAgo)
     .maybeSingle();
 
-  if (existing) return;
+  if (recent) return;
 
   await supabase
     .from("members")
