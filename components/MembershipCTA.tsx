@@ -13,7 +13,7 @@ export default function MembershipCTA() {
           <div className="max-w-xl">
             <div className="flex items-center gap-4 mb-8">
               <div className="h-px w-12 bg-[#a07830]" />
-              <p className="text-[10px] font-bold uppercase tracking-[0.38em] text-[#a07830]">Membership</p>
+              <p className="text-[10px] font-bold uppercase tracking-[0.38em] text-[#a07830]">Diverse &amp; Inclusive</p>
             </div>
             <h2 className="font-serif text-4xl font-bold text-white sm:text-5xl leading-[1.1]">
               Invest in yourself.{" "}
@@ -21,9 +21,9 @@ export default function MembershipCTA() {
               Shape Wisconsin.
             </h2>
             <p className="mt-5 text-base leading-8 text-white/55">
-              WCCC membership opens two journeys at once — personal development programs
-              that sharpen your leadership, and business resources that help you scale.
-              Join 240+ professionals building a stronger Wisconsin, together.
+              WCCC is Wisconsin's diverse chamber — rooted in Asian-American heritage and
+              open to every entrepreneur and professional ready to grow. Join 240+ members
+              building a stronger Wisconsin, together.
             </p>
             <div className="mt-8 flex flex-wrap gap-4">
               <a href="/login" className="rounded border border-[#c9993a] bg-[#c9993a] px-8 py-4 text-[11px] font-bold uppercase tracking-[0.14em] text-[#0c1e3a] transition hover:bg-[#a07830] hover:border-[#a07830]">

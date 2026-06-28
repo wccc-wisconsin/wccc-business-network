@@ -39,9 +39,9 @@ export default function Hero() {
               <div className="fade-up fade-up-delay-2 mt-5 mb-4 w-12 border-t-2 border-[#c9993a]" />
 
               <p className="fade-up fade-up-delay-2 max-w-md text-sm leading-7 text-white/75">
-                Two journeys, one community. Whether you're investing in yourself or
-                scaling a business, WCCC brings Wisconsin professionals the programs,
-                mentorship, and connections to thrive at every stage.
+                A diverse chamber rooted in Asian-American heritage, open to all. WCCC
+                connects Wisconsin professionals, entrepreneurs, and community leaders to
+                the programs, mentorship, and people to thrive at every stage.
               </p>
 
               <div className="fade-up fade-up-delay-3 mt-6 flex flex-wrap gap-3">
