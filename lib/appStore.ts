@@ -1,7 +1,7 @@
 import "server-only";
 import { createClient } from "@supabase/supabase-js";
 
-export type JourneyType = "business" | "personal";
+export type JourneyType = "business" | "personal" | "both";
 
 export type Member = {
   id: string;

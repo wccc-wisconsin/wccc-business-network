@@ -16,7 +16,9 @@ function fieldValue(formData: FormData, name: string) {
 }
 
 function journeyValue(value: string): JourneyType {
-  return value === "personal" ? "personal" : "business";
+  if (value === "personal") return "personal";
+  if (value === "both") return "both";
+  return "business";
 }
 
 export async function completeProfileAction(formData: FormData) {

@@ -103,6 +103,8 @@ export default async function DashboardPage() {
                 <span>
                   {member.journey === "personal"
                     ? "Know Yourself"
+                    : member.journey === "both"
+                    ? "Both Journeys"
                     : "Know Your Business"}{" "}
                   progress
                 </span>

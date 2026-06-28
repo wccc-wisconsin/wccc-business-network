@@ -128,7 +128,7 @@ export default async function OnboardingPage() {
               <label className="block text-[11px] font-bold uppercase tracking-[0.18em] text-[#94a3b8] mb-3">
                 Which journey interests you most? <span className="text-[#c9993a]">*</span>
               </label>
-              <div className="grid gap-3 sm:grid-cols-2">
+              <div className="grid gap-3 sm:grid-cols-3">
                 <label className="flex cursor-pointer items-start gap-3 rounded border border-[#e8e3db] bg-[#faf8f5] px-4 py-4 transition hover:border-[#a07830] has-[:checked]:border-[#a07830] has-[:checked]:bg-[#fdf6ec]">
                   <input
                     defaultChecked
@@ -152,6 +152,18 @@ export default async function OnboardingPage() {
                   <span>
                     <span className="block text-sm font-bold text-[#0c1e3a]">Know Yourself</span>
                     <span className="block text-xs text-[#64748b] mt-0.5">Leadership and personal growth</span>
+                  </span>
+                </label>
+                <label className="flex cursor-pointer items-start gap-3 rounded border border-[#e8e3db] bg-[#faf8f5] px-4 py-4 transition hover:border-[#a07830] has-[:checked]:border-[#a07830] has-[:checked]:bg-[#fdf6ec]">
+                  <input
+                    name="journey"
+                    type="radio"
+                    value="both"
+                    className="mt-0.5 h-4 w-4 accent-[#a07830]"
+                  />
+                  <span>
+                    <span className="block text-sm font-bold text-[#0c1e3a]">Both</span>
+                    <span className="block text-xs text-[#64748b] mt-0.5">All of the above</span>
                   </span>
                 </label>
               </div>
