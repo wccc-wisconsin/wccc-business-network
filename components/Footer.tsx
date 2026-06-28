@@ -25,12 +25,12 @@ export default function Footer() {
               <span className="flex h-9 w-9 items-center justify-center rounded bg-[#0c1e3a] font-serif text-base font-bold text-[#c9993a]">W</span>
               <div>
                 <div className="font-serif text-base font-bold text-[#0c1e3a]">WCCC</div>
-                <div className="text-[9px] font-semibold uppercase tracking-[0.28em] text-[#a07830]">Business Network</div>
+                <div className="text-[9px] font-semibold uppercase tracking-[0.28em] text-[#a07830]">Community &amp; Growth Network</div>
               </div>
             </div>
             <p className="text-sm leading-7 text-[#64748b] max-w-xs">
-              Wisconsin Chinese Chamber of Commerce — empowering entrepreneurs and
-              professionals across Wisconsin since 2017.
+              Wisconsin Chinese Chamber of Commerce — growing people, building businesses,
+              and strengthening community across Wisconsin since 2017.
             </p>
             <div className="mt-5 flex gap-2">
               {socialLinks.map((s) => (

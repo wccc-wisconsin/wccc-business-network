@@ -16,12 +16,14 @@ export default function MembershipCTA() {
               <p className="text-[10px] font-bold uppercase tracking-[0.38em] text-[#a07830]">Membership</p>
             </div>
             <h2 className="font-serif text-4xl font-bold text-white sm:text-5xl leading-[1.1]">
-              Join a network built for{" "}
-              <em className="not-italic text-[#c9993a]">Wisconsin's future.</em>
+              Invest in yourself.{" "}
+              <em className="not-italic text-[#c9993a]">Grow your business.</em>{" "}
+              Shape Wisconsin.
             </h2>
             <p className="mt-5 text-base leading-8 text-white/55">
-              Access exclusive programs, meaningful mentorship, and a trusted community
-              of over 240 business owners and professionals driving growth across the state.
+              WCCC membership opens two journeys at once — personal development programs
+              that sharpen your leadership, and business resources that help you scale.
+              Join 240+ professionals building a stronger Wisconsin, together.
             </p>
             <div className="mt-8 flex flex-wrap gap-4">
               <a href="/login" className="rounded border border-[#c9993a] bg-[#c9993a] px-8 py-4 text-[11px] font-bold uppercase tracking-[0.14em] text-[#0c1e3a] transition hover:bg-[#a07830] hover:border-[#a07830]">

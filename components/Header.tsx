@@ -22,7 +22,7 @@ export default async function Header() {
           <span className="hidden sm:block">
             <span className="block font-serif text-lg font-bold leading-none tracking-tight text-[#0c1e3a]">WCCC</span>
             <span className="block text-[9px] font-semibold uppercase tracking-[0.3em] text-[#a07830]">
-              Business Network
+              Community &amp; Growth Network
             </span>
           </span>
         </a>

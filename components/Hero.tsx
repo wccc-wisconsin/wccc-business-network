@@ -31,16 +31,17 @@ export default function Hero() {
                 id="home-heading"
                 className="fade-up fade-up-delay-1 font-serif text-4xl font-bold leading-[1.1] text-white lg:text-5xl"
               >
-                Empowering Wisconsin's{" "}
-                <em className="not-italic text-[#c9993a]">small businesses</em>{" "}
-                to grow, connect, and lead.
+                Grow as a person.{" "}
+                <em className="not-italic text-[#c9993a]">Build your business.</em>{" "}
+                Lead your community.
               </h1>
 
               <div className="fade-up fade-up-delay-2 mt-5 mb-4 w-12 border-t-2 border-[#c9993a]" />
 
               <p className="fade-up fade-up-delay-2 max-w-md text-sm leading-7 text-white/75">
-                Programs, mentorship, and strategic connections for entrepreneurs and
-                professionals across Wisconsin.
+                Two journeys, one community. Whether you're investing in yourself or
+                scaling a business, WCCC brings Wisconsin professionals the programs,
+                mentorship, and connections to thrive at every stage.
               </p>
 
               <div className="fade-up fade-up-delay-3 mt-6 flex flex-wrap gap-3">
