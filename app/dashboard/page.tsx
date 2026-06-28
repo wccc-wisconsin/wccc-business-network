@@ -85,6 +85,18 @@ export default async function DashboardPage() {
             <p className="mt-3 text-sm leading-6 text-white/68">
               {member.businessName || "No organization added"} · {member.email}
             </p>
+            <div className="mt-2 flex flex-wrap gap-3">
+              {member.industry && (
+                <span className="rounded border border-[#d7a84d]/30 bg-[#d7a84d]/10 px-3 py-1 text-xs font-semibold text-[#d7a84d]">
+                  {member.industry}
+                </span>
+              )}
+              {member.city && (
+                <span className="rounded border border-white/15 bg-white/5 px-3 py-1 text-xs font-semibold text-white/60">
+                  📍 {member.city}, WI
+                </span>
+              )}
+            </div>
 
             <div className="mt-7">
               <div className="mb-2 flex justify-between text-sm text-white/75">

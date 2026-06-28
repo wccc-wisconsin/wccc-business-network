@@ -20,7 +20,7 @@ export default function LoginPage() {
         </section>
 
         <div>
-          <SignIn routing="hash" fallbackRedirectUrl="/dashboard" />
+          <SignIn routing="hash" forceRedirectUrl="/dashboard" />
         </div>
       </div>
     </main>
