@@ -1,23 +1,18 @@
-import Image from "next/image";
-
 export default function Hero() {
   return (
     <section id="top" aria-labelledby="home-heading" className="relative overflow-hidden">
       {/* Full image — no cropping, section height follows the photo */}
       <div className="relative w-full">
-        <Image
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
           src="/wccc-hero.png"
           alt="WCCC community events"
-          width={1200}
-          height={400}
-          className="w-full h-auto"
-          priority
+          className="w-full h-auto brightness-110 saturate-[1.3]"
         />
 
-        {/* Uniform dark overlay — lets photo show through fully */}
-        <div className="absolute inset-0 bg-[#0c1e3a]/55" />
-        {/* Extra darkening on left where text sits */}
-        <div className="absolute inset-y-0 left-0 w-1/2 bg-gradient-to-r from-[#0c1e3a]/40 to-transparent" />
+        {/* Light overlay — photo stays visible, left edge darkened for text */}
+        <div className="absolute inset-0 bg-[#0c1e3a]/35" />
+        <div className="absolute inset-y-0 left-0 w-[55%] bg-gradient-to-r from-[#0c1e3a]/50 to-transparent" />
 
         {/* Content sits on top */}
         <div className="absolute inset-0 flex items-center">
