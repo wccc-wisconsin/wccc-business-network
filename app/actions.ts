@@ -1,15 +1,13 @@
 "use server";
 
+import { auth, currentUser } from "@clerk/nextjs/server";
 import { revalidatePath } from "next/cache";
-import { cookies, headers } from "next/headers";
+import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import {
-  SESSION_COOKIE,
-  endCurrentSession,
   enrollInProgram,
-  getCurrentMember,
   registerForEvent,
-  signInMember,
+  upsertMember,
   type JourneyType,
 } from "@/lib/appStore";
 
@@ -22,73 +20,45 @@ function journeyValue(value: string): JourneyType {
   return value === "personal" ? "personal" : "business";
 }
 
-export async function signInAction(formData: FormData) {
-  const email = fieldValue(formData, "email");
-  const name = fieldValue(formData, "name");
-  const businessName = fieldValue(formData, "businessName");
-  const journey = journeyValue(fieldValue(formData, "journey"));
+export async function completeProfileAction(formData: FormData) {
+  const { userId } = await auth();
+  if (!userId) redirect("/login");
 
-  if (!email || !name) {
-    redirect("/login?error=missing-fields");
-  }
-
+  const user = await currentUser();
   const headerStore = await headers();
-  const { session } = await signInMember({
-    email,
-    name,
-    businessName,
-    journey,
+
+  await upsertMember({
+    clerkId: userId,
+    email: user?.emailAddresses[0]?.emailAddress ?? "",
+    name: fieldValue(formData, "name") || user?.fullName || "",
+    businessName: fieldValue(formData, "businessName"),
+    journey: journeyValue(fieldValue(formData, "journey")),
     userAgent: headerStore.get("user-agent") ?? "Unknown browser",
   });
-  const cookieStore = await cookies();
 
-  cookieStore.set({
-    name: SESSION_COOKIE,
-    value: session.id,
-    httpOnly: true,
-    sameSite: "lax",
-    path: "/",
-    maxAge: 60 * 60 * 24 * 30,
-  });
-
-  revalidatePath("/");
+  revalidatePath("/dashboard");
   redirect("/dashboard");
 }
 
-export async function signOutAction() {
-  await endCurrentSession();
-  const cookieStore = await cookies();
-  cookieStore.delete(SESSION_COOKIE);
-
-  revalidatePath("/");
-  redirect("/");
-}
-
 export async function registerForEventAction(formData: FormData) {
-  const member = await getCurrentMember();
+  const { userId } = await auth();
+  if (!userId) redirect("/login");
+
   const eventTitle = fieldValue(formData, "eventTitle");
-
-  if (!member) {
-    redirect("/login");
-  }
-
   if (eventTitle) {
-    await registerForEvent(member.id, eventTitle);
+    await registerForEvent(userId, eventTitle);
   }
 
   revalidatePath("/dashboard");
 }
 
 export async function enrollInProgramAction(formData: FormData) {
-  const member = await getCurrentMember();
+  const { userId } = await auth();
+  if (!userId) redirect("/login");
+
   const programTitle = fieldValue(formData, "programTitle");
-
-  if (!member) {
-    redirect("/login");
-  }
-
   if (programTitle) {
-    await enrollInProgram(member.id, programTitle);
+    await enrollInProgram(userId, programTitle);
   }
 
   revalidatePath("/dashboard");

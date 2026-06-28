@@ -1,4 +1,5 @@
-import { getCurrentMember } from "@/lib/appStore";
+import { auth } from "@clerk/nextjs/server";
+import { UserButton } from "@clerk/nextjs";
 
 const navItems = [
   { label: "Dashboard", href: "/dashboard" },
@@ -8,7 +9,7 @@ const navItems = [
 ];
 
 export default async function Header() {
-  const member = await getCurrentMember();
+  const { userId } = await auth();
 
   return (
     <header className="sticky top-0 z-20 border-b border-white/10 bg-[#07172b]/95 backdrop-blur">
@@ -42,19 +43,31 @@ export default async function Header() {
           ))}
         </nav>
 
-        <div className="flex items-center gap-2 text-sm">
+        <div className="flex items-center gap-3 text-sm">
           <a
             href="#programs"
             className="rounded-full border border-white/15 px-4 py-2 font-semibold text-white/80 transition hover:border-[#d7a84d] hover:text-white"
           >
             Explore
           </a>
-          <a
-            href={member ? "/dashboard" : "/login"}
-            className="rounded-full bg-[#d7a84d] px-4 py-2 font-bold text-[#07172b] transition hover:bg-[#f1c864]"
-          >
-            {member ? "Dashboard" : "Sign in"}
-          </a>
+          {userId ? (
+            <div className="flex items-center gap-3">
+              <a
+                href="/dashboard"
+                className="rounded-full bg-[#d7a84d] px-4 py-2 font-bold text-[#07172b] transition hover:bg-[#f1c864]"
+              >
+                Dashboard
+              </a>
+              <UserButton />
+            </div>
+          ) : (
+            <a
+              href="/login"
+              className="rounded-full bg-[#d7a84d] px-4 py-2 font-bold text-[#07172b] transition hover:bg-[#f1c864]"
+            >
+              Sign in
+            </a>
+          )}
         </div>
       </div>
     </header>

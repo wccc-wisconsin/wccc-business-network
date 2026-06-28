@@ -1,9 +1,4 @@
-import { randomUUID } from "node:crypto";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
-import path from "node:path";
-import { cookies } from "next/headers";
-
-export const SESSION_COOKIE = "wccc_session";
+import { createClient } from "@supabase/supabase-js";
 
 export type JourneyType = "business" | "personal";
 
@@ -16,21 +11,6 @@ export type Member = {
   createdAt: string;
   updatedAt: string;
   lastLoginAt: string;
-};
-
-export type Session = {
-  id: string;
-  memberId: string;
-  createdAt: string;
-  expiresAt: string;
-};
-
-export type LoginEvent = {
-  id: string;
-  memberId: string;
-  email: string;
-  at: string;
-  userAgent: string;
 };
 
 export type EventRegistration = {
@@ -56,13 +36,12 @@ export type MemberActivity = {
   createdAt: string;
 };
 
-export type AppStore = {
-  members: Member[];
-  sessions: Session[];
-  loginEvents: LoginEvent[];
-  eventRegistrations: EventRegistration[];
-  programEnrollments: ProgramEnrollment[];
-  activities: MemberActivity[];
+export type LoginEvent = {
+  id: string;
+  memberId: string;
+  email: string;
+  at: string;
+  userAgent: string;
 };
 
 export type MemberDashboard = {
@@ -73,7 +52,15 @@ export type MemberDashboard = {
   progress: number;
 };
 
-type SignInInput = {
+function db() {
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+  );
+}
+
+type UpsertMemberInput = {
+  clerkId: string;
   email: string;
   name: string;
   businessName: string;
@@ -81,221 +68,173 @@ type SignInInput = {
   userAgent: string;
 };
 
-const emptyStore: AppStore = {
-  members: [],
-  sessions: [],
-  loginEvents: [],
-  eventRegistrations: [],
-  programEnrollments: [],
-  activities: [],
-};
+export async function upsertMember(input: UpsertMemberInput) {
+  const supabase = db();
+  const now = new Date().toISOString();
 
-function getStorePath() {
-  return path.join(process.cwd(), "storage", "app-store.json");
-}
+  const { data: existing } = await supabase
+    .from("members")
+    .select("*")
+    .eq("id", input.clerkId)
+    .single();
 
-function now() {
-  return new Date().toISOString();
-}
-
-function thirtyDaysFromNow() {
-  return new Date(Date.now() + 1000 * 60 * 60 * 24 * 30).toISOString();
-}
-
-function normalizeEmail(email: string) {
-  return email.trim().toLowerCase();
-}
-
-function sortNewestFirst<T extends { createdAt?: string; at?: string }>(items: T[]) {
-  return [...items].sort((a, b) => {
-    const left = a.createdAt ?? a.at ?? "";
-    const right = b.createdAt ?? b.at ?? "";
-    return right.localeCompare(left);
-  });
-}
-
-async function readStore(): Promise<AppStore> {
-  try {
-    const raw = await readFile(getStorePath(), "utf8");
-    return { ...emptyStore, ...JSON.parse(raw) };
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
-      return { ...emptyStore };
-    }
-
-    throw error;
-  }
-}
-
-async function writeStore(store: AppStore) {
-  const storePath = getStorePath();
-  await mkdir(path.dirname(storePath), { recursive: true });
-  await writeFile(storePath, JSON.stringify(store, null, 2), "utf8");
-}
-
-async function getSessionIdFromCookie() {
-  const cookieStore = await cookies();
-  return cookieStore.get(SESSION_COOKIE)?.value ?? null;
-}
-
-export async function signInMember(input: SignInInput) {
-  const store = await readStore();
-  const email = normalizeEmail(input.email);
-  const timestamp = now();
-  let member = store.members.find((item) => item.email === email);
-
-  if (!member) {
-    member = {
-      id: randomUUID(),
-      email,
-      name: input.name.trim(),
-      businessName: input.businessName.trim(),
-      journey: input.journey,
-      createdAt: timestamp,
-      updatedAt: timestamp,
-      lastLoginAt: timestamp,
-    };
-    store.members.push(member);
+  if (existing) {
+    await supabase
+      .from("members")
+      .update({
+        name: input.name || existing.name,
+        business_name: input.businessName || existing.business_name,
+        journey: input.journey,
+        updated_at: now,
+        last_login_at: now,
+      })
+      .eq("id", input.clerkId);
   } else {
-    member.name = input.name.trim() || member.name;
-    member.businessName = input.businessName.trim() || member.businessName;
-    member.journey = input.journey;
-    member.updatedAt = timestamp;
-    member.lastLoginAt = timestamp;
+    await supabase.from("members").insert({
+      id: input.clerkId,
+      email: input.email,
+      name: input.name,
+      business_name: input.businessName,
+      journey: input.journey,
+      created_at: now,
+      updated_at: now,
+      last_login_at: now,
+    });
   }
 
-  const session: Session = {
-    id: randomUUID(),
-    memberId: member.id,
-    createdAt: timestamp,
-    expiresAt: thirtyDaysFromNow(),
-  };
-
-  store.sessions.push(session);
-  store.loginEvents.push({
-    id: randomUUID(),
-    memberId: member.id,
-    email: member.email,
-    at: timestamp,
-    userAgent: input.userAgent,
+  await supabase.from("login_events").insert({
+    member_id: input.clerkId,
+    email: input.email,
+    user_agent: input.userAgent,
+    created_at: now,
   });
-  store.activities.push({
-    id: randomUUID(),
-    memberId: member.id,
+
+  await supabase.from("activities").insert({
+    member_id: input.clerkId,
     type: "login",
     title: "Signed in",
     detail: "Member session started",
-    createdAt: timestamp,
+    created_at: now,
   });
-
-  await writeStore(store);
-
-  return { member, session };
 }
 
-export async function getCurrentMember() {
-  const sessionId = await getSessionIdFromCookie();
-
-  if (!sessionId) {
-    return null;
-  }
-
-  const store = await readStore();
-  const session = store.sessions.find((item) => item.id === sessionId);
-
-  if (!session || new Date(session.expiresAt).getTime() < Date.now()) {
-    return null;
-  }
-
-  return store.members.find((member) => member.id === session.memberId) ?? null;
-}
-
-export async function endCurrentSession() {
-  const sessionId = await getSessionIdFromCookie();
-
-  if (!sessionId) {
-    return;
-  }
-
-  const store = await readStore();
-  store.sessions = store.sessions.filter((session) => session.id !== sessionId);
-  await writeStore(store);
-}
-
-export async function getMemberDashboard(memberId: string): Promise<MemberDashboard> {
-  const store = await readStore();
-  const registrations = store.eventRegistrations.filter(
-    (registration) => registration.memberId === memberId,
-  );
-  const enrollments = store.programEnrollments.filter(
-    (enrollment) => enrollment.memberId === memberId,
-  );
-  const loginEvents = store.loginEvents.filter((event) => event.memberId === memberId);
-  const activities = store.activities.filter((activity) => activity.memberId === memberId);
-  const progress = Math.min(
-    100,
-    25 + registrations.length * 15 + enrollments.length * 18,
-  );
-
+export async function getMemberById(clerkId: string): Promise<Member | null> {
+  const { data } = await db().from("members").select("*").eq("id", clerkId).single();
+  if (!data) return null;
   return {
-    registrations: sortNewestFirst(registrations),
-    enrollments: sortNewestFirst(enrollments),
-    loginEvents: sortNewestFirst(loginEvents),
-    activities: sortNewestFirst(activities).slice(0, 8),
-    progress,
+    id: data.id,
+    email: data.email,
+    name: data.name,
+    businessName: data.business_name,
+    journey: data.journey,
+    createdAt: data.created_at,
+    updatedAt: data.updated_at,
+    lastLoginAt: data.last_login_at,
   };
 }
 
-export async function registerForEvent(memberId: string, eventTitle: string) {
-  const store = await readStore();
-  const timestamp = now();
-  const exists = store.eventRegistrations.some(
-    (registration) =>
-      registration.memberId === memberId && registration.eventTitle === eventTitle,
-  );
+export async function getMemberDashboard(memberId: string): Promise<MemberDashboard> {
+  const supabase = db();
 
-  if (!exists) {
-    store.eventRegistrations.push({
-      id: randomUUID(),
-      memberId,
-      eventTitle,
-      createdAt: timestamp,
-    });
-    store.activities.push({
-      id: randomUUID(),
-      memberId,
+  const [
+    { data: regRows },
+    { data: enrollRows },
+    { data: loginRows },
+    { data: activityRows },
+  ] = await Promise.all([
+    supabase
+      .from("event_registrations")
+      .select("*")
+      .eq("member_id", memberId)
+      .order("created_at", { ascending: false }),
+    supabase
+      .from("program_enrollments")
+      .select("*")
+      .eq("member_id", memberId)
+      .order("created_at", { ascending: false }),
+    supabase
+      .from("login_events")
+      .select("*")
+      .eq("member_id", memberId)
+      .order("created_at", { ascending: false }),
+    supabase
+      .from("activities")
+      .select("*")
+      .eq("member_id", memberId)
+      .order("created_at", { ascending: false })
+      .limit(8),
+  ]);
+
+  const registrations: EventRegistration[] = (regRows ?? []).map((r) => ({
+    id: r.id,
+    memberId: r.member_id,
+    eventTitle: r.event_title,
+    createdAt: r.created_at,
+  }));
+
+  const enrollments: ProgramEnrollment[] = (enrollRows ?? []).map((r) => ({
+    id: r.id,
+    memberId: r.member_id,
+    programTitle: r.program_title,
+    createdAt: r.created_at,
+  }));
+
+  const loginEvents: LoginEvent[] = (loginRows ?? []).map((r) => ({
+    id: r.id,
+    memberId: r.member_id,
+    email: r.email,
+    at: r.created_at,
+    userAgent: r.user_agent,
+  }));
+
+  const activities: MemberActivity[] = (activityRows ?? []).map((r) => ({
+    id: r.id,
+    memberId: r.member_id,
+    type: r.type,
+    title: r.title,
+    detail: r.detail,
+    createdAt: r.created_at,
+  }));
+
+  const progress = Math.min(100, 25 + registrations.length * 15 + enrollments.length * 18);
+
+  return { registrations, enrollments, loginEvents, activities, progress };
+}
+
+export async function registerForEvent(memberId: string, eventTitle: string) {
+  const supabase = db();
+  const now = new Date().toISOString();
+
+  const { error } = await supabase
+    .from("event_registrations")
+    .insert({ member_id: memberId, event_title: eventTitle, created_at: now });
+
+  if (!error) {
+    await supabase.from("activities").insert({
+      member_id: memberId,
       type: "event",
       title: "Registered for event",
       detail: eventTitle,
-      createdAt: timestamp,
+      created_at: now,
     });
-    await writeStore(store);
   }
 }
 
 export async function enrollInProgram(memberId: string, programTitle: string) {
-  const store = await readStore();
-  const timestamp = now();
-  const exists = store.programEnrollments.some(
-    (enrollment) =>
-      enrollment.memberId === memberId && enrollment.programTitle === programTitle,
-  );
+  const supabase = db();
+  const now = new Date().toISOString();
 
-  if (!exists) {
-    store.programEnrollments.push({
-      id: randomUUID(),
-      memberId,
-      programTitle,
-      createdAt: timestamp,
-    });
-    store.activities.push({
-      id: randomUUID(),
-      memberId,
+  const { error } = await supabase
+    .from("program_enrollments")
+    .insert({ member_id: memberId, program_title: programTitle, created_at: now });
+
+  if (!error) {
+    await supabase.from("activities").insert({
+      member_id: memberId,
       type: "program",
       title: "Joined program",
       detail: programTitle,
-      createdAt: timestamp,
+      created_at: now,
     });
-    await writeStore(store);
   }
 }

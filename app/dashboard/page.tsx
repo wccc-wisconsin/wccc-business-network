@@ -1,15 +1,16 @@
+import { auth, currentUser } from "@clerk/nextjs/server";
+import { UserButton } from "@clerk/nextjs";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import {
   enrollInProgramAction,
   registerForEventAction,
-  signOutAction,
+  completeProfileAction,
 } from "@/app/actions";
 import { events } from "@/data/events";
 import { programs } from "@/data/programs";
-import { getCurrentMember, getMemberDashboard } from "@/lib/appStore";
+import { getMemberById, getMemberDashboard } from "@/lib/appStore";
 
-export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 function formatDate(value: string) {
@@ -22,18 +23,93 @@ function formatDate(value: string) {
 }
 
 export default async function DashboardPage() {
-  const member = await getCurrentMember();
+  const { userId } = await auth();
+  if (!userId) redirect("/login");
 
+  const clerkUser = await currentUser();
+  const member = await getMemberById(userId);
+
+  // First-time user: show profile completion form
   if (!member) {
-    redirect("/login");
+    return (
+      <main className="min-h-screen bg-[#07172b] text-white flex items-center justify-center px-6 py-10">
+        <div className="max-w-lg w-full rounded-[8px] border border-[#d7a84d]/30 bg-[#0b2544] p-8 shadow-2xl">
+          <p className="text-xs font-bold uppercase tracking-[0.3em] text-[#d7a84d]">
+            Welcome to WCCC
+          </p>
+          <h1 className="mt-3 font-serif text-3xl font-bold">Complete your profile</h1>
+          <p className="mt-2 text-sm text-white/65">
+            Tell us a bit about yourself to get started.
+          </p>
+
+          <form action={completeProfileAction} className="mt-6 space-y-5">
+            <label className="block">
+              <span className="text-sm font-semibold text-white/80">Name</span>
+              <input
+                required
+                name="name"
+                type="text"
+                defaultValue={clerkUser?.fullName ?? ""}
+                className="mt-2 w-full rounded-[8px] border border-white/10 bg-white px-4 py-3 text-[#07172b] outline-none ring-[#d7a84d] transition focus:ring-2"
+                placeholder="Jane Smith"
+              />
+            </label>
+
+            <label className="block">
+              <span className="text-sm font-semibold text-white/80">
+                Business or organization
+              </span>
+              <input
+                name="businessName"
+                type="text"
+                className="mt-2 w-full rounded-[8px] border border-white/10 bg-white px-4 py-3 text-[#07172b] outline-none ring-[#d7a84d] transition focus:ring-2"
+                placeholder="Smith Studio"
+              />
+            </label>
+
+            <fieldset>
+              <legend className="text-sm font-semibold text-white/80">Primary journey</legend>
+              <div className="mt-2 grid gap-3 sm:grid-cols-2">
+                <label className="flex cursor-pointer items-center gap-3 rounded-[8px] border border-white/12 bg-white/5 px-4 py-3">
+                  <input
+                    defaultChecked
+                    name="journey"
+                    type="radio"
+                    value="business"
+                    className="h-4 w-4 accent-[#d7a84d]"
+                  />
+                  <span>Know Your Business</span>
+                </label>
+                <label className="flex cursor-pointer items-center gap-3 rounded-[8px] border border-white/12 bg-white/5 px-4 py-3">
+                  <input
+                    name="journey"
+                    type="radio"
+                    value="personal"
+                    className="h-4 w-4 accent-[#d7a84d]"
+                  />
+                  <span>Know Yourself</span>
+                </label>
+              </div>
+            </fieldset>
+
+            <button
+              type="submit"
+              className="w-full rounded-full bg-[#d7a84d] px-6 py-3 text-sm font-bold uppercase tracking-[0.14em] text-[#07172b] transition hover:bg-[#f1c864]"
+            >
+              Go to dashboard
+            </button>
+          </form>
+        </div>
+      </main>
+    );
   }
 
-  const dashboard = await getMemberDashboard(member.id);
+  const dashboard = await getMemberDashboard(userId);
   const registeredTitles = new Set(
-    dashboard.registrations.map((registration) => registration.eventTitle),
+    dashboard.registrations.map((r) => r.eventTitle),
   );
   const enrolledTitles = new Set(
-    dashboard.enrollments.map((enrollment) => enrollment.programTitle),
+    dashboard.enrollments.map((e) => e.programTitle),
   );
 
   return (
@@ -52,14 +128,10 @@ export default async function DashboardPage() {
             </span>
           </Link>
 
-          <form action={signOutAction}>
-            <button
-              type="submit"
-              className="rounded-full border border-white/15 px-4 py-2 text-sm font-semibold text-white/78 transition hover:border-[#d7a84d] hover:text-white"
-            >
-              Sign out
-            </button>
-          </form>
+          <div className="flex items-center gap-4">
+            <span className="text-sm text-white/60">{member.email}</span>
+            <UserButton />
+          </div>
         </div>
       </header>
 
@@ -71,7 +143,7 @@ export default async function DashboardPage() {
             </p>
             <h1 className="mt-3 font-serif text-5xl font-bold">{member.name}</h1>
             <p className="mt-3 text-sm leading-6 text-white/68">
-              {member.businessName || "No organization added"} - {member.email}
+              {member.businessName || "No organization added"} · {member.email}
             </p>
 
             <div className="mt-7">
@@ -121,18 +193,17 @@ export default async function DashboardPage() {
             <div className="mt-5 space-y-3">
               {events.map((event) => {
                 const isRegistered = registeredTitles.has(event.title);
-
                 return (
                   <article
                     key={event.title}
                     className="rounded-[8px] border border-[#07172b]/10 bg-white p-4"
                   >
                     <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#9b6b1f]">
-                      {event.category} - {event.date}
+                      {event.category} · {event.date}
                     </p>
                     <h3 className="mt-2 text-lg font-bold">{event.title}</h3>
                     <p className="mt-1 text-sm text-slate-600">
-                      {event.time} - {event.location}
+                      {event.time} · {event.location}
                     </p>
                     <form action={registerForEventAction} className="mt-4">
                       <input name="eventTitle" type="hidden" value={event.title} />
@@ -155,7 +226,6 @@ export default async function DashboardPage() {
             <div className="mt-5 grid gap-3 sm:grid-cols-2">
               {programs.map((program) => {
                 const isEnrolled = enrolledTitles.has(program.title);
-
                 return (
                   <article
                     key={program.title}
@@ -169,11 +239,7 @@ export default async function DashboardPage() {
                       {program.description}
                     </p>
                     <form action={enrollInProgramAction} className="mt-4">
-                      <input
-                        name="programTitle"
-                        type="hidden"
-                        value={program.title}
-                      />
+                      <input name="programTitle" type="hidden" value={program.title} />
                       <button
                         disabled={isEnrolled}
                         type="submit"
