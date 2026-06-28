@@ -26,19 +26,17 @@ export default function AiAssistantPanel() {
   }
 
   return (
-    <section id="assistant" className="relative bg-[#050d1a] px-6 py-20">
-      <div className="pointer-events-none absolute left-1/2 top-1/2 h-[500px] w-[700px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-[#38bdf8]/6 blur-[120px]" />
-
-      <div className="relative mx-auto max-w-3xl">
+    <section id="assistant" className="bg-[#f8fafc] px-6 py-20">
+      <div className="mx-auto max-w-3xl">
         <div className="mb-8 text-center">
           <p className="text-xs font-bold uppercase tracking-[0.35em] text-[#38bdf8] mb-3">AI-Powered</p>
-          <h2 className="font-serif text-4xl font-bold text-white sm:text-5xl">
+          <h2 className="font-serif text-4xl font-bold text-[#0f1e35] sm:text-5xl">
             Ask <span className="text-gradient-cyan">WCCC Assistant</span>
           </h2>
-          <p className="mt-3 text-white/50">Get instant answers about programs, events, and membership.</p>
+          <p className="mt-3 text-slate-500">Get instant answers about programs, events, and membership.</p>
         </div>
 
-        <div className="glass-cyan rounded-2xl p-6">
+        <div className="rounded-2xl border border-[#38bdf8]/20 bg-white p-6 shadow-sm">
           <div className="flex gap-3">
             <input
               type="text"
@@ -46,12 +44,12 @@ export default function AiAssistantPanel() {
               onChange={(e) => setQuery(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && handleAsk("")}
               placeholder="Ask anything about WCCC programs…"
-              className="flex-1 rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white placeholder-white/30 outline-none focus:border-[#38bdf8]/40 focus:ring-1 focus:ring-[#38bdf8]/20 transition"
+              className="flex-1 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-[#0f1e35] placeholder-slate-400 outline-none focus:border-[#38bdf8] focus:ring-1 focus:ring-[#38bdf8]/30 transition"
             />
             <button
               onClick={() => handleAsk("")}
               disabled={loading}
-              className="rounded-xl bg-[#38bdf8] px-5 py-3 text-sm font-bold text-[#050d1a] transition hover:bg-[#7dd3fc] disabled:opacity-50 glow-cyan"
+              className="rounded-xl bg-[#38bdf8] px-5 py-3 text-sm font-bold text-white transition hover:bg-[#0ea5e9] disabled:opacity-50"
             >
               {loading ? "…" : "Ask"}
             </button>
@@ -62,7 +60,7 @@ export default function AiAssistantPanel() {
               <button
                 key={s}
                 onClick={() => { setQuery(s); handleAsk(s); }}
-                className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 text-xs text-white/50 transition hover:border-[#38bdf8]/40 hover:text-[#38bdf8]"
+                className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs text-slate-500 transition hover:border-[#38bdf8]/40 hover:text-[#0369a1]"
               >
                 {s}
               </button>
@@ -70,19 +68,19 @@ export default function AiAssistantPanel() {
           </div>
 
           {(loading || answer) && (
-            <div className="mt-6 rounded-xl border border-[#38bdf8]/10 bg-[#38bdf8]/[0.04] p-4">
+            <div className="mt-6 rounded-xl border border-[#38bdf8]/15 bg-[#38bdf8]/5 p-4">
               {loading ? (
                 <div className="flex gap-1.5">
                   {[0, 1, 2].map((i) => (
                     <div
                       key={i}
-                      className="h-2 w-2 rounded-full bg-[#38bdf8] opacity-50 animate-bounce"
+                      className="h-2 w-2 rounded-full bg-[#38bdf8] animate-bounce"
                       style={{ animationDelay: `${i * 0.15}s` }}
                     />
                   ))}
                 </div>
               ) : (
-                <p className="text-sm leading-7 text-white/70">{answer}</p>
+                <p className="text-sm leading-7 text-slate-600">{answer}</p>
               )}
             </div>
           )}
