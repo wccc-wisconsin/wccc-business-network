@@ -26,7 +26,7 @@ export default async function OnboardingPage() {
 
   // Already completed onboarding — go straight to dashboard
   const member = await getMemberById(userId);
-  if (member) redirect("/dashboard");
+  if (member && member.industry) redirect("/dashboard");
 
   const clerkUser = await currentUser();
   const email = clerkUser?.emailAddresses[0]?.emailAddress ?? "";
