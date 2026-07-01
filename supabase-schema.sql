@@ -17,6 +17,20 @@ create table if not exists members (
 alter table members add column if not exists industry text not null default '';
 alter table members add column if not exists city text not null default '';
 
+-- Migration: add membership tier fields if upgrading an existing database
+alter table members add column if not exists membership_tier text not null default 'network';
+alter table members add column if not exists membership_expires_at timestamptz;
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_constraint where conname = 'members_membership_tier_check'
+  ) then
+    alter table members add constraint members_membership_tier_check
+      check (membership_tier in ('network', 'individual', 'business', 'corporate'));
+  end if;
+end $$;
+
 create table if not exists login_events (
   id uuid primary key default gen_random_uuid(),
   member_id text not null references members(id) on delete cascade,
