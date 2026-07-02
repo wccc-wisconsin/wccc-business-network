@@ -20,6 +20,12 @@ You can start editing the page by modifying `app/page.tsx`. The page auto-update
 
 This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
 
+## Database
+
+Auth is handled by Clerk; member data lives in Supabase. To set up (or update) the database, run `supabase-schema.sql` in the Supabase dashboard: **Dashboard → SQL Editor → New query**.
+
+The script is additive and safe to re-run — every statement uses `if not exists` guards, so running it against an already-set-up database just applies any new columns/tables without touching existing data. When you add a field that `lib/appStore.ts` reads or writes, add a matching `alter table ... add column if not exists` migration here in the same PR, or the app will silently fail to persist it (this happened with `membership_tier` and `membership_expires_at` — see PR #1).
+
 ## Learn More
 
 To learn more about Next.js, take a look at the following resources:
