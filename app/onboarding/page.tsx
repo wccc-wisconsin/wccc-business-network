@@ -127,12 +127,16 @@ export default async function OnboardingPage() {
             {/* Industry + City */}
             <div className="grid gap-4 sm:grid-cols-2">
               <div>
-                <label className="block text-[11px] font-bold uppercase tracking-[0.18em] text-[#94a3b8] mb-1.5">Industry</label>
+                <label className="block text-[11px] font-bold uppercase tracking-[0.18em] text-[#94a3b8] mb-1.5">
+                  Industry <span className="text-[#c9993a]">*</span>
+                </label>
                 <select
+                  required
                   name="industry"
+                  defaultValue=""
                   className="w-full rounded border border-[#e8e3db] bg-[#faf8f5] px-4 py-3 text-sm text-[#0c1e3a] outline-none transition focus:border-[#a07830] focus:ring-1 focus:ring-[#a07830]/20"
                 >
-                  <option value="">Select…</option>
+                  <option value="" disabled>Select…</option>
                   {industries.map((ind) => (
                     <option key={ind} value={ind}>{ind}</option>
                   ))}
