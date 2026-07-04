@@ -9,6 +9,7 @@ import {
 } from "@/app/actions";
 import { events } from "@/data/events";
 import { programs } from "@/data/programs";
+import { businessModules } from "@/data/modules";
 import {
   getMemberById,
   getMemberDashboard,
@@ -152,6 +153,44 @@ export default async function DashboardPage() {
               </div>
               <div className="mt-1 text-sm text-white/70">Tracked sign-ins</div>
             </div>
+          </div>
+        </section>
+
+        {/* Business Builder — 7 module strip */}
+        <section className="mt-6 rounded-[8px] border border-white/10 bg-[#132f52] p-6">
+          <div className="flex flex-wrap items-baseline justify-between gap-2 mb-5">
+            <div>
+              <p className="text-xs font-bold uppercase tracking-[0.3em] text-[#d7a84d]">AI Business Builder</p>
+              <h2 className="mt-1 font-serif text-2xl font-bold text-white">7 tools to grow, one stage at a time</h2>
+            </div>
+            <p className="text-xs text-white/50">Launch → Revenue → Growth → Capital → Opportunity → Expansion → Legacy</p>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-7">
+            {businessModules.map((mod) => {
+              const isAvailable = mod.status === "available";
+              return (
+                <div
+                  key={mod.key}
+                  className={`relative flex flex-col items-center gap-2 rounded-[8px] border p-4 text-center transition ${
+                    isAvailable
+                      ? "border-[#d7a84d] bg-[#d7a84d]/10 cursor-pointer hover:bg-[#d7a84d]/15"
+                      : "border-white/10 bg-white/[0.03] opacity-60"
+                  }`}
+                >
+                  {!isAvailable && (
+                    <span className="absolute -top-2 -right-2 rounded-full bg-[#0f2d4a] border border-white/15 px-2 py-0.5 text-[9px] font-bold uppercase tracking-[0.1em] text-white/60">
+                      Soon
+                    </span>
+                  )}
+                  <span className="text-2xl">{mod.icon}</span>
+                  <span className={`text-xs font-bold uppercase tracking-[0.12em] ${isAvailable ? "text-[#d7a84d]" : "text-white/70"}`}>
+                    {mod.label}
+                  </span>
+                  <span className="text-[11px] leading-tight text-white/50">{mod.tagline}</span>
+                </div>
+              );
+            })}
           </div>
         </section>
 
