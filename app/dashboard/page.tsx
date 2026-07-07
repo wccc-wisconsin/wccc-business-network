@@ -203,8 +203,8 @@ export default async function DashboardPage() {
                 <p className="text-xs font-bold uppercase tracking-[0.3em] text-[#d7a84d]">{track.eyebrow}</p>
                 <h2 className="mt-1 font-serif text-2xl font-bold text-white">{track.heading}</h2>
                 <p className="mt-1 text-sm text-white/50">
-                  7 stages of resources. Your {tierLabels[member.membershipTier]} membership
-                  unlocks {track.modules.filter((m) => tierMeetsMinimum(member.membershipTier, m.minTier)).length} of 7.
+                  {track.modules.length} stages of resources. Your {tierLabels[member.membershipTier]} membership
+                  unlocks {track.modules.filter((m) => tierMeetsMinimum(member.membershipTier, m.minTier)).length} of {track.modules.length}.
                 </p>
               </div>
 
