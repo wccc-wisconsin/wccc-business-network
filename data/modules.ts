@@ -112,7 +112,8 @@ export const businessModules: BusinessModule[] = [
 // from an earlier 7-stage draft to keep every item traceable to WCCC's own
 // professional/community programming — general wellness content, senior
 // empowerment, and mentor-matching (live or otherwise) were cut as outside
-// the chamber's scope. Tier gating still mirrors businessModules above.
+// the chamber's scope. Unlike businessModules, every stage here is minTier
+// "network" — the personal track is intentionally unrestricted for all members.
 export const personalModules: BusinessModule[] = [
   {
     key: "foundation",
@@ -131,7 +132,7 @@ export const personalModules: BusinessModule[] = [
     icon: "💼",
     label: "Professional Growth",
     tagline: "Sharpen your financial and career footing",
-    minTier: "individual",
+    minTier: "network",
     resources: [
       "Financial wellness workshop",
       "Resume & LinkedIn review",
@@ -143,7 +144,7 @@ export const personalModules: BusinessModule[] = [
     icon: "🧠",
     label: "Leadership & Visibility",
     tagline: "Lead, communicate, and get seen",
-    minTier: "business",
+    minTier: "network",
     resources: [
       "Leadership skills workshop series",
       "360 feedback & coaching guide",
@@ -155,7 +156,7 @@ export const personalModules: BusinessModule[] = [
     icon: "🤝",
     label: "Community & Legacy",
     tagline: "Deepen community ties and pay it forward",
-    minTier: "corporate",
+    minTier: "network",
     resources: [
       "Affinity group access",
       "Cultural heritage programming",
