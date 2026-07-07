@@ -9,12 +9,13 @@ import {
 } from "@/app/actions";
 import { events } from "@/data/events";
 import { programs } from "@/data/programs";
-import { businessModules, tierMeetsMinimum } from "@/data/modules";
+import { businessModules, personalModules, tierMeetsMinimum } from "@/data/modules";
 import {
   getMemberById,
   getMemberDashboard,
   recordMemberSignIn,
 } from "@/lib/appStore";
+import DashboardRoadmapTabs from "@/components/DashboardRoadmapTabs";
 
 export const dynamic = "force-dynamic";
 
@@ -59,6 +60,27 @@ export default async function DashboardPage() {
   const enrolledTitles = new Set(
     dashboard.enrollments.map((e) => e.programTitle),
   );
+
+  // Which roadmap(s) to show depends on the journey picked at onboarding —
+  // "business" and "personal" each get their own 7-stage track; "both" gets both.
+  const roadmapTracks = [
+    ...(member.journey !== "personal"
+      ? [{
+          key: "business",
+          eyebrow: "AI Business Builder",
+          heading: "Your growth roadmap",
+          modules: businessModules,
+        }]
+      : []),
+    ...(member.journey !== "business"
+      ? [{
+          key: "personal",
+          eyebrow: "Personal Growth Path",
+          heading: "Your Know Yourself roadmap",
+          modules: personalModules,
+        }]
+      : []),
+  ];
 
   return (
     <main className="min-h-screen bg-[#0f2d4a] text-white">
@@ -163,54 +185,68 @@ export default async function DashboardPage() {
           </div>
         </section>
 
-        {/* Business Builder — 7-stage roadmap, gated by membership tier */}
-        <section className="mt-6 rounded-[8px] border border-white/10 bg-[#132f52] p-6">
-          <div className="mb-5">
-            <p className="text-xs font-bold uppercase tracking-[0.3em] text-[#d7a84d]">AI Business Builder</p>
-            <h2 className="mt-1 font-serif text-2xl font-bold text-white">Your growth roadmap</h2>
-            <p className="mt-1 text-sm text-white/50">
-              7 stages of resources, from launch to legacy. Your {tierLabels[member.membershipTier]} membership
-              unlocks {businessModules.filter((m) => tierMeetsMinimum(member.membershipTier, m.minTier)).length} of 7.
-            </p>
-          </div>
+        {/* Roadmap(s) — 7-stage tracks, gated by membership tier, chosen by journey.
+            Members with only one track (business-only or personal-only) get that
+            single section directly. Members on "both" get a tabbed view so
+            Business Networking and Personal Networking are each spotlighted
+            on their own tab instead of stacked one after another. */}
+        {roadmapTracks.length > 1 ? (
+          <DashboardRoadmapTabs
+            tracks={roadmapTracks}
+            membershipTier={member.membershipTier}
+            tierLabels={tierLabels}
+          />
+        ) : (
+          roadmapTracks.map((track) => (
+            <section key={track.key} className="mt-6 rounded-[8px] border border-white/10 bg-[#132f52] p-6">
+              <div className="mb-5">
+                <p className="text-xs font-bold uppercase tracking-[0.3em] text-[#d7a84d]">{track.eyebrow}</p>
+                <h2 className="mt-1 font-serif text-2xl font-bold text-white">{track.heading}</h2>
+                <p className="mt-1 text-sm text-white/50">
+                  7 stages of resources. Your {tierLabels[member.membershipTier]} membership
+                  unlocks {track.modules.filter((m) => tierMeetsMinimum(member.membershipTier, m.minTier)).length} of 7.
+                </p>
+              </div>
 
-          <div className="space-y-3">
-            {businessModules.map((mod, i) => {
-              const unlocked = tierMeetsMinimum(member.membershipTier, mod.minTier);
-              return (
-                <div
-                  key={mod.key}
-                  className={`rounded-[8px] border p-4 sm:flex sm:items-start sm:gap-5 ${
-                    unlocked ? "border-[#d7a84d]/30 bg-[#d7a84d]/5" : "border-white/10 bg-white/[0.03] opacity-70"
-                  }`}
-                >
-                  <div className="flex items-center gap-3 sm:w-56 shrink-0">
-                    <span className="text-2xl">{mod.icon}</span>
-                    <div>
-                      <p className={`text-sm font-bold uppercase tracking-[0.08em] ${unlocked ? "text-[#d7a84d]" : "text-white/60"}`}>
-                        {i + 1}. {mod.label}
-                      </p>
-                      <p className="text-xs text-white/50">{mod.tagline}</p>
-                    </div>
-                  </div>
-                  <div className="mt-3 sm:mt-0 flex-1">
-                    {unlocked ? (
-                      <div className="flex flex-wrap gap-2">
-                        {mod.resources.map((r) => (
-                          <span key={r} className="rounded-full border border-[#d7a84d]/25 bg-[#d7a84d]/10 px-3 py-1 text-xs text-white/80">
-                            {r}
-                          </span>
-                        ))}
+              <div className="space-y-3">
+                {track.modules.map((mod, i) => {
+                  const unlocked = tierMeetsMinimum(member.membershipTier, mod.minTier);
+                  return (
+                    <div
+                      key={mod.key}
+                      className={`rounded-[8px] border p-4 sm:flex sm:items-start sm:gap-5 ${
+                        unlocked ? "border-[#d7a84d]/30 bg-[#d7a84d]/5" : "border-white/10 bg-white/[0.03] opacity-70"
+                      }`}
+                    >
+                      <div className="flex items-center gap-3 sm:w-56 shrink-0">
+                        <span className="text-2xl">{mod.icon}</span>
+                        <div>
+                          <p className={`text-sm font-bold uppercase tracking-[0.08em] ${unlocked ? "text-[#d7a84d]" : "text-white/60"}`}>
+                            {i + 1}. {mod.label}
+                          </p>
+                          <p className="text-xs text-white/50">{mod.tagline}</p>
+                        </div>
                       </div>
-                    ) : (
-                      <p className="text-xs text-white/40">🔒 Unlock at {tierLabels[mod.minTier]} tier</p>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </section>
+                      <div className="mt-3 sm:mt-0 flex-1">
+                        {unlocked ? (
+                          <div className="flex flex-wrap gap-2">
+                            {mod.resources.map((r) => (
+                              <span key={r} className="rounded-full border border-[#d7a84d]/25 bg-[#d7a84d]/10 px-3 py-1 text-xs text-white/80">
+                                {r}
+                              </span>
+                            ))}
+                          </div>
+                        ) : (
+                          <p className="text-xs text-white/40">🔒 Unlock at {tierLabels[mod.minTier]} tier</p>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </section>
+          ))
+        )}
 
         <section className="mt-6 grid gap-6 lg:grid-cols-2">
           <div className="rounded-[8px] bg-[#f8f1e7] p-5 text-[#0f2d4a]">

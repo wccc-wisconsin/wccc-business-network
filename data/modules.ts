@@ -107,3 +107,90 @@ export const businessModules: BusinessModule[] = [
     ],
   },
 ];
+
+// The 7 stages of the "Know Yourself" personal-growth track, mirroring the
+// same lifecycle shape and tier gating as businessModules above, so both
+// journeys unlock at the same pace as a member upgrades.
+export const personalModules: BusinessModule[] = [
+  {
+    key: "foundation",
+    icon: "🧭",
+    label: "Foundation",
+    tagline: "Get grounded and set your direction",
+    minTier: "network",
+    resources: [
+      "Self-assessment & goals worksheet",
+      "WCCC community directory access",
+      "Personal Growth Summary tool",
+    ],
+  },
+  {
+    key: "wellness",
+    icon: "💪",
+    label: "Wellness",
+    tagline: "Build health and financial confidence",
+    minTier: "individual",
+    resources: [
+      "Mental health resource guide",
+      "Financial wellness workshop",
+      "Wellness partner discounts",
+    ],
+  },
+  {
+    key: "leadership",
+    icon: "🧠",
+    label: "Leadership",
+    tagline: "Sharpen how you lead and communicate",
+    minTier: "business",
+    resources: [
+      "Leadership skills workshop series",
+      "360 feedback & coaching guide",
+    ],
+  },
+  {
+    key: "career",
+    icon: "📈",
+    label: "Career",
+    tagline: "Advance your career momentum",
+    minTier: "business",
+    resources: [
+      "Resume & LinkedIn review",
+      "Career pathing session",
+      "Mentor matching (career track)",
+    ],
+  },
+  {
+    key: "belonging",
+    icon: "🤝",
+    label: "Belonging",
+    tagline: "Deepen community connection",
+    minTier: "corporate",
+    resources: [
+      "Affinity group access",
+      "Cultural heritage programming",
+      "Peer mastermind groups",
+    ],
+  },
+  {
+    key: "empowerment",
+    icon: "🌟",
+    label: "Empowerment",
+    tagline: "Senior and lifelong empowerment",
+    minTier: "corporate",
+    resources: [
+      "Senior empowerment programming",
+      "Public speaking & visibility opportunities",
+    ],
+  },
+  {
+    key: "legacy-personal",
+    icon: "👑",
+    label: "Legacy",
+    tagline: "Pass it forward",
+    minTier: "corporate",
+    resources: [
+      "Mentor-the-next-generation matching",
+      "Community leadership pathways",
+    ],
+  },
+];
