@@ -108,9 +108,11 @@ export const businessModules: BusinessModule[] = [
   },
 ];
 
-// The 7 stages of the "Know Yourself" personal-growth track, mirroring the
-// same lifecycle shape and tier gating as businessModules above, so both
-// journeys unlock at the same pace as a member upgrades.
+// The 4 stages of the "Know Yourself" personal-growth track. Trimmed down
+// from an earlier 7-stage draft to keep every item traceable to WCCC's own
+// professional/community programming — general wellness content, senior
+// empowerment, and mentor-matching (live or otherwise) were cut as outside
+// the chamber's scope. Tier gating still mirrors businessModules above.
 export const personalModules: BusinessModule[] = [
   {
     key: "foundation",
@@ -125,71 +127,39 @@ export const personalModules: BusinessModule[] = [
     ],
   },
   {
-    key: "wellness",
-    icon: "💪",
-    label: "Wellness",
-    tagline: "Build health and financial confidence",
+    key: "professional-growth",
+    icon: "💼",
+    label: "Professional Growth",
+    tagline: "Sharpen your financial and career footing",
     minTier: "individual",
     resources: [
-      "Mental health resource guide",
       "Financial wellness workshop",
-      "Wellness partner discounts",
+      "Resume & LinkedIn review",
+      "Career pathing session",
     ],
   },
   {
-    key: "leadership",
+    key: "leadership-visibility",
     icon: "🧠",
-    label: "Leadership",
-    tagline: "Sharpen how you lead and communicate",
+    label: "Leadership & Visibility",
+    tagline: "Lead, communicate, and get seen",
     minTier: "business",
     resources: [
       "Leadership skills workshop series",
       "360 feedback & coaching guide",
+      "Public speaking & visibility opportunities",
     ],
   },
   {
-    key: "career",
-    icon: "📈",
-    label: "Career",
-    tagline: "Advance your career momentum",
-    minTier: "business",
-    resources: [
-      "Resume & LinkedIn review",
-      "Career pathing session",
-      "Mentor matching (career track)",
-    ],
-  },
-  {
-    key: "belonging",
+    key: "community-legacy",
     icon: "🤝",
-    label: "Belonging",
-    tagline: "Deepen community connection",
+    label: "Community & Legacy",
+    tagline: "Deepen community ties and pay it forward",
     minTier: "corporate",
     resources: [
       "Affinity group access",
       "Cultural heritage programming",
       "Peer mastermind groups",
-    ],
-  },
-  {
-    key: "empowerment",
-    icon: "🌟",
-    label: "Empowerment",
-    tagline: "Senior and lifelong empowerment",
-    minTier: "corporate",
-    resources: [
-      "Senior empowerment programming",
-      "Public speaking & visibility opportunities",
-    ],
-  },
-  {
-    key: "legacy-personal",
-    icon: "👑",
-    label: "Legacy",
-    tagline: "Pass it forward",
-    minTier: "corporate",
-    resources: [
-      "Mentor-the-next-generation matching",
       "Community leadership pathways",
     ],
   },
