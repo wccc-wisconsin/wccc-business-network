@@ -51,8 +51,8 @@ export default function DashboardRoadmapTabs({ tracks, membershipTier, tierLabel
         <p className="text-xs font-bold uppercase tracking-[0.3em] text-[#d7a84d]">{active.eyebrow}</p>
         <h2 className="mt-1 font-serif text-2xl font-bold text-white">{active.heading}</h2>
         <p className="mt-1 text-sm text-white/50">
-          7 stages of resources. Your {tierLabels[membershipTier]} membership unlocks{" "}
-          {active.modules.filter((m) => tierMeetsMinimum(membershipTier, m.minTier)).length} of 7.
+          {active.modules.length} stages of resources. Your {tierLabels[membershipTier]} membership unlocks{" "}
+          {active.modules.filter((m) => tierMeetsMinimum(membershipTier, m.minTier)).length} of {active.modules.length}.
         </p>
       </div>
 
