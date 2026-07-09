@@ -1,4 +1,4 @@
-import { auth, currentUser } from "@clerk/nextjs/server";
+import { auth } from "@clerk/nextjs/server";
 import { UserButton } from "@clerk/nextjs";
 import Link from "next/link";
 import { headers } from "next/headers";
@@ -16,6 +16,7 @@ import {
   recordMemberSignIn,
 } from "@/lib/appStore";
 import DashboardRoadmapTabs from "@/components/DashboardRoadmapTabs";
+import RoadmapModuleList from "@/components/RoadmapModuleList";
 
 export const dynamic = "force-dynamic";
 
@@ -39,7 +40,6 @@ export default async function DashboardPage() {
   const { userId, sessionId } = await auth();
   if (!userId) redirect("/login");
 
-  const clerkUser = await currentUser();
   const member = await getMemberById(userId);
 
   // No member record or incomplete intake form — send to onboarding
@@ -208,42 +208,12 @@ export default async function DashboardPage() {
                 </p>
               </div>
 
-              <div className="space-y-3">
-                {track.modules.map((mod, i) => {
-                  const unlocked = tierMeetsMinimum(member.membershipTier, mod.minTier);
-                  return (
-                    <div
-                      key={mod.key}
-                      className={`rounded-[8px] border p-4 sm:flex sm:items-start sm:gap-5 ${
-                        unlocked ? "border-[#d7a84d]/30 bg-[#d7a84d]/5" : "border-white/10 bg-white/[0.03] opacity-70"
-                      }`}
-                    >
-                      <div className="flex items-center gap-3 sm:w-56 shrink-0">
-                        <span className="text-2xl">{mod.icon}</span>
-                        <div>
-                          <p className={`text-sm font-bold uppercase tracking-[0.08em] ${unlocked ? "text-[#d7a84d]" : "text-white/60"}`}>
-                            {i + 1}. {mod.label}
-                          </p>
-                          <p className="text-xs text-white/50">{mod.tagline}</p>
-                        </div>
-                      </div>
-                      <div className="mt-3 sm:mt-0 flex-1">
-                        {unlocked ? (
-                          <div className="flex flex-wrap gap-2">
-                            {mod.resources.map((r) => (
-                              <span key={r} className="rounded-full border border-[#d7a84d]/25 bg-[#d7a84d]/10 px-3 py-1 text-xs text-white/80">
-                                {r}
-                              </span>
-                            ))}
-                          </div>
-                        ) : (
-                          <p className="text-xs text-white/40">🔒 Unlock at {tierLabels[mod.minTier]} tier</p>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
+              <RoadmapModuleList
+                key={track.key}
+                modules={track.modules}
+                membershipTier={member.membershipTier}
+                tierLabels={tierLabels}
+              />
             </section>
           ))
         )}
