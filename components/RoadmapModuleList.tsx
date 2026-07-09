@@ -10,11 +10,13 @@ type Props = {
   tierLabels: Record<string, string>;
 };
 
-// Card-deck stepper: one roadmap stage front-and-center at a time, with a
-// peek of the next couple of stages stacked behind it. Forward/back arrows
-// and a row of dots move through the deck. Shared by the single-track view
-// (app/dashboard/page.tsx) and the tabbed view (DashboardRoadmapTabs.tsx)
-// so the two can't drift apart.
+// Card-deck stepper: one roadmap stage front-and-center at a time, with the
+// previous stage peeking in from the left edge and the next stage peeking
+// in from the right — never stacked directly behind the active card, so
+// their text never bleeds through it. Forward/back arrows and a row of
+// dots move through the deck; clicking a peeking card also jumps to it.
+// Shared by the single-track view (app/dashboard/page.tsx) and the tabbed
+// view (DashboardRoadmapTabs.tsx) so the two can't drift apart.
 export default function RoadmapModuleList({ modules, membershipTier, tierLabels }: Props) {
   const [index, setIndex] = useState(0);
   const total = modules.length;
@@ -44,23 +46,24 @@ export default function RoadmapModuleList({ modules, membershipTier, tierLabels 
 
   return (
     <div>
-      <div className="relative min-h-[320px] sm:min-h-[260px]">
+      <div className="relative min-h-[320px] sm:min-h-[260px] overflow-hidden">
         {modules.map((mod, i) => {
-          const depth = i - clamped;
-          if (depth < 0 || depth > 2) return null; // only render the active card + 2 peeking behind it
+          const offset = i - clamped;
+          if (offset < -1 || offset > 1) return null; // only render prev / active / next
+          const isActive = offset === 0;
           const unlocked = tierMeetsMinimum(membershipTier, mod.minTier);
           return (
             <div
               key={mod.key}
-              aria-hidden={depth !== 0}
-              className={`absolute inset-0 flex flex-col rounded-[8px] border p-5 sm:p-6 transition-all duration-300 ease-out motion-reduce:transition-none ${
+              aria-hidden={!isActive}
+              onClick={!isActive ? () => setIndex(i) : undefined}
+              className={`absolute inset-y-0 left-1/2 w-[88%] max-w-xl flex flex-col rounded-[8px] border p-5 sm:p-6 transition-all duration-300 ease-out motion-reduce:transition-none ${
                 unlocked ? "border-[#d7a84d]/30 bg-[#d7a84d]/5" : "border-white/10 bg-white/[0.03]"
-              }`}
+              } ${!isActive ? "cursor-pointer" : ""}`}
               style={{
-                transform: `translateY(${depth * 12}px) scale(${1 - depth * 0.05})`,
-                zIndex: total - depth,
-                opacity: depth === 0 ? 1 : 0.4 - depth * 0.12,
-                pointerEvents: depth === 0 ? "auto" : "none",
+                transform: `translateX(calc(-50% + ${offset * 62}%)) scale(${isActive ? 1 : 0.88})`,
+                zIndex: isActive ? 10 : 5,
+                opacity: isActive ? 1 : 0.35,
               }}
             >
               <div className="flex items-center justify-between">
