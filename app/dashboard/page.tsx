@@ -1,4 +1,4 @@
-import { auth, currentUser } from "@clerk/nextjs/server";
+import { auth } from "@clerk/nextjs/server";
 import { UserButton } from "@clerk/nextjs";
 import Link from "next/link";
 import { headers } from "next/headers";
@@ -9,13 +9,23 @@ import {
 } from "@/app/actions";
 import { events } from "@/data/events";
 import { programs } from "@/data/programs";
+import { businessModules, personalModules, tierMeetsMinimum } from "@/data/modules";
 import {
   getMemberById,
   getMemberDashboard,
   recordMemberSignIn,
 } from "@/lib/appStore";
+import DashboardRoadmapTabs from "@/components/DashboardRoadmapTabs";
+import RoadmapModuleList from "@/components/RoadmapModuleList";
 
 export const dynamic = "force-dynamic";
+
+const tierLabels: Record<string, string> = {
+  network: "Network",
+  individual: "Individual",
+  business: "Business",
+  corporate: "Corporate",
+};
 
 function formatDate(value: string) {
   return new Intl.DateTimeFormat("en", {
@@ -30,7 +40,6 @@ export default async function DashboardPage() {
   const { userId, sessionId } = await auth();
   if (!userId) redirect("/login");
 
-  const clerkUser = await currentUser();
   const member = await getMemberById(userId);
 
   // No member record or incomplete intake form — send to onboarding
@@ -51,6 +60,27 @@ export default async function DashboardPage() {
   const enrolledTitles = new Set(
     dashboard.enrollments.map((e) => e.programTitle),
   );
+
+  // Which roadmap(s) to show depends on the journey picked at onboarding —
+  // "business" and "personal" each get their own 7-stage track; "both" gets both.
+  const roadmapTracks = [
+    ...(member.journey !== "personal"
+      ? [{
+          key: "business",
+          eyebrow: "AI Business Builder",
+          heading: "Your growth roadmap",
+          modules: businessModules,
+        }]
+      : []),
+    ...(member.journey !== "business"
+      ? [{
+          key: "personal",
+          eyebrow: "Personal Growth Path",
+          heading: "Your Know Yourself roadmap",
+          modules: personalModules,
+        }]
+      : []),
+  ];
 
   return (
     <main className="min-h-screen bg-[#0f2d4a] text-white">
@@ -154,6 +184,39 @@ export default async function DashboardPage() {
             </div>
           </div>
         </section>
+
+        {/* Roadmap(s) — 7-stage tracks, gated by membership tier, chosen by journey.
+            Members with only one track (business-only or personal-only) get that
+            single section directly. Members on "both" get a tabbed view so
+            Business Networking and Personal Networking are each spotlighted
+            on their own tab instead of stacked one after another. */}
+        {roadmapTracks.length > 1 ? (
+          <DashboardRoadmapTabs
+            tracks={roadmapTracks}
+            membershipTier={member.membershipTier}
+            tierLabels={tierLabels}
+          />
+        ) : (
+          roadmapTracks.map((track) => (
+            <section key={track.key} className="mt-6 rounded-[8px] border border-white/10 bg-[#132f52] p-6">
+              <div className="mb-5">
+                <p className="text-xs font-bold uppercase tracking-[0.3em] text-[#d7a84d]">{track.eyebrow}</p>
+                <h2 className="mt-1 font-serif text-2xl font-bold text-white">{track.heading}</h2>
+                <p className="mt-1 text-sm text-white/50">
+                  {track.modules.length} stages of resources. Your {tierLabels[member.membershipTier]} membership
+                  unlocks {track.modules.filter((m) => tierMeetsMinimum(member.membershipTier, m.minTier)).length} of {track.modules.length}.
+                </p>
+              </div>
+
+              <RoadmapModuleList
+                key={track.key}
+                modules={track.modules}
+                membershipTier={member.membershipTier}
+                tierLabels={tierLabels}
+              />
+            </section>
+          ))
+        )}
 
         <section className="mt-6 grid gap-6 lg:grid-cols-2">
           <div className="rounded-[8px] bg-[#f8f1e7] p-5 text-[#0f2d4a]">
