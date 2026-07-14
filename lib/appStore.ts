@@ -438,25 +438,46 @@ export type PortalActivitySummary = {
  * Uses count-only queries (head: true) so no rows are actually transferred —
  * this scales fine even once these tables have thousands of rows.
  */
+const emptyPortalActivitySummary: PortalActivitySummary = {
+  totalMembers: 0,
+  totalEventRegistrations: 0,
+  totalEventAttendance: 0,
+  totalProgramEnrollments: 0,
+};
+
 export async function getPortalActivitySummary(): Promise<PortalActivitySummary> {
-  const supabase = db();
+  // This runs on the public homepage, so a Supabase hiccup (or missing env
+  // vars in a given environment) should degrade to zeros, not take the
+  // whole page down.
+  let supabase: ReturnType<typeof db>;
+  try {
+    supabase = db();
+  } catch (error) {
+    console.error("getPortalActivitySummary: failed to create Supabase client", error);
+    return emptyPortalActivitySummary;
+  }
 
-  const [
-    { count: totalMembers },
-    { count: totalEventRegistrations },
-    { count: totalEventAttendance },
-    { count: totalProgramEnrollments },
-  ] = await Promise.all([
-    supabase.from("members").select("*", { count: "exact", head: true }),
-    supabase.from("event_registrations").select("*", { count: "exact", head: true }),
-    supabase.from("event_attendance").select("*", { count: "exact", head: true }),
-    supabase.from("program_enrollments").select("*", { count: "exact", head: true }),
-  ]);
+  try {
+    const [
+      { count: totalMembers },
+      { count: totalEventRegistrations },
+      { count: totalEventAttendance },
+      { count: totalProgramEnrollments },
+    ] = await Promise.all([
+      supabase.from("members").select("*", { count: "exact", head: true }),
+      supabase.from("event_registrations").select("*", { count: "exact", head: true }),
+      supabase.from("event_attendance").select("*", { count: "exact", head: true }),
+      supabase.from("program_enrollments").select("*", { count: "exact", head: true }),
+    ]);
 
-  return {
-    totalMembers: totalMembers ?? 0,
-    totalEventRegistrations: totalEventRegistrations ?? 0,
-    totalEventAttendance: totalEventAttendance ?? 0,
-    totalProgramEnrollments: totalProgramEnrollments ?? 0,
-  };
+    return {
+      totalMembers: totalMembers ?? 0,
+      totalEventRegistrations: totalEventRegistrations ?? 0,
+      totalEventAttendance: totalEventAttendance ?? 0,
+      totalProgramEnrollments: totalProgramEnrollments ?? 0,
+    };
+  } catch (error) {
+    console.error("getPortalActivitySummary: failed to load counts", error);
+    return emptyPortalActivitySummary;
+  }
 }
