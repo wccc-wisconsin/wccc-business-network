@@ -26,7 +26,7 @@ export default function Footer() {
               <img src="/wccc-logo.jpg" alt="WCCC logo" className="h-9 w-9 rounded-full object-cover" />
               <div>
                 <div className="font-serif text-base font-bold text-[#0c1e3a]">WCCC</div>
-                <div className="text-[9px] font-semibold uppercase tracking-[0.28em] text-[#a07830]">Wisconsin's Diverse Chamber</div>
+                <div className="text-[9px] font-semibold uppercase tracking-[0.28em] text-[#a07830]">Wisconsin&apos;s Diverse Chamber</div>
               </div>
             </div>
             <p className="text-sm leading-7 text-[#64748b] max-w-xs">

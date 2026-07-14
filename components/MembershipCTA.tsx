@@ -56,7 +56,7 @@ export default function MembershipCTA() {
             Shape Wisconsin.
           </h2>
           <p className="mt-5 max-w-2xl mx-auto text-base leading-8 text-white/55">
-            WCCC is Wisconsin's diverse chamber — rooted in Asian-American heritage and open to every
+            WCCC is Wisconsin&apos;s diverse chamber — rooted in Asian-American heritage and open to every
             entrepreneur and professional ready to grow.
           </p>
         </div>

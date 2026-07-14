@@ -5,7 +5,7 @@ export default function Stats() {
     <section className="bg-[#050d1a] px-6 pb-16 pt-0" aria-label="WCCC impact">
       <div className="mx-auto max-w-7xl">
         <div className="grid gap-px sm:grid-cols-2 lg:grid-cols-4 rounded-2xl overflow-hidden border border-white/[0.06]">
-          {stats.map((stat, i) => (
+          {stats.map((stat) => (
             <div
               key={stat.label}
               className="glass p-8 relative group"
