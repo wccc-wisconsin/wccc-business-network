@@ -4,9 +4,11 @@ import Link from "next/link";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import {
+  checkInForEventAction,
   enrollInProgramAction,
   registerForEventAction,
 } from "@/app/actions";
+import ActionButtonForm from "@/components/ActionButtonForm";
 import { events } from "@/data/events";
 import { programs } from "@/data/programs";
 import { businessModules, personalModules, tierMeetsMinimum } from "@/data/modules";
@@ -15,6 +17,7 @@ import {
   getMemberDashboard,
   recordMemberSignIn,
 } from "@/lib/appStore";
+import { slugifyEventTitle } from "@/lib/eventSlug";
 import DashboardRoadmapTabs from "@/components/DashboardRoadmapTabs";
 import RoadmapModuleList from "@/components/RoadmapModuleList";
 
@@ -36,7 +39,11 @@ function formatDate(value: string) {
   }).format(new Date(value));
 }
 
-export default async function DashboardPage() {
+type DashboardPageProps = {
+  searchParams: Promise<{ checkin?: string; event?: string }>;
+};
+
+export default async function DashboardPage({ searchParams }: DashboardPageProps) {
   const { userId, sessionId } = await auth();
   if (!userId) redirect("/login");
 
@@ -53,12 +60,34 @@ export default async function DashboardPage() {
     userAgent: headerStore.get("user-agent") ?? "Unknown browser",
   });
 
+  const { checkin, event: checkinSlug } = await searchParams;
+  const checkinEventTitle = checkinSlug
+    ? events.find((e) => slugifyEventTitle(e.title) === checkinSlug)?.title
+    : undefined;
+
+  // Absolute origin, used to build the QR check-in links below.
+  const host = headerStore.get("host") ?? "localhost:3000";
+  const protocol = host.startsWith("localhost") ? "http" : "https";
+  const siteOrigin = `${protocol}://${host}`;
+
+  // The QR check-in codes are a staff tool, not something every member needs
+  // to see. There's no admin/role system in the members table yet, so gate
+  // this on a simple env var (comma-separated staff emails) until one exists.
+  const staffEmails = (process.env.STAFF_EMAILS ?? "")
+    .split(",")
+    .map((e) => e.trim().toLowerCase())
+    .filter(Boolean);
+  const isStaff = staffEmails.includes(member.email.toLowerCase());
+
   const dashboard = await getMemberDashboard(userId);
   const registeredTitles = new Set(
     dashboard.registrations.map((r) => r.eventTitle),
   );
   const enrolledTitles = new Set(
     dashboard.enrollments.map((e) => e.programTitle),
+  );
+  const attendedTitles = new Set(
+    dashboard.attendance.map((a) => a.eventTitle),
   );
 
   // Which roadmap(s) to show depends on the journey picked at onboarding —
@@ -106,6 +135,17 @@ export default async function DashboardPage() {
       </header>
 
       <div className="mx-auto max-w-7xl px-6 py-8">
+        {checkin === "success" && (
+          <div className="mb-6 rounded-[8px] border border-emerald-400/40 bg-emerald-400/10 px-5 py-3 text-sm font-semibold text-emerald-300">
+            ✓ You&apos;re checked in{checkinEventTitle ? ` to ${checkinEventTitle}` : ""}. Thanks for coming out!
+          </div>
+        )}
+        {checkin === "invalid" && (
+          <div className="mb-6 rounded-[8px] border border-red-400/40 bg-red-400/10 px-5 py-3 text-sm font-semibold text-red-300">
+            That check-in code didn&apos;t match a current event. Ask a staff member for help.
+          </div>
+        )}
+
         <section className="grid gap-5 lg:grid-cols-[1.2fr_0.8fr]">
           <div className="rounded-[8px] border border-[#d7a84d]/30 bg-[#132f52] p-6">
             <p className="text-xs font-bold uppercase tracking-[0.3em] text-[#d7a84d]">
@@ -163,12 +203,18 @@ export default async function DashboardPage() {
             </div>
           </div>
 
-          <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-1">
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-1">
             <div className="rounded-[8px] border border-white/10 bg-white/5 p-5">
               <div className="font-serif text-4xl font-bold text-[#d7a84d]">
                 {dashboard.registrations.length}
               </div>
               <div className="mt-1 text-sm text-white/70">Event registrations</div>
+            </div>
+            <div className="rounded-[8px] border border-white/10 bg-white/5 p-5">
+              <div className="font-serif text-4xl font-bold text-[#d7a84d]">
+                {dashboard.attendance.length}
+              </div>
+              <div className="mt-1 text-sm text-white/70">Events attended</div>
             </div>
             <div className="rounded-[8px] border border-white/10 bg-white/5 p-5">
               <div className="font-serif text-4xl font-bold text-[#d7a84d]">
@@ -224,6 +270,7 @@ export default async function DashboardPage() {
             <div className="mt-5 space-y-3">
               {events.map((event) => {
                 const isRegistered = registeredTitles.has(event.title);
+                const hasAttended = attendedTitles.has(event.title);
                 return (
                   <article
                     key={event.title}
@@ -236,16 +283,30 @@ export default async function DashboardPage() {
                     <p className="mt-1 text-sm text-slate-600">
                       {event.time} · {event.location}
                     </p>
-                    <form action={registerForEventAction} className="mt-4">
-                      <input name="eventTitle" type="hidden" value={event.title} />
-                      <button
+                    <div className="mt-4 flex flex-wrap items-start gap-2">
+                      <ActionButtonForm
+                        action={registerForEventAction}
+                        fieldName="eventTitle"
+                        fieldValue={event.title}
                         disabled={isRegistered}
-                        type="submit"
+                        idleLabel="Register"
+                        disabledLabel="Registered"
+                        pendingLabel="Registering…"
                         className="rounded-full bg-[#0f2d4a] px-4 py-2 text-sm font-bold text-white transition hover:bg-[#13345f] disabled:bg-slate-300 disabled:text-slate-600"
-                      >
-                        {isRegistered ? "Registered" : "Register"}
-                      </button>
-                    </form>
+                      />
+                      {isRegistered && (
+                        <ActionButtonForm
+                          action={checkInForEventAction}
+                          fieldName="eventTitle"
+                          fieldValue={event.title}
+                          disabled={hasAttended}
+                          idleLabel="Check in"
+                          disabledLabel="✓ Attended"
+                          pendingLabel="Checking in…"
+                          className="rounded-full border border-[#0f2d4a] px-4 py-2 text-sm font-bold text-[#0f2d4a] transition hover:bg-[#0f2d4a] hover:text-white disabled:border-slate-300 disabled:text-slate-400 disabled:hover:bg-transparent"
+                        />
+                      )}
+                    </div>
                   </article>
                 );
               })}
@@ -274,16 +335,18 @@ export default async function DashboardPage() {
                         🔒 Upgrade to access programs
                       </div>
                     ) : (
-                      <form action={enrollInProgramAction} className="mt-4">
-                        <input name="programTitle" type="hidden" value={program.title} />
-                        <button
+                      <div className="mt-4">
+                        <ActionButtonForm
+                          action={enrollInProgramAction}
+                          fieldName="programTitle"
+                          fieldValue={program.title}
                           disabled={isEnrolled}
-                          type="submit"
+                          idleLabel="Enroll"
+                          disabledLabel="Enrolled"
+                          pendingLabel="Enrolling…"
                           className="rounded-full bg-[#0f2d4a] px-4 py-2 text-sm font-bold text-white transition hover:bg-[#13345f] disabled:bg-slate-300 disabled:text-slate-600"
-                        >
-                          {isEnrolled ? "Enrolled" : "Enroll"}
-                        </button>
-                      </form>
+                        />
+                      </div>
                     )}
                   </article>
                 );
@@ -291,6 +354,43 @@ export default async function DashboardPage() {
             </div>
           </div>
         </section>
+
+        {/* Staff tool: a QR code per event that, when scanned by an attendee
+            who's signed in on their phone, checks them in automatically —
+            no form, no extra tap. Print/display these at the venue.
+            Only visible to staff (see STAFF_EMAILS above) — regular members
+            don't need or want to see every event's check-in link. */}
+        {isStaff && (
+          <section className="mt-6 rounded-[8px] border border-white/10 bg-[#132f52] p-5">
+            <h2 className="font-serif text-2xl font-bold">Event check-in codes</h2>
+            <p className="mt-1 text-sm text-white/60">
+              Display the QR code for an event at the venue. Attendees scan it with their
+              phone (while signed in) to check themselves in — the count updates instantly.
+            </p>
+            <div className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {events.map((event) => {
+                const checkinUrl = `${siteOrigin}/api/checkin/${slugifyEventTitle(event.title)}`;
+                const qrImageUrl = `https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=${encodeURIComponent(checkinUrl)}`;
+                return (
+                  <div
+                    key={event.title}
+                    className="rounded-[8px] border border-white/10 bg-white/5 p-4 text-center"
+                  >
+                    <p className="text-sm font-bold">{event.title}</p>
+                    <img
+                      src={qrImageUrl}
+                      alt={`Check-in QR code for ${event.title}`}
+                      width={160}
+                      height={160}
+                      className="mx-auto mt-3 rounded bg-white p-2"
+                    />
+                    <p className="mt-2 break-all text-xs text-white/45">{checkinUrl}</p>
+                  </div>
+                );
+              })}
+            </div>
+          </section>
+        )}
 
         {/* Upgrade banner for network (free) members */}
         {member.membershipTier === "network" && (
