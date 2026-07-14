@@ -69,9 +69,33 @@ create table if not exists activities (
   created_at timestamptz not null default now()
 );
 
+-- Attendance is separate from registration: a member can register for an
+-- event ahead of time, and is only marked "attended" once they check in
+-- (see checkInForEventAction in app/actions.ts).
+create table if not exists event_attendance (
+  id uuid primary key default gen_random_uuid(),
+  member_id text not null references members(id) on delete cascade,
+  event_title text not null,
+  created_at timestamptz not null default now(),
+  unique(member_id, event_title)
+);
+
+-- Indexes: the dashboard always queries these tables filtered by member_id
+-- and, for activities/logins, ordered by created_at. Without these, lookups
+-- degrade to sequential scans as the tables grow.
+create index if not exists activities_member_created_idx
+  on activities(member_id, created_at desc);
+
+create index if not exists login_events_member_created_idx
+  on login_events(member_id, created_at desc);
+
+create index if not exists event_attendance_member_idx
+  on event_attendance(member_id);
+
 -- Disable RLS (service role key bypasses it anyway, but keeps it simple)
 alter table members disable row level security;
 alter table login_events disable row level security;
 alter table event_registrations disable row level security;
 alter table program_enrollments disable row level security;
 alter table activities disable row level security;
+alter table event_attendance disable row level security;
