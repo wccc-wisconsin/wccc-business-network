@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import type { BusinessModule, MembershipTierKey } from "@/data/modules";
 import { tierMeetsMinimum } from "@/data/modules";
 
@@ -90,6 +91,15 @@ export default function RoadmapModuleList({ modules, membershipTier, tierLabels 
                 ) : (
                   <p className="text-xs text-white/40">🔒 Unlock at {tierLabels[mod.minTier]} tier</p>
                 )}
+              </div>
+
+              <div className="mt-auto pt-5">
+                <Link
+                  href={`/dashboard/roadmap/${mod.key}`}
+                  className="inline-flex items-center gap-1 text-xs font-bold uppercase tracking-[0.15em] text-[#d7a84d] hover:text-white"
+                >
+                  Learn more →
+                </Link>
               </div>
             </div>
           );
