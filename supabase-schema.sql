@@ -92,6 +92,37 @@ create index if not exists login_events_member_created_idx
 create index if not exists event_attendance_member_idx
   on event_attendance(member_id);
 
+-- AI Business Builder: one row per member/module/step. `answers` holds the
+-- guided-question responses for that step as { [questionKey]: string }.
+-- `completed` drives the checkbox + the module's completion %.
+create table if not exists module_step_progress (
+  id uuid primary key default gen_random_uuid(),
+  member_id text not null references members(id) on delete cascade,
+  module_key text not null,
+  step_key text not null,
+  completed boolean not null default false,
+  answers jsonb not null default '{}'::jsonb,
+  updated_at timestamptz not null default now(),
+  unique(member_id, module_key, step_key)
+);
+
+create index if not exists module_step_progress_member_module_idx
+  on module_step_progress(member_id, module_key);
+
+-- The AI-generated "save summary" artifact per module (e.g. a member's
+-- Business Idea Summary from the Launch engine). One saved artifact per
+-- member per module — regenerating overwrites the previous one.
+create table if not exists module_summaries (
+  id uuid primary key default gen_random_uuid(),
+  member_id text not null references members(id) on delete cascade,
+  module_key text not null,
+  title text not null,
+  content text not null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique(member_id, module_key)
+);
+
 -- Disable RLS (service role key bypasses it anyway, but keeps it simple)
 alter table members disable row level security;
 alter table login_events disable row level security;
@@ -99,3 +130,5 @@ alter table event_registrations disable row level security;
 alter table program_enrollments disable row level security;
 alter table activities disable row level security;
 alter table event_attendance disable row level security;
+alter table module_step_progress disable row level security;
+alter table module_summaries disable row level security;

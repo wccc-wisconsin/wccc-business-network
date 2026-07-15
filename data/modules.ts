@@ -1,5 +1,30 @@
 export type MembershipTierKey = "network" | "individual" | "business" | "corporate";
 
+// "Essential" = can't operate without it. "Recommended" = important, but can
+// be lean or come soon after — keeps a 6-step module from feeling like 6
+// hard requirements.
+export type StepLabel = "essential" | "recommended";
+
+export type GuidedQuestion = {
+  key: string;
+  label: string;
+  placeholder?: string;
+};
+
+export type ModuleStep = {
+  key: string;
+  title: string;
+  label: StepLabel;
+  /** 2-4 specific labeled fields — not one blank box — saved per member. */
+  questions: GuidedQuestion[];
+};
+
+export type ModulePhase = {
+  key: string;
+  title: string;
+  steps: ModuleStep[];
+};
+
 export type BusinessModule = {
   key: string;
   icon: string;
@@ -8,7 +33,20 @@ export type BusinessModule = {
   /** Minimum tier required to unlock this module. */
   minTier: MembershipTierKey;
   resources: string[];
+  /**
+   * The full guided-steps template (phases -> steps -> guided questions).
+   * Optional because only Launch has this fleshed out so far — it's the
+   * master template (see app/dashboard/roadmap/[module]/page.tsx); the
+   * other 6 modules get their phases/steps cloned in next, same shell.
+   * Modules without `phases` fall back to the plain resource-list view.
+   */
+  phases?: ModulePhase[];
 };
+
+/** Flattens a module's phases into a single step list, in order. */
+export function stepsForModule(mod: BusinessModule): ModuleStep[] {
+  return (mod.phases ?? []).flatMap((phase) => phase.steps);
+}
 
 // Tiers in ascending order — used to check "does member's tier meet minTier".
 export const tierOrder: MembershipTierKey[] = ["network", "individual", "business", "corporate"];
@@ -32,6 +70,91 @@ export const businessModules: BusinessModule[] = [
       "IRS EIN setup walkthrough",
       "Banking & insurance checklist",
       "Business Idea Summary tool",
+    ],
+    // Master template for the other 6 engines — see ModulePhase/ModuleStep
+    // above. Owns 6 of the original 10 launch steps; the demand/selling
+    // steps (7, 9, 10) live in Revenue and the CRM/ops step (8) lives in
+    // Growth, since those are really selling and scaling work, not "become
+    // a legal business" work.
+    phases: [
+      {
+        key: "prove-it",
+        title: "Prove it",
+        steps: [
+          {
+            key: "validate-idea",
+            title: "Validate your business idea",
+            label: "essential",
+            questions: [
+              { key: "problem", label: "What problem does your business solve, and for whom?" },
+              { key: "proof", label: "Who are 2-3 real people who've told you they'd pay for this?" },
+              { key: "test", label: "What's the smallest version of this you could test in the next 30 days?" },
+            ],
+          },
+        ],
+      },
+      {
+        key: "make-it-official",
+        title: "Make it official",
+        steps: [
+          {
+            key: "name-brand",
+            title: "Name & brand identity",
+            label: "recommended",
+            questions: [
+              { key: "name-availability", label: "What's your business name, and is it available in Wisconsin (WI DFI name search)?" },
+              { key: "reputation", label: "In one sentence, what feeling or reputation do you want your brand to have?" },
+              { key: "visual-identity", label: "Do you have a logo or visual identity yet, or is that still to-do?" },
+            ],
+          },
+          {
+            key: "register-ein",
+            title: "Register your business & EIN",
+            label: "essential",
+            questions: [
+              { key: "structure", label: "What business structure are you using (LLC, sole prop, corporation)?" },
+              { key: "dfi-status", label: "Have you registered with WI DFI yet? If not, what's blocking you?" },
+              { key: "ein-status", label: "Do you have your EIN from the IRS yet?" },
+            ],
+          },
+          {
+            key: "bank-insurance",
+            title: "Bank account & insurance",
+            label: "essential",
+            questions: [
+              { key: "bank-account", label: "Have you opened a dedicated business bank account?" },
+              { key: "insurance-type", label: "What type of insurance does your business need (general liability, professional, etc.)?" },
+              { key: "insurance-provider", label: "Who's your insurance provider, or are you still shopping?" },
+            ],
+          },
+        ],
+      },
+      {
+        key: "get-ready-to-transact",
+        title: "Get ready to transact",
+        steps: [
+          {
+            key: "accounting-payments",
+            title: "Accounting & accept payments",
+            label: "essential",
+            questions: [
+              { key: "tracking", label: "How will you track income and expenses (software, spreadsheet, bookkeeper)?" },
+              { key: "payment-methods", label: "How will customers pay you (card, invoice, cash, online)?" },
+              { key: "tax-savings", label: "Do you have a system for setting aside money for taxes?" },
+            ],
+          },
+          {
+            key: "website-systems",
+            title: "Website & core systems (email, domain)",
+            label: "recommended",
+            questions: [
+              { key: "website-status", label: "Do you have a website or landing page yet?" },
+              { key: "email-domain", label: "What's your business email domain (not a personal Gmail)?" },
+              { key: "visitor-action", label: "What's the one thing you want a visitor to do on your site?" },
+            ],
+          },
+        ],
+      },
     ],
   },
   {
@@ -214,4 +337,15 @@ export function findModule(moduleKey: string) {
     }
   }
   return null;
+}
+
+/** Looks up one guided step within a module by its `stepKey`. Used by the
+ * AI Business Builder's API routes to validate a request and pull the
+ * step's title into the AI prompt. */
+export function findStep(moduleKey: string, stepKey: string) {
+  const found = findModule(moduleKey);
+  if (!found) return null;
+  const step = stepsForModule(found.module).find((s) => s.key === stepKey);
+  if (!step) return null;
+  return { module: found.module, step };
 }

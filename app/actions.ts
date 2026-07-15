@@ -7,12 +7,15 @@ import {
   enrollInProgram,
   recordEventAttendance,
   registerForEvent,
+  saveStepAnswers,
+  setStepCompleted,
   upsertMember,
   type JourneyType,
   type MembershipTier,
 } from "@/lib/appStore";
 import { events } from "@/data/events";
 import { programs } from "@/data/programs";
+import { findStep } from "@/data/modules";
 
 // Shared result shape for the useActionState-driven forms below (Register,
 // Enroll, Check in) so a failed Supabase write can show the member an actual
@@ -127,6 +130,43 @@ export async function checkInForEventAction(
 
   if (!result.ok) {
     return { ok: false, error: "Couldn't record your check-in — please try again in a moment." };
+  }
+  return { ok: true, error: null };
+}
+
+// Saves one guided-step's checkbox + question answers together (see
+// components/StepCard.tsx). Both writes go through even if one fails, since
+// they're independent columns on the same row — the error message just
+// reflects whether either one didn't make it.
+export async function saveStepProgressAction(
+  _prevState: FormState,
+  formData: FormData,
+): Promise<FormState> {
+  const { userId } = await auth();
+  if (!userId) redirect("/login");
+
+  const moduleKey = fieldValue(formData, "moduleKey");
+  const stepKey = fieldValue(formData, "stepKey");
+  const found = findStep(moduleKey, stepKey);
+  if (!found) {
+    return { ok: false, error: "That step couldn't be found. Refresh the page and try again." };
+  }
+
+  const completed = formData.get("completed") === "on";
+  const answers: Record<string, string> = {};
+  for (const q of found.step.questions) {
+    answers[q.key] = fieldValue(formData, q.key);
+  }
+
+  const [answersResult, completedResult] = await Promise.all([
+    saveStepAnswers(userId, moduleKey, stepKey, answers),
+    setStepCompleted(userId, moduleKey, stepKey, completed),
+  ]);
+
+  revalidatePath(`/dashboard/roadmap/${moduleKey}`);
+
+  if (!answersResult.ok || !completedResult.ok) {
+    return { ok: false, error: "Couldn't save — please try again in a moment." };
   }
   return { ok: true, error: null };
 }

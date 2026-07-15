@@ -481,3 +481,187 @@ export async function getPortalActivitySummary(): Promise<PortalActivitySummary>
     return emptyPortalActivitySummary;
   }
 }
+
+// ---------------------------------------------------------------------------
+// AI Business Builder — per-step progress, guided-question answers, and the
+// AI-generated "save summary" artifact (e.g. a member's Business Idea
+// Summary). Backed by module_step_progress / module_summaries, which are
+// new tables in supabase-schema.sql that may not be migrated onto the live
+// database yet — every function here degrades to an empty/no-op result
+// instead of throwing, same pattern as the rest of this file, so the module
+// pages keep working (just without saving) until the migration runs.
+// ---------------------------------------------------------------------------
+
+export type StepProgress = {
+  stepKey: string;
+  completed: boolean;
+  answers: Record<string, string>;
+};
+
+type StepProgressRow = {
+  step_key: string;
+  completed: boolean;
+  answers: Record<string, string> | null;
+};
+
+/** All saved step progress for one member within one module, keyed by step. */
+export async function getModuleProgress(
+  memberId: string,
+  moduleKey: string,
+): Promise<Record<string, StepProgress>> {
+  try {
+    const { data, error } = await db()
+      .from("module_step_progress")
+      .select("step_key, completed, answers")
+      .eq("member_id", memberId)
+      .eq("module_key", moduleKey);
+
+    if (error) {
+      console.error("getModuleProgress: failed to load", error);
+      return {};
+    }
+
+    const rows = (data ?? []) as StepProgressRow[];
+    return Object.fromEntries(
+      rows.map((r) => [
+        r.step_key,
+        { stepKey: r.step_key, completed: r.completed, answers: r.answers ?? {} },
+      ]),
+    );
+  } catch (error) {
+    console.error("getModuleProgress: Supabase unavailable", error);
+    return {};
+  }
+}
+
+/** Saves (upserts) a step's guided-question answers without touching `completed`. */
+export async function saveStepAnswers(
+  memberId: string,
+  moduleKey: string,
+  stepKey: string,
+  answers: Record<string, string>,
+): Promise<{ ok: boolean }> {
+  try {
+    const supabase = db();
+    const { data: existing } = await supabase
+      .from("module_step_progress")
+      .select("completed")
+      .eq("member_id", memberId)
+      .eq("module_key", moduleKey)
+      .eq("step_key", stepKey)
+      .maybeSingle();
+
+    const { error } = await supabase.from("module_step_progress").upsert(
+      {
+        member_id: memberId,
+        module_key: moduleKey,
+        step_key: stepKey,
+        completed: existing?.completed ?? false,
+        answers,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "member_id,module_key,step_key" },
+    );
+
+    if (error) {
+      console.error("saveStepAnswers: failed to upsert", error);
+      return { ok: false };
+    }
+    return { ok: true };
+  } catch (error) {
+    console.error("saveStepAnswers: Supabase unavailable", error);
+    return { ok: false };
+  }
+}
+
+/** Sets (or clears) a step's completed checkbox. */
+export async function setStepCompleted(
+  memberId: string,
+  moduleKey: string,
+  stepKey: string,
+  completed: boolean,
+): Promise<{ ok: boolean }> {
+  try {
+    const supabase = db();
+    const { data: existing } = await supabase
+      .from("module_step_progress")
+      .select("answers")
+      .eq("member_id", memberId)
+      .eq("module_key", moduleKey)
+      .eq("step_key", stepKey)
+      .maybeSingle();
+
+    const { error } = await supabase.from("module_step_progress").upsert(
+      {
+        member_id: memberId,
+        module_key: moduleKey,
+        step_key: stepKey,
+        completed,
+        answers: existing?.answers ?? {},
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "member_id,module_key,step_key" },
+    );
+
+    if (error) {
+      console.error("setStepCompleted: failed to upsert", error);
+      return { ok: false };
+    }
+    return { ok: true };
+  } catch (error) {
+    console.error("setStepCompleted: Supabase unavailable", error);
+    return { ok: false };
+  }
+}
+
+export type ModuleSummary = {
+  title: string;
+  content: string;
+  updatedAt: string;
+};
+
+/** The member's saved AI-generated summary artifact for a module, if any. */
+export async function getModuleSummary(
+  memberId: string,
+  moduleKey: string,
+): Promise<ModuleSummary | null> {
+  try {
+    const { data } = await db()
+      .from("module_summaries")
+      .select("title, content, updated_at")
+      .eq("member_id", memberId)
+      .eq("module_key", moduleKey)
+      .maybeSingle();
+
+    if (!data) return null;
+    return { title: data.title, content: data.content, updatedAt: data.updated_at };
+  } catch (error) {
+    console.error("getModuleSummary: Supabase unavailable", error);
+    return null;
+  }
+}
+
+/** Saves (or overwrites) the member's AI-generated summary artifact for a module. */
+export async function saveModuleSummary(
+  memberId: string,
+  moduleKey: string,
+  title: string,
+  content: string,
+): Promise<{ ok: boolean }> {
+  try {
+    const now = new Date().toISOString();
+    const { error } = await db().from("module_summaries").upsert(
+      { member_id: memberId, module_key: moduleKey, title, content, updated_at: now },
+      { onConflict: "member_id,module_key" },
+    );
+
+    if (error) {
+      console.error("saveModuleSummary: failed to upsert", error);
+      return { ok: false };
+    }
+    return { ok: true };
+  } catch (error) {
+    console.error("saveModuleSummary: Supabase unavailable", error);
+    return { ok: false };
+  }
+}
