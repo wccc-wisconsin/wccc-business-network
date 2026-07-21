@@ -123,6 +123,19 @@ create table if not exists module_summaries (
   unique(member_id, module_key)
 );
 
+-- Funding & Programs: AI-generated matches (grants, loans, certifications,
+-- WCCC/WEDC/SBA programs) tailored to one member's industry/city/stage.
+-- Excludes contracts/RFPs, which are the roadmap's own "Opportunity" stage.
+-- One row per member — regenerating overwrites the previous set, same
+-- pattern as module_summaries. `content` is a JSON array of
+-- { title, type, description, whyItFits, nextStep }.
+create table if not exists member_opportunities (
+  id uuid primary key default gen_random_uuid(),
+  member_id text not null references members(id) on delete cascade unique,
+  content jsonb not null default '[]'::jsonb,
+  generated_at timestamptz not null default now()
+);
+
 -- Disable RLS (service role key bypasses it anyway, but keeps it simple)
 alter table members disable row level security;
 alter table login_events disable row level security;
@@ -132,3 +145,4 @@ alter table activities disable row level security;
 alter table event_attendance disable row level security;
 alter table module_step_progress disable row level security;
 alter table module_summaries disable row level security;
+alter table member_opportunities disable row level security;

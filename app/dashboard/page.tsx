@@ -16,11 +16,13 @@ import { roadmapTracks as allRoadmapTracks, tierMeetsMinimum } from "@/data/modu
 import {
   getMemberById,
   getMemberDashboard,
+  getMemberOpportunities,
   recordMemberSignIn,
 } from "@/lib/appStore";
 import { slugifyEventTitle } from "@/lib/eventSlug";
 import DashboardRoadmapTabs from "@/components/DashboardRoadmapTabs";
 import RoadmapModuleList from "@/components/RoadmapModuleList";
+import OpportunitiesPanel from "@/components/OpportunitiesPanel";
 
 export const dynamic = "force-dynamic";
 
@@ -88,7 +90,10 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
     .filter(Boolean);
   const isStaff = staffEmails.includes(member.email.toLowerCase());
 
-  const dashboard = await getMemberDashboard(userId);
+  const [dashboard, memberOpportunities] = await Promise.all([
+    getMemberDashboard(userId),
+    getMemberOpportunities(userId),
+  ]);
   const registeredTitles = new Set(
     dashboard.registrations.map((r) => r.eventTitle),
   );
@@ -259,6 +264,8 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
             </section>
           ))
         )}
+
+        <OpportunitiesPanel initialOpportunities={memberOpportunities} />
 
         <CommunityHubLinks />
 

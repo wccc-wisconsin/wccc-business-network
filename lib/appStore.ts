@@ -665,3 +665,69 @@ export async function saveModuleSummary(
     return { ok: false };
   }
 }
+
+// ---------------------------------------------------------------------------
+// Funding & Programs — AI-generated matches (grants, loans, certifications,
+// WCCC/WEDC/SBA programs) tailored to one member's industry/city/stage.
+// Deliberately excludes contracts/RFPs, which are the roadmap's own
+// "Opportunity" stage. Backed by member_opportunities, a new table in
+// supabase-schema.sql that may not be migrated onto the live database yet —
+// degrades to empty/no-op like the module_summaries functions above, so the
+// dashboard keeps working (just without saving) until the migration runs.
+// ---------------------------------------------------------------------------
+
+export type Opportunity = {
+  title: string;
+  type: string;
+  description: string;
+  whyItFits: string;
+  nextStep: string;
+};
+
+export type OpportunityMatches = {
+  items: Opportunity[];
+  generatedAt: string;
+};
+
+/** The member's most recently generated opportunity matches, if any. */
+export async function getMemberOpportunities(
+  memberId: string,
+): Promise<OpportunityMatches | null> {
+  try {
+    const { data } = await db()
+      .from("member_opportunities")
+      .select("content, generated_at")
+      .eq("member_id", memberId)
+      .maybeSingle();
+
+    if (!data) return null;
+    const items = Array.isArray(data.content) ? (data.content as Opportunity[]) : [];
+    return { items, generatedAt: data.generated_at };
+  } catch (error) {
+    console.error("getMemberOpportunities: Supabase unavailable", error);
+    return null;
+  }
+}
+
+/** Saves (overwrites) the member's generated opportunity matches. */
+export async function saveMemberOpportunities(
+  memberId: string,
+  items: Opportunity[],
+): Promise<{ ok: boolean }> {
+  try {
+    const now = new Date().toISOString();
+    const { error } = await db().from("member_opportunities").upsert(
+      { member_id: memberId, content: items, generated_at: now },
+      { onConflict: "member_id" },
+    );
+
+    if (error) {
+      console.error("saveMemberOpportunities: failed to upsert", error);
+      return { ok: false };
+    }
+    return { ok: true };
+  } catch (error) {
+    console.error("saveMemberOpportunities: Supabase unavailable", error);
+    return { ok: false };
+  }
+}

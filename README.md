@@ -26,6 +26,8 @@ Auth is handled by Clerk; member data lives in Supabase. To set up (or update) t
 
 The script is additive and safe to re-run — every statement uses `if not exists` guards, so running it against an already-set-up database just applies any new columns/tables without touching existing data. When you add a field that `lib/appStore.ts` reads or writes, add a matching `alter table ... add column if not exists` migration here in the same PR, or the app will silently fail to persist it (this happened with `membership_tier` and `membership_expires_at` — see PR #1).
 
+**Pending migration:** this file now includes `member_opportunities` (backs the dashboard's Funding & Programs panel — AI-generated grants/loans/certifications/programs matched to each member; deliberately excludes contracts/RFPs, which are the roadmap's own "Opportunity" stage). Re-run the script in the Supabase SQL Editor to add it; until then the feature degrades gracefully (members can generate matches, they just won't be saved between visits).
+
 ## Learn More
 
 To learn more about Next.js, take a look at the following resources:
