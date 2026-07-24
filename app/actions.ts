@@ -7,6 +7,7 @@ import {
   enrollInProgram,
   recordEventAttendance,
   registerForEvent,
+  saveBusinessAssessment,
   saveStepAnswers,
   setStepCompleted,
   upsertMember,
@@ -16,6 +17,7 @@ import {
 import { events } from "@/data/events";
 import { programs } from "@/data/programs";
 import { findStep } from "@/data/modules";
+import { assessmentQuestions, computeAssessment } from "@/data/assessment";
 
 // Shared result shape for the useActionState-driven forms below (Register,
 // Enroll, Check in) so a failed Supabase write can show the member an actual
@@ -167,6 +169,38 @@ export async function saveStepProgressAction(
 
   if (!answersResult.ok || !completedResult.ok) {
     return { ok: false, error: "Couldn't save — please try again in a moment." };
+  }
+  return { ok: true, error: null };
+}
+
+// Saves the Business Snapshot questionnaire (see components/BusinessAssessmentCard.tsx
+// and data/assessment.ts). The score/stage/free-module are always computed
+// here from the submitted answers — never trust a score sent from the
+// client, since that would let a member hand-craft a request that unlocks
+// any module for free.
+export async function saveBusinessAssessmentAction(
+  _prevState: FormState,
+  formData: FormData,
+): Promise<FormState> {
+  const { userId } = await auth();
+  if (!userId) redirect("/login");
+
+  const answers: Record<string, string> = {};
+  for (const q of assessmentQuestions) {
+    const value = fieldValue(formData, q.key);
+    const isValidOption = q.options.some((o) => o.value === value);
+    if (!isValidOption) {
+      return { ok: false, error: "Please answer every question, then try again." };
+    }
+    answers[q.key] = value;
+  }
+
+  const { score, stage, freeModuleKey } = computeAssessment(answers);
+  const result = await saveBusinessAssessment(userId, answers, score, stage, freeModuleKey);
+  revalidatePath("/dashboard");
+
+  if (!result.ok) {
+    return { ok: false, error: "Couldn't save your Business Snapshot — please try again in a moment." };
   }
   return { ok: true, error: null };
 }

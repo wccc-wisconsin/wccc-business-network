@@ -731,3 +731,79 @@ export async function saveMemberOpportunities(
     return { ok: false };
   }
 }
+
+// ---------------------------------------------------------------------------
+// Business Snapshot — the short questionnaire (data/assessment.ts) that
+// scores a member's business maturity and records which single roadmap
+// module their stated immediate need unlocks for free. Backed by
+// business_assessments, a new table in supabase-schema.sql that may not be
+// migrated onto the live database yet — degrades to null/no-op like the
+// module_summaries functions above, so the dashboard keeps working (just
+// without saving) until the migration runs.
+// ---------------------------------------------------------------------------
+
+export type BusinessAssessment = {
+  answers: Record<string, string>;
+  score: number;
+  stage: string;
+  freeModuleKey: string | null;
+  updatedAt: string;
+};
+
+/** The member's most recently saved Business Snapshot, if any. */
+export async function getBusinessAssessment(
+  memberId: string,
+): Promise<BusinessAssessment | null> {
+  try {
+    const { data } = await db()
+      .from("business_assessments")
+      .select("answers, score, stage, free_module_key, updated_at")
+      .eq("member_id", memberId)
+      .maybeSingle();
+
+    if (!data) return null;
+    return {
+      answers: (data.answers ?? {}) as Record<string, string>,
+      score: data.score,
+      stage: data.stage,
+      freeModuleKey: data.free_module_key ?? null,
+      updatedAt: data.updated_at,
+    };
+  } catch (error) {
+    console.error("getBusinessAssessment: Supabase unavailable", error);
+    return null;
+  }
+}
+
+/** Saves (overwrites) the member's Business Snapshot — one row per member. */
+export async function saveBusinessAssessment(
+  memberId: string,
+  answers: Record<string, string>,
+  score: number,
+  stage: string,
+  freeModuleKey: string | null,
+): Promise<{ ok: boolean }> {
+  try {
+    const now = new Date().toISOString();
+    const { error } = await db().from("business_assessments").upsert(
+      {
+        member_id: memberId,
+        answers,
+        score,
+        stage,
+        free_module_key: freeModuleKey,
+        updated_at: now,
+      },
+      { onConflict: "member_id" },
+    );
+
+    if (error) {
+      console.error("saveBusinessAssessment: failed to upsert", error);
+      return { ok: false };
+    }
+    return { ok: true };
+  } catch (error) {
+    console.error("saveBusinessAssessment: Supabase unavailable", error);
+    return { ok: false };
+  }
+}

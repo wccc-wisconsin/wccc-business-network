@@ -55,6 +55,21 @@ export function tierMeetsMinimum(memberTier: MembershipTierKey, minTier: Members
   return tierOrder.indexOf(memberTier) >= tierOrder.indexOf(minTier);
 }
 
+/**
+ * Whether a member can access a given module: either their membership tier
+ * covers it, or it's the one module their Business Snapshot assessment
+ * unlocked for free (see data/assessment.ts, components/BusinessAssessmentCard.tsx).
+ * `freeModuleKey` is the member's current free-unlock choice, or null/undefined
+ * if they haven't taken the assessment (or it hasn't loaded).
+ */
+export function isModuleUnlocked(
+  memberTier: MembershipTierKey,
+  mod: BusinessModule,
+  freeModuleKey?: string | null,
+) {
+  return tierMeetsMinimum(memberTier, mod.minTier) || mod.key === freeModuleKey;
+}
+
 // The 7 engines of the AI Business Builder, in lifecycle order:
 // Launch (set up) -> Revenue (sell) -> Growth (scale) -> Capital (fund)
 // -> Opportunity (win contracts) -> Expansion (multiply) -> Legacy (hand off)

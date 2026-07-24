@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import type { BusinessModule, MembershipTierKey } from "@/data/modules";
-import { tierMeetsMinimum } from "@/data/modules";
+import { isModuleUnlocked } from "@/data/modules";
 import RoadmapModuleList from "@/components/RoadmapModuleList";
 
 export type RoadmapTrack = {
@@ -16,13 +16,15 @@ type Props = {
   tracks: RoadmapTrack[];
   membershipTier: MembershipTierKey;
   tierLabels: Record<string, string>;
+  /** The member's Business Snapshot free-unlock choice, if any — see data/assessment.ts. */
+  freeModuleKey?: string | null;
 };
 
 // Tabbed view for members whose journey unlocks more than one roadmap
 // (e.g. journey === "both"), so Business Networking and Personal
 // Networking each get their own spotlighted tab instead of being
 // stacked one after another.
-export default function DashboardRoadmapTabs({ tracks, membershipTier, tierLabels }: Props) {
+export default function DashboardRoadmapTabs({ tracks, membershipTier, tierLabels, freeModuleKey }: Props) {
   const [activeKey, setActiveKey] = useState(tracks[0]?.key);
   const active = tracks.find((t) => t.key === activeKey) ?? tracks[0];
 
@@ -53,11 +55,17 @@ export default function DashboardRoadmapTabs({ tracks, membershipTier, tierLabel
         <h2 className="mt-1 font-serif text-2xl font-bold text-white">{active.heading}</h2>
         <p className="mt-1 text-sm text-white/50">
           {active.modules.length} stages of resources. Your {tierLabels[membershipTier]} membership unlocks{" "}
-          {active.modules.filter((m) => tierMeetsMinimum(membershipTier, m.minTier)).length} of {active.modules.length}.
+          {active.modules.filter((m) => isModuleUnlocked(membershipTier, m, freeModuleKey)).length} of {active.modules.length}.
         </p>
       </div>
 
-      <RoadmapModuleList key={active.key} modules={active.modules} membershipTier={membershipTier} tierLabels={tierLabels} />
+      <RoadmapModuleList
+        key={active.key}
+        modules={active.modules}
+        membershipTier={membershipTier}
+        tierLabels={tierLabels}
+        freeModuleKey={freeModuleKey}
+      />
     </section>
   );
 }

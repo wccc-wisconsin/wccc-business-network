@@ -12,14 +12,16 @@ import ActionButtonForm from "@/components/ActionButtonForm";
 import CommunityHubLinks from "@/components/CommunityHubLinks";
 import { events } from "@/data/events";
 import { programs } from "@/data/programs";
-import { roadmapTracks as allRoadmapTracks, tierMeetsMinimum } from "@/data/modules";
+import { roadmapTracks as allRoadmapTracks, isModuleUnlocked } from "@/data/modules";
 import {
+  getBusinessAssessment,
   getMemberById,
   getMemberDashboard,
   getMemberOpportunities,
   recordMemberSignIn,
 } from "@/lib/appStore";
 import { slugifyEventTitle } from "@/lib/eventSlug";
+import BusinessAssessmentCard from "@/components/BusinessAssessmentCard";
 import DashboardRoadmapTabs from "@/components/DashboardRoadmapTabs";
 import RoadmapModuleList from "@/components/RoadmapModuleList";
 import OpportunitiesPanel from "@/components/OpportunitiesPanel";
@@ -90,10 +92,12 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
     .filter(Boolean);
   const isStaff = staffEmails.includes(member.email.toLowerCase());
 
-  const [dashboard, memberOpportunities] = await Promise.all([
+  const [dashboard, memberOpportunities, businessAssessment] = await Promise.all([
     getMemberDashboard(userId),
     getMemberOpportunities(userId),
+    getBusinessAssessment(userId),
   ]);
+  const freeModuleKey = businessAssessment?.freeModuleKey ?? null;
   const registeredTitles = new Set(
     dashboard.registrations.map((r) => r.eventTitle),
   );
@@ -232,16 +236,29 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
           </div>
         </section>
 
-        {/* Roadmap(s) — 7-stage tracks, gated by membership tier, chosen by journey.
-            Members with only one track (business-only or personal-only) get that
-            single section directly. Members on "both" get a tabbed view so
-            Business Networking and Personal Networking are each spotlighted
-            on their own tab instead of stacked one after another. */}
+        {/* Business Snapshot — 7-question dashboard card that classifies the
+            member's business stage and unlocks one roadmap module free
+            based on their stated top priority, regardless of membership
+            tier. Sits above the roadmap since its free-unlock badge shows
+            up there. See data/assessment.ts and components/BusinessAssessmentCard.tsx. */}
+        <BusinessAssessmentCard
+          key={businessAssessment?.updatedAt ?? "new"}
+          initialAssessment={businessAssessment}
+        />
+
+        {/* Roadmap(s) — 7-stage tracks, gated by membership tier (plus the
+            one free module from the Business Snapshot above), chosen by
+            journey. Members with only one track (business-only or
+            personal-only) get that single section directly. Members on
+            "both" get a tabbed view so Business Networking and Personal
+            Networking are each spotlighted on their own tab instead of
+            stacked one after another. */}
         {roadmapTracks.length > 1 ? (
           <DashboardRoadmapTabs
             tracks={roadmapTracks}
             membershipTier={member.membershipTier}
             tierLabels={tierLabels}
+            freeModuleKey={freeModuleKey}
           />
         ) : (
           roadmapTracks.map((track) => (
@@ -251,7 +268,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                 <h2 className="mt-1 font-serif text-2xl font-bold text-white">{track.heading}</h2>
                 <p className="mt-1 text-sm text-white/50">
                   {track.modules.length} stages of resources. Your {tierLabels[member.membershipTier]} membership
-                  unlocks {track.modules.filter((m) => tierMeetsMinimum(member.membershipTier, m.minTier)).length} of {track.modules.length}.
+                  unlocks {track.modules.filter((m) => isModuleUnlocked(member.membershipTier, m, freeModuleKey)).length} of {track.modules.length}.
                 </p>
               </div>
 
@@ -260,6 +277,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                 modules={track.modules}
                 membershipTier={member.membershipTier}
                 tierLabels={tierLabels}
+                freeModuleKey={freeModuleKey}
               />
             </section>
           ))

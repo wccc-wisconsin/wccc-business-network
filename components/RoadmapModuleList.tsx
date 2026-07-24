@@ -3,12 +3,14 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import type { BusinessModule, MembershipTierKey } from "@/data/modules";
-import { tierMeetsMinimum } from "@/data/modules";
+import { isModuleUnlocked, tierMeetsMinimum } from "@/data/modules";
 
 type Props = {
   modules: BusinessModule[];
   membershipTier: MembershipTierKey;
   tierLabels: Record<string, string>;
+  /** The member's Business Snapshot free-unlock choice, if any — see data/assessment.ts. */
+  freeModuleKey?: string | null;
 };
 
 // Card-deck stepper: one roadmap stage front-and-center at a time, with the
@@ -18,7 +20,7 @@ type Props = {
 // dots move through the deck; clicking a peeking card also jumps to it.
 // Shared by the single-track view (app/dashboard/page.tsx) and the tabbed
 // view (DashboardRoadmapTabs.tsx) so the two can't drift apart.
-export default function RoadmapModuleList({ modules, membershipTier, tierLabels }: Props) {
+export default function RoadmapModuleList({ modules, membershipTier, tierLabels, freeModuleKey }: Props) {
   const [index, setIndex] = useState(0);
   const total = modules.length;
 
@@ -52,7 +54,9 @@ export default function RoadmapModuleList({ modules, membershipTier, tierLabels 
           const offset = i - clamped;
           if (offset < -1 || offset > 1) return null; // only render prev / active / next
           const isActive = offset === 0;
-          const unlocked = tierMeetsMinimum(membershipTier, mod.minTier);
+          const unlockedByTier = tierMeetsMinimum(membershipTier, mod.minTier);
+          const unlocked = isModuleUnlocked(membershipTier, mod, freeModuleKey);
+          const unlockedByFreeGrant = unlocked && !unlockedByTier;
           return (
             <div
               key={mod.key}
@@ -78,6 +82,12 @@ export default function RoadmapModuleList({ modules, membershipTier, tierLabels 
                 {mod.label}
               </p>
               <p className="mt-1 text-sm text-white/50">{mod.tagline}</p>
+
+              {unlockedByFreeGrant && (
+                <span className="mt-3 inline-block w-fit rounded-full border border-emerald-400/30 bg-emerald-400/10 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.12em] text-emerald-300">
+                  ✓ Unlocked free from your Business Snapshot
+                </span>
+              )}
 
               <div className="mt-5">
                 {unlocked ? (

@@ -40,6 +40,11 @@ create table if not exists login_events (
   created_at timestamptz not null default now()
 );
 
+-- Migration: add session_id if upgrading a database created before this
+-- column existed (create table if not exists is a no-op on existing tables,
+-- so it wouldn't otherwise be added).
+alter table login_events add column if not exists session_id text not null default '';
+
 create unique index if not exists login_events_member_session_idx
   on login_events(member_id, session_id)
   where session_id <> '';
@@ -136,6 +141,28 @@ create table if not exists member_opportunities (
   generated_at timestamptz not null default now()
 );
 
+-- Business Snapshot: a short questionnaire (data/assessment.ts) that scores
+-- a member's business maturity and records which single roadmap module
+-- their stated "most urgent need" unlocks for free, regardless of
+-- membership tier (see isModuleUnlocked in data/modules.ts). One row per
+-- member — retaking the assessment overwrites the previous result, same
+-- upsert pattern as module_summaries / member_opportunities.
+-- `answers` holds the raw question-key -> selected-option-value map so past
+-- answers can be re-shown if the member reopens the form to update it.
+create table if not exists business_assessments (
+  id uuid primary key default gen_random_uuid(),
+  member_id text not null references members(id) on delete cascade unique,
+  answers jsonb not null default '{}'::jsonb,
+  score int not null default 0,
+  stage text not null default '',
+  free_module_key text,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create index if not exists business_assessments_member_idx
+  on business_assessments(member_id);
+
 -- Disable RLS (service role key bypasses it anyway, but keeps it simple)
 alter table members disable row level security;
 alter table login_events disable row level security;
@@ -146,3 +173,4 @@ alter table event_attendance disable row level security;
 alter table module_step_progress disable row level security;
 alter table module_summaries disable row level security;
 alter table member_opportunities disable row level security;
+alter table business_assessments disable row level security;
