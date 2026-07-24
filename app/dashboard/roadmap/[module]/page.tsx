@@ -1,8 +1,9 @@
 import { auth } from "@clerk/nextjs/server";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
-import { findModule, stepsForModule, tierMeetsMinimum } from "@/data/modules";
+import { findModule, isModuleUnlocked, tierMeetsMinimum, stepsForModule } from "@/data/modules";
 import {
+  getBusinessAssessment,
   getMemberById,
   getModuleProgress,
   getModuleSummary,
@@ -42,7 +43,10 @@ export default async function ModulePage({ params }: ModulePageProps) {
   if (!found) notFound();
 
   const { track, module: mod, prev, next } = found;
-  const unlocked = tierMeetsMinimum(member.membershipTier, mod.minTier);
+  const assessment = await getBusinessAssessment(userId);
+  const unlockedByTier = tierMeetsMinimum(member.membershipTier, mod.minTier);
+  const unlocked = isModuleUnlocked(member.membershipTier, mod, assessment?.freeModuleKey);
+  const unlockedByFreeGrant = unlocked && !unlockedByTier;
   const steps = stepsForModule(mod);
   const hasGuidedSteps = steps.length > 0;
 
@@ -91,6 +95,12 @@ export default async function ModulePage({ params }: ModulePageProps) {
         </div>
         <p className="mt-3 text-base text-white/60">{mod.tagline}</p>
 
+        {unlockedByFreeGrant && (
+          <span className="mt-3 inline-block rounded-full border border-emerald-400/30 bg-emerald-400/10 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.12em] text-emerald-300">
+            ✓ Unlocked free from your Business Snapshot
+          </span>
+        )}
+
         {unlocked && hasGuidedSteps && (
           <div className="mt-6">
             <div className="mb-2 flex justify-between text-sm text-white/75">
@@ -131,6 +141,11 @@ export default async function ModulePage({ params }: ModulePageProps) {
               <p className="mt-2 text-sm text-white/60">
                 Your current membership is {tierLabels[member.membershipTier]}. Upgrade to unlock{" "}
                 {mod.resources.length} resource{mod.resources.length === 1 ? "" : "s"} in this stage.
+              </p>
+              <p className="mt-2 text-sm text-white/50">
+                {assessment
+                  ? "Or take the Business Snapshot on your dashboard again and pick this as your top priority — it unlocks one stage free."
+                  : "Or take the Business Snapshot on your dashboard — 7 quick questions unlock one stage free, matched to your top priority."}
               </p>
               <a
                 href={`mailto:info@wisccc.org?subject=Membership Upgrade&body=I'd like to upgrade to ${tierLabels[mod.minTier]} membership.`}

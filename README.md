@@ -28,6 +28,8 @@ The script is additive and safe to re-run — every statement uses `if not exist
 
 **Pending migration:** this file now includes `member_opportunities` (backs the dashboard's Funding & Programs panel — AI-generated grants/loans/certifications/programs matched to each member; deliberately excludes contracts/RFPs, which are the roadmap's own "Opportunity" stage). Re-run the script in the Supabase SQL Editor to add it; until then the feature degrades gracefully (members can generate matches, they just won't be saved between visits).
 
+**Pending migration:** this file now also includes `business_assessments` (backs the dashboard's Business Snapshot card — a 7-question form that scores a member's business stage and unlocks one roadmap module for free based on their stated top priority, regardless of membership tier; see `data/assessment.ts`). Re-run the script to add it; until then the card still renders and members can submit the form, but `saveBusinessAssessment` degrades to a no-op (see `lib/appStore.ts`), so nothing is saved and no module gets unlocked until the migration runs.
+
 ## Learn More
 
 To learn more about Next.js, take a look at the following resources:
