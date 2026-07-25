@@ -1,6 +1,7 @@
 "use client";
 
 import { useActionState, useState } from "react";
+import Link from "next/link";
 import type { FormState } from "@/app/actions";
 import { saveBusinessAssessmentAction } from "@/app/actions";
 import { assessmentQuestions } from "@/data/assessment";
@@ -81,14 +82,39 @@ export default function BusinessAssessmentCard({ initialAssessment }: Props) {
       )}
 
       {!isEditing && unlockedModule && (
-        <div className="mt-4 flex items-center gap-3 rounded-[8px] border border-emerald-400/30 bg-emerald-400/10 px-4 py-3">
-          <span className="text-2xl">{unlockedModule.icon}</span>
-          <div>
-            <p className="text-xs font-bold uppercase tracking-[0.15em] text-emerald-300">Unlocked free for you</p>
-            <p className="text-sm font-bold text-white">
-              {unlockedModule.label} — {unlockedModule.tagline}
-            </p>
+        <div className="mt-4 rounded-[8px] border border-emerald-400/30 bg-emerald-400/10 p-4">
+          <div className="flex items-center gap-3">
+            <span className="text-2xl">{unlockedModule.icon}</span>
+            <div>
+              <p className="text-xs font-bold uppercase tracking-[0.15em] text-emerald-300">Unlocked free for you</p>
+              <p className="text-sm font-bold text-white">
+                {unlockedModule.label} — {unlockedModule.tagline}
+              </p>
+            </div>
           </div>
+
+          {unlockedModule.resources.length > 0 && (
+            <>
+              <p className="mt-4 text-[10px] font-bold uppercase tracking-[0.2em] text-white/50">
+                Start with these
+              </p>
+              <ul className="mt-2 space-y-1.5">
+                {unlockedModule.resources.map((r) => (
+                  <li key={r} className="flex items-start gap-2 text-sm text-white/80">
+                    <span className="mt-0.5 shrink-0 text-emerald-300">☐</span>
+                    {r}
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
+
+          <Link
+            href={`/dashboard/roadmap/${unlockedModule.key}`}
+            className="mt-4 inline-flex items-center gap-1 rounded-full bg-emerald-400/20 px-4 py-2 text-xs font-bold uppercase tracking-[0.12em] text-emerald-300 transition hover:bg-emerald-400/30"
+          >
+            Start {unlockedModule.label} →
+          </Link>
         </div>
       )}
 
