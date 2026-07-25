@@ -184,6 +184,91 @@ export const businessModules: BusinessModule[] = [
       "First-customer outreach generator",
       "Sales & follow-up system",
     ],
+    // Second full guided-steps template after Launch — same shape (3
+    // phases, 6 steps), scoped to Revenue's actual job: get found, get the
+    // next customer, get paid reliably. Owns the demand/selling steps that
+    // were carved out of the original 10-step Launch draft (see the note
+    // on Launch's `phases` above).
+    phases: [
+      {
+        key: "get-found",
+        title: "Get found",
+        steps: [
+          {
+            key: "local-presence",
+            title: "Google Business Profile & local presence",
+            label: "essential",
+            questions: [
+              { key: "gbp-status", label: "Do you have a Google Business Profile set up and verified?" },
+              { key: "search-experience", label: "If a new customer searched for what you do in your city right now, what would they find?" },
+              { key: "reviews", label: "How many reviews do you have, and what's your average rating?" },
+            ],
+          },
+          {
+            key: "marketing-plan",
+            title: "Marketing plan & channels",
+            label: "recommended",
+            questions: [
+              { key: "channels", label: "Which channels are you actually using (social media, referrals, paid ads, events, none yet)?" },
+              { key: "time-money", label: "Roughly how much time or money do you spend on marketing per month?" },
+              { key: "best-channel", label: "Which channel has brought you the best customers so far, if any?" },
+            ],
+          },
+        ],
+      },
+      {
+        key: "get-the-next-customer",
+        title: "Get the next customer",
+        steps: [
+          {
+            key: "outreach-pipeline",
+            title: "Outreach & pipeline",
+            label: "essential",
+            questions: [
+              { key: "next-prospects", label: "Who are 5 real, specific people or businesses you could reach out to this week?" },
+              { key: "outreach-method", label: "How do you typically reach out (call, email, in-person, social DM)?" },
+              { key: "blocker", label: "What's actually stopping you from reaching out today?" },
+            ],
+          },
+          {
+            key: "follow-up-referrals",
+            title: "Follow-up & referrals",
+            label: "recommended",
+            questions: [
+              { key: "follow-up-system", label: "How do you track who you've followed up with (CRM, spreadsheet, memory)?" },
+              { key: "referral-ask", label: "Do you ever directly ask happy customers for a referral or review? What do you say?" },
+              { key: "response-time", label: "How quickly do you typically respond to a new inquiry?" },
+            ],
+          },
+        ],
+      },
+      {
+        key: "get-paid-reliably",
+        title: "Get paid, reliably",
+        steps: [
+          {
+            key: "pricing-sales",
+            title: "Pricing & sales process",
+            label: "essential",
+            questions: [
+              { key: "pricing-basis", label: "How did you set your current prices (cost-based, competitor-based, gut feeling)?" },
+              { key: "close-rate", label: "Out of 10 people who show real interest, roughly how many become paying customers?" },
+              { key: "objection", label: "What's the most common reason someone says no?" },
+            ],
+          },
+          {
+            key: "retention",
+            title: "Repeat business & retention",
+            label: "recommended",
+            questions: [
+              { key: "repeat-share", label: "Roughly what share of your revenue comes from repeat or returning customers?" },
+              { key: "stay-in-touch", label: "Do you have any system for staying in touch with past customers?" },
+              { key: "comeback-reason", label: "What would realistically make a past customer come back?" },
+            ],
+          },
+        ],
+      },
+    ],
   },
   {
     key: "growth",
