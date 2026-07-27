@@ -35,10 +35,13 @@ export type BusinessModule = {
   resources: string[];
   /**
    * The full guided-steps template (phases -> steps -> guided questions).
-   * Optional because only Launch has this fleshed out so far — it's the
-   * master template (see app/dashboard/roadmap/[module]/page.tsx); the
-   * other 6 modules get their phases/steps cloned in next, same shell.
-   * Modules without `phases` fall back to the plain resource-list view.
+   * Optional because it's being filled in one module at a time, in lifecycle
+   * order — Launch, Revenue, and Growth have it today; the remaining business
+   * modules and the whole personal track get the same shape cloned in next.
+   * Modules without `phases` fall back to the plain resource-list view
+   * (see app/dashboard/roadmap/[module]/page.tsx). Every module uses the same
+   * generic storage (module_key/step_key in module_step_progress), so filling
+   * these in is a pure data change — no schema or query work needed.
    */
   phases?: ModulePhase[];
 };
@@ -280,6 +283,94 @@ export const businessModules: BusinessModule[] = [
       "SOP template generator",
       "KPI dashboard & monthly review",
       "First-hire & delegation guide",
+      "Cash flow & profitability worksheet",
+    ],
+    // Third full guided-steps template, same shape as Launch and Revenue (3
+    // phases, 6 steps, 3 questions each). Scoped to Growth's actual job: stop
+    // being the bottleneck. Owns the CRM/ops step carved out of the original
+    // 10-step Launch draft (see the note on Launch's `phases` above) — by this
+    // stage the question isn't "do you have tools" but "do the tools run
+    // without you". Questions deliberately ask for real numbers where a number
+    // exists; "I don't know" is itself a useful answer for the AI coach.
+    phases: [
+      {
+        key: "systemize-the-work",
+        title: "Systemize the work",
+        steps: [
+          {
+            key: "document-process",
+            title: "Document how the work gets done",
+            label: "essential",
+            questions: [
+              { key: "core-process", label: "Walk through what happens from the moment someone says yes to the moment the job is done." },
+              { key: "written-down", label: "Which parts of that are written down somewhere other than your head?" },
+              { key: "bus-test", label: "If you were out sick for two weeks, what would break first?" },
+            ],
+          },
+          {
+            key: "tools-systems",
+            title: "Tools & systems that run without you",
+            label: "recommended",
+            questions: [
+              { key: "current-tools", label: "What tools do you use to run day-to-day operations (CRM, scheduling, invoicing, project tracking)?" },
+              { key: "manual-work", label: "What do you still do by hand every week that a tool could probably handle?" },
+              { key: "single-source", label: "If a customer called right now, could anyone but you find their full history in under a minute?" },
+            ],
+          },
+        ],
+      },
+      {
+        key: "know-your-numbers",
+        title: "Know your numbers",
+        steps: [
+          {
+            key: "track-kpis",
+            title: "Track the numbers that matter",
+            label: "essential",
+            questions: [
+              { key: "key-metrics", label: "What are the 3 numbers you'd want to see every month to know the business is healthy?" },
+              { key: "current-visibility", label: "Which of those can you actually pull up today, and where do they live?" },
+              { key: "review-rhythm", label: "How often do you sit down and look at your numbers — honestly?" },
+            ],
+          },
+          {
+            key: "cash-flow",
+            title: "Cash flow & profitability",
+            label: "recommended",
+            questions: [
+              { key: "monthly-costs", label: "Roughly what does it cost to keep the doors open for one month?" },
+              { key: "profit-by-service", label: "Which of your products or services actually makes the most profit, not just the most revenue?" },
+              { key: "cash-cushion", label: "How many months could the business cover its costs if revenue stopped tomorrow?" },
+            ],
+          },
+        ],
+      },
+      {
+        key: "build-the-team",
+        title: "Build the team",
+        steps: [
+          {
+            key: "first-hire",
+            title: "Your first hire (or contractor)",
+            label: "essential",
+            questions: [
+              { key: "biggest-drain", label: "What task eats the most of your time but doesn't actually need you specifically?" },
+              { key: "role-shape", label: "Would that be an employee, a contractor, or a service — and roughly what would it cost per month?" },
+              { key: "hire-blocker", label: "What's holding you back from filling that role (money, trust, not knowing where to look)?" },
+            ],
+          },
+          {
+            key: "delegate-lead",
+            title: "Delegate & lead",
+            label: "recommended",
+            questions: [
+              { key: "handoff", label: "Think of the last thing you handed off. What made it work, or what went wrong?" },
+              { key: "decision-rights", label: "What decisions can someone else make without checking with you first?" },
+              { key: "owner-role", label: "A year from now, what should you personally be spending your time on?" },
+            ],
+          },
+        ],
+      },
     ],
   },
   {

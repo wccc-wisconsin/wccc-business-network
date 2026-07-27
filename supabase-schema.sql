@@ -87,15 +87,23 @@ create table if not exists event_attendance (
 
 -- Indexes: the dashboard always queries these tables filtered by member_id
 -- and, for activities/logins, ordered by created_at. Without these, lookups
--- degrade to sequential scans as the tables grow.
+-- degrade to sequential scans as the tables grow. These two tables need
+-- explicit indexes because neither has a unique constraint starting with
+-- member_id (login_events' unique index is partial, so it can't serve
+-- general member lookups or the created_at ordering).
 create index if not exists activities_member_created_idx
   on activities(member_id, created_at desc);
 
 create index if not exists login_events_member_created_idx
   on login_events(member_id, created_at desc);
 
-create index if not exists event_attendance_member_idx
-  on event_attendance(member_id);
+-- Removed: redundant with the index Postgres already creates for
+-- unique(member_id, event_title) — a btree on (member_id, event_title)
+-- serves member_id-only lookups via its leading column, so this was a
+-- duplicate that cost an extra write on every check-in and bought nothing.
+-- Verified against Postgres: member_id lookups still use an index scan on
+-- event_attendance_member_id_event_title_key without it.
+drop index if exists event_attendance_member_idx;
 
 -- AI Business Builder: one row per member/module/step. `answers` holds the
 -- guided-question responses for that step as { [questionKey]: string }.
@@ -111,8 +119,12 @@ create table if not exists module_step_progress (
   unique(member_id, module_key, step_key)
 );
 
-create index if not exists module_step_progress_member_module_idx
-  on module_step_progress(member_id, module_key);
+-- Removed: redundant with unique(member_id, module_key, step_key) above.
+-- getModuleProgress filters on (member_id, module_key), which is the leading
+-- prefix of that unique index, so the planner uses it either way. This table
+-- takes a write on every guided-step save, so the duplicate index was the
+-- most expensive of the three.
+drop index if exists module_step_progress_member_module_idx;
 
 -- The AI-generated "save summary" artifact per module (e.g. a member's
 -- Business Idea Summary from the Launch engine). One saved artifact per
@@ -160,8 +172,11 @@ create table if not exists business_assessments (
   updated_at timestamptz not null default now()
 );
 
-create index if not exists business_assessments_member_idx
-  on business_assessments(member_id);
+-- Removed: an exact duplicate. `member_id ... unique` on the column above
+-- already creates a btree index on exactly (member_id); this added a second
+-- identical one. Never shipped to production, so nothing to clean up unless
+-- an earlier version of this script was already run.
+drop index if exists business_assessments_member_idx;
 
 -- Disable RLS (service role key bypasses it anyway, but keeps it simple)
 alter table members disable row level security;

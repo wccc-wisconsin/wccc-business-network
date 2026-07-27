@@ -28,9 +28,11 @@ type ModulePageProps = {
 // Detail page for a single roadmap stage (e.g. /dashboard/roadmap/launch).
 // Linked from the "Learn more" button on each roadmap card in
 // components/RoadmapModuleList.tsx. Modules with a full `phases` template
-// (currently just Launch — see data/modules.ts) get the full AI Business
-// Builder experience below; the rest fall back to the plain resource list
-// until their phases/steps/questions are filled in, same shell either way.
+// (see data/modules.ts) get the full AI Business Builder experience below;
+// the rest fall back to the plain resource list until their
+// phases/steps/questions are filled in, same shell either way. The fallback
+// copy names the guided stages dynamically so it can't go stale as more
+// modules are built out.
 export default async function ModulePage({ params }: ModulePageProps) {
   const { userId } = await auth();
   if (!userId) redirect("/login");
@@ -58,6 +60,16 @@ export default async function ModulePage({ params }: ModulePageProps) {
   const completedCount = steps.filter((s) => progress[s.key]?.completed).length;
   const percentComplete = hasGuidedSteps ? Math.round((completedCount / steps.length) * 100) : 0;
   const summaryTitle = mod.key === "launch" ? "Business Idea Summary" : `${mod.label} Summary`;
+
+  // Names the stages that already have guided steps, so the "coming soon"
+  // fallback below stays accurate as more modules are filled in.
+  const guidedLabels = track.modules
+    .filter((m) => (m.phases?.length ?? 0) > 0)
+    .map((m) => m.label);
+  const guidedLabelList =
+    guidedLabels.length > 1
+      ? `${guidedLabels.slice(0, -1).join(", ")} and ${guidedLabels[guidedLabels.length - 1]}`
+      : guidedLabels[0];
 
   return (
     <main className="min-h-screen bg-[#0f2d4a] text-white">
@@ -187,7 +199,11 @@ export default async function ModulePage({ params }: ModulePageProps) {
                 ))}
               </ul>
               <p className="mt-4 text-xs text-white/40">
-                Guided steps for this stage are coming soon — the Launch engine has the full walkthrough today.
+                {guidedLabelList
+                  ? `Guided steps for this stage are coming soon — ${guidedLabelList} ${
+                      guidedLabels.length > 1 ? "have" : "has"
+                    } the full walkthrough today.`
+                  : "Guided steps for this stage are coming soon."}
               </p>
             </div>
           )}
