@@ -44,3 +44,8 @@ next-env.d.ts
 /storage/*.json
 
 .vercel
+
+# local agent tooling — personal dev setup, not part of the app
+.agents/
+.claude/
+skills-lock.json

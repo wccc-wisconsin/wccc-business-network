@@ -178,6 +178,35 @@ create table if not exists business_assessments (
 -- an earlier version of this script was already run.
 drop index if exists business_assessments_member_idx;
 
+-- Decision Grill: one row per finished grilling — the member states a
+-- decision they're weighing, the AI interrogates it one question at a time,
+-- then writes a decision brief. Unlike member_opportunities /
+-- business_assessments this deliberately KEEPS A HISTORY rather than
+-- upserting one row per member: looking back at how you decided something
+-- six months ago is the point of the feature, so each session inserts.
+-- `transcript` is the JSON array of { role, content } turns; `brief` is the
+-- generated { decision, recommendation, confidence, keyFactors, blindSpots,
+-- risks[], nextSteps[] } object (validated server-side before it's stored,
+-- see normalizeBrief in app/api/ai/grill/route.ts). Nothing is written until
+-- a brief is generated, so abandoned sessions leave no rows behind.
+create table if not exists member_decisions (
+  id uuid primary key default gen_random_uuid(),
+  member_id text not null references members(id) on delete cascade,
+  topic text not null,
+  transcript jsonb not null default '[]'::jsonb,
+  brief jsonb not null,
+  created_at timestamptz not null default now()
+);
+
+-- Kept, unlike the three indexes dropped above: this table has no unique
+-- constraint to piggyback on, and the only query against it is
+-- getMemberDecisions — filter on member_id, order by created_at desc, limit N.
+-- The descending second column lets Postgres satisfy both the filter and the
+-- sort from one index scan and stop at the limit, instead of reading every
+-- row a member has and sorting them.
+create index if not exists member_decisions_member_created_idx
+  on member_decisions (member_id, created_at desc);
+
 -- Disable RLS (service role key bypasses it anyway, but keeps it simple)
 alter table members disable row level security;
 alter table login_events disable row level security;
@@ -189,3 +218,4 @@ alter table module_step_progress disable row level security;
 alter table module_summaries disable row level security;
 alter table member_opportunities disable row level security;
 alter table business_assessments disable row level security;
+alter table member_decisions disable row level security;
