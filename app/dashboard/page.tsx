@@ -17,12 +17,15 @@ import {
   getBusinessAssessment,
   getMemberById,
   getMemberDashboard,
+  getMemberDecisions,
   getMemberOpportunities,
   recordMemberSignIn,
 } from "@/lib/appStore";
+import { SAVED_DECISIONS_LIMIT } from "@/data/decisions";
 import { slugifyEventTitle } from "@/lib/eventSlug";
 import BusinessAssessmentCard from "@/components/BusinessAssessmentCard";
 import DashboardRoadmapTabs from "@/components/DashboardRoadmapTabs";
+import DecisionGrillPanel from "@/components/DecisionGrillPanel";
 import RoadmapModuleList from "@/components/RoadmapModuleList";
 import OpportunitiesPanel from "@/components/OpportunitiesPanel";
 
@@ -92,10 +95,11 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
     .filter(Boolean);
   const isStaff = staffEmails.includes(member.email.toLowerCase());
 
-  const [dashboard, memberOpportunities, businessAssessment] = await Promise.all([
+  const [dashboard, memberOpportunities, businessAssessment, decisions] = await Promise.all([
     getMemberDashboard(userId),
     getMemberOpportunities(userId),
     getBusinessAssessment(userId),
+    getMemberDecisions(userId, SAVED_DECISIONS_LIMIT),
   ]);
   const freeModuleKey = businessAssessment?.freeModuleKey ?? null;
   const registeredTitles = new Set(
@@ -282,6 +286,14 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
             </section>
           ))
         )}
+
+        {/* Decision Grill — the member names a decision they're weighing and
+            gets interrogated on it one question at a time, then a written
+            brief. Sits below the roadmap because it's for the questions the
+            roadmap's fixed stages don't cover ("should I sign this lease?"),
+            and above Funding & Programs because deciding usually comes first.
+            See components/DecisionGrillPanel.tsx and app/api/ai/grill/route.ts. */}
+        <DecisionGrillPanel initialDecisions={decisions} />
 
         <OpportunitiesPanel initialOpportunities={memberOpportunities} />
 

@@ -733,6 +733,118 @@ export async function saveMemberOpportunities(
 }
 
 // ---------------------------------------------------------------------------
+// Decision Grill — the AI interviews a member about one business decision
+// they're weighing (one question at a time), then writes them a decision
+// brief. Unlike the single-row features above, this keeps a HISTORY: a
+// member's past decisions are the point, so each finished grilling inserts
+// its own row rather than overwriting. Backed by member_decisions, a new
+// table in supabase-schema.sql that may not be migrated onto the live
+// database yet — degrades to empty/no-op like the functions above, so the
+// member still gets their brief on screen, it just isn't kept.
+// ---------------------------------------------------------------------------
+
+/** Shape of one stored transcript turn. Mirrors ChatMessage in lib/ai.ts. */
+export type ChatTurn = { role: "user" | "assistant"; content: string };
+
+export type DecisionRisk = { risk: string; mitigation: string };
+export type DecisionStep = { step: string; timeframe: string };
+
+export type DecisionBrief = {
+  decision: string;
+  recommendation: string;
+  /** "High" | "Medium" | "Low" — normalized by the API route before saving. */
+  confidence: string;
+  keyFactors: string[];
+  /** What the grilling surfaced that the member hadn't accounted for. */
+  blindSpots: string[];
+  risks: DecisionRisk[];
+  nextSteps: DecisionStep[];
+};
+
+export type SavedDecision = {
+  id: string;
+  topic: string;
+  brief: DecisionBrief;
+  createdAt: string;
+};
+
+type DecisionRow = {
+  id: string;
+  topic: string;
+  brief: DecisionBrief;
+  created_at: string;
+};
+
+/** The member's most recent finished decision briefs, newest first. */
+export async function getMemberDecisions(
+  memberId: string,
+  limit: number,
+): Promise<SavedDecision[]> {
+  try {
+    // Only the columns the dashboard renders — `transcript` is stored for the
+    // member's own reference but can be long, and nothing on this page reads
+    // it, so it stays out of the query.
+    const { data, error } = await db()
+      .from("member_decisions")
+      .select("id, topic, brief, created_at")
+      .eq("member_id", memberId)
+      .order("created_at", { ascending: false })
+      .limit(limit);
+
+    if (error) {
+      console.error("getMemberDecisions: failed to load", error);
+      return [];
+    }
+
+    return ((data ?? []) as DecisionRow[]).map((r) => ({
+      id: r.id,
+      topic: r.topic,
+      brief: r.brief,
+      createdAt: r.created_at,
+    }));
+  } catch (error) {
+    console.error("getMemberDecisions: Supabase unavailable", error);
+    return [];
+  }
+}
+
+/**
+ * Saves one finished grilling. Returns the new row's id and timestamp so the
+ * caller can hand them straight back to the client, which prepends the brief
+ * to the on-screen history without re-fetching the dashboard.
+ */
+export async function saveMemberDecision(
+  memberId: string,
+  topic: string,
+  transcript: ChatTurn[],
+  brief: DecisionBrief,
+): Promise<{ ok: true; id: string; createdAt: string } | { ok: false }> {
+  try {
+    const now = new Date().toISOString();
+    const { data, error } = await db()
+      .from("member_decisions")
+      .insert({
+        member_id: memberId,
+        topic,
+        transcript,
+        brief,
+        created_at: now,
+      })
+      .select("id, created_at")
+      .single();
+
+    if (error || !data) {
+      console.error("saveMemberDecision: failed to insert", error);
+      return { ok: false };
+    }
+    return { ok: true, id: data.id, createdAt: data.created_at };
+  } catch (error) {
+    console.error("saveMemberDecision: Supabase unavailable", error);
+    return { ok: false };
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Business Snapshot — the short questionnaire (data/assessment.ts) that
 // scores a member's business maturity and records which single roadmap
 // module their stated immediate need unlocks for free. Backed by

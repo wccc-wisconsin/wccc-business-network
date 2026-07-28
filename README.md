@@ -32,6 +32,10 @@ The script is additive and safe to re-run — every statement uses `if not exist
 
 **Pending migration:** this file now also includes `business_assessments` (backs the dashboard's Business Snapshot card — a 7-question form that scores a member's business stage and unlocks one roadmap module for free based on their stated top priority, regardless of membership tier; see `data/assessment.ts`). Re-run the script to add it; until then the card still renders and members can submit the form, but `saveBusinessAssessment` degrades to a no-op (see `lib/appStore.ts`), so nothing is saved and no module gets unlocked until the migration runs.
 
+**Pending migration:** this file now also includes `member_decisions` (backs the dashboard's Decision Grill — a member names a business decision they're weighing, the AI interrogates it one question at a time, then writes a decision brief; see `components/DecisionGrillPanel.tsx` and `app/api/ai/grill/route.ts`). Unlike the other AI features this keeps a history rather than one row per member, so it's the one new table here with an index of its own — justified inline in the script. Re-run the script to add it; until then the grilling and the brief both still work, the brief just isn't kept after the member leaves the page (the panel says so on screen).
+
+The question count and length caps live in `data/decisions.ts` and are imported by both the panel and the API route, so the client's UX limits and the server's enforced limits can't drift apart. The feature is open to every signed-in member; gating it by tier would be a check against `member.membershipTier` at the top of the route plus a locked state in the panel, in the style of the Programs card.
+
 ## Learn More
 
 To learn more about Next.js, take a look at the following resources:

@@ -136,6 +136,22 @@ export const businessModules: BusinessModule[] = [
             ],
           },
           {
+            // Registering the business is not the same as being allowed to
+            // operate it. Industry licenses and a seller's permit are the
+            // most common reason an otherwise-legitimate business gets fined
+            // or shut down, and they're easy to miss because DFI/IRS
+            // registration feels like the finish line.
+            key: "licenses-permits",
+            title: "Licenses, permits & sales tax",
+            label: "essential",
+            questions: [
+              { key: "industry-license", label: "Does your industry need a specific license or permit to operate (food service, contractor, childcare, cosmetology, liquor, professional license)?" },
+              { key: "license-status", label: "Which of those do you already hold, and which are still outstanding?" },
+              { key: "seller-permit", label: "Do you sell anything taxable in Wisconsin, and do you have a seller's permit from the Department of Revenue?" },
+              { key: "local-requirements", label: "Have you checked with your city or county about zoning, signage, or occupancy requirements at your location?" },
+            ],
+          },
+          {
             key: "bank-insurance",
             title: "Bank account & insurance",
             label: "essential",
@@ -143,6 +159,21 @@ export const businessModules: BusinessModule[] = [
               { key: "bank-account", label: "Have you opened a dedicated business bank account?" },
               { key: "insurance-type", label: "What type of insurance does your business need (general liability, professional, etc.)?" },
               { key: "insurance-provider", label: "Who's your insurance provider, or are you still shopping?" },
+            ],
+          },
+          {
+            // Deliberately worded for every member, not a subset: "who reads
+            // this before you sign it" is good practice for anyone, and is
+            // quietly most valuable to a member doing business in a second
+            // language. No assumption is made about who that is.
+            key: "contract-review",
+            title: "Before you sign anything",
+            label: "recommended",
+            questions: [
+              { key: "agreements-signed", label: "What agreements are you currently bound by (lease, supplier terms, franchise, partnership, loan)?" },
+              { key: "review-process", label: "Who reads a contract before you sign it — you, an attorney, a family member, nobody yet?" },
+              { key: "unclear-terms", label: "Is there anything you've signed, or are being asked to sign, that you couldn't fully read or didn't fully understand?" },
+              { key: "language-support", label: "Would having a document translated, or reviewed in another language, make this easier?" },
             ],
           },
         ],
@@ -250,6 +281,22 @@ export const businessModules: BusinessModule[] = [
         title: "Get paid, reliably",
         steps: [
           {
+            // Deliberately placed BEFORE pricing-sales: a member can't set a
+            // price honestly until they know what the thing costs them. The
+            // rest of this module is demand-side; this is the one step that
+            // looks at the cost side, and it's the whole ballgame for the
+            // product, food, retail, and import businesses in the membership.
+            key: "suppliers-costs",
+            title: "Suppliers, inventory & what it costs you",
+            label: "essential",
+            questions: [
+              { key: "cost-per-sale", label: "For your best-selling product or service, what does it actually cost you to deliver one?" },
+              { key: "supplier-terms", label: "Who are your main suppliers, and what terms are you on (pay up front, net 30, no set terms)?" },
+              { key: "supplier-risk", label: "Is there any supplier or ingredient you'd struggle to replace if they raised prices or stopped delivering?" },
+              { key: "inventory-waste", label: "If you carry inventory, how do you decide how much to hold — and how much goes to waste or sits unsold?" },
+            ],
+          },
+          {
             key: "pricing-sales",
             title: "Pricing & sales process",
             label: "essential",
@@ -343,6 +390,23 @@ export const businessModules: BusinessModule[] = [
               { key: "cash-cushion", label: "How many months could the business cover its costs if revenue stopped tomorrow?" },
             ],
           },
+          {
+            // cash-flow above covers "what if the money stops". This covers
+            // the other three ways a healthy-looking small business falls
+            // over: the owner is unavailable, one customer was secretly the
+            // whole business, or the records disappear. Legacy handles the
+            // PLANNED handoff; nothing else in the roadmap handles the
+            // unplanned one.
+            key: "continuity-risk",
+            title: "What happens if something goes wrong",
+            label: "recommended",
+            questions: [
+              { key: "owner-absence", label: "If you couldn't work for the next 30 days, what would happen to the business?" },
+              { key: "customer-concentration", label: "Roughly what share of your revenue comes from your single largest customer?" },
+              { key: "single-points", label: "What else would seriously disrupt you if you lost it — your lease, a key employee, a piece of equipment, one supplier?" },
+              { key: "records-backup", label: "Where do your records, customer list, and passwords live, and could someone else get to them in an emergency?" },
+            ],
+          },
         ],
       },
       {
@@ -357,6 +421,25 @@ export const businessModules: BusinessModule[] = [
               { key: "biggest-drain", label: "What task eats the most of your time but doesn't actually need you specifically?" },
               { key: "role-shape", label: "Would that be an employee, a contractor, or a service — and roughly what would it cost per month?" },
               { key: "hire-blocker", label: "What's holding you back from filling that role (money, trust, not knowing where to look)?" },
+            ],
+          },
+          {
+            // first-hire above is about the DECISION to hire. This is the
+            // paperwork that decision triggers — the part that quietly
+            // generates penalties. Worker misclassification and missing
+            // workers' comp are among the most expensive mistakes a growing
+            // small business makes, and neither is obvious until it's a
+            // problem. Questions ask what's in place, not what the law
+            // requires — the member confirms specifics with a payroll
+            // provider or accountant.
+            key: "hiring-compliance",
+            title: "Payroll, classification & the paperwork",
+            label: "essential",
+            questions: [
+              { key: "worker-classification", label: "For each person who works with you, are they set up as a W-2 employee or a 1099 contractor — and are you confident that's the right classification?" },
+              { key: "payroll-setup", label: "How do you run payroll and withholding (payroll service, accountant, by hand, not yet)?" },
+              { key: "state-registrations", label: "Are you registered with Wisconsin for withholding and unemployment insurance, and do you carry workers' compensation coverage?" },
+              { key: "onboarding-records", label: "Do you keep signed offer letters, I-9s, and W-4s on file for everyone?" },
             ],
           },
           {
@@ -384,6 +467,90 @@ export const businessModules: BusinessModule[] = [
       "Wisconsin grant-finder",
       "AI pitch-deck builder",
     ],
+    // Ordered so the member arrives at the ask having already answered the
+    // two questions every lender and grant reviewer opens with: how much,
+    // and what does your business actually look like on paper. Members who
+    // skip to "make the ask" are the ones who get declined.
+    phases: [
+      {
+        key: "know-what-you-need",
+        title: "Know what you need",
+        steps: [
+          {
+            key: "funding-need",
+            title: "How much, and what for",
+            label: "essential",
+            questions: [
+              { key: "amount", label: "How much money do you need, and how did you arrive at that number?" },
+              { key: "use-of-funds", label: "What specifically would it buy — equipment, inventory, payroll, a build-out, breathing room?" },
+              { key: "cost-of-waiting", label: "What happens to the business if you don't get it, or don't get it this year?" },
+            ],
+          },
+          {
+            key: "financial-position",
+            title: "Where you stand today",
+            label: "essential",
+            questions: [
+              { key: "revenue-trend", label: "What did the business bring in over the last 12 months, and is that trending up or down?" },
+              { key: "books-current", label: "Are your books current enough that you could hand someone a P&L this week?" },
+              { key: "credit-and-debt", label: "What debt is the business already carrying, and roughly where does your credit stand?" },
+            ],
+          },
+        ],
+      },
+      {
+        key: "find-the-right-money",
+        title: "Find the right money",
+        steps: [
+          {
+            key: "funding-options",
+            title: "Grant, loan, investor, or your own cash",
+            label: "essential",
+            questions: [
+              { key: "options-considered", label: "Which of these have you looked into — grant, bank or SBA loan, community lender (e.g. WWBIC), investor, or funding it yourself?" },
+              { key: "ownership-tradeoff", label: "Are you willing to give up any ownership of the business, or is that off the table?" },
+              { key: "repayment-comfort", label: "What monthly payment could the business genuinely absorb without straining?" },
+            ],
+          },
+          {
+            key: "lender-readiness",
+            title: "What they'll ask you for",
+            label: "recommended",
+            questions: [
+              { key: "documents-ready", label: "Which of these do you have ready: business plan, financial projections, last 2 years of tax returns, bank statements?" },
+              { key: "biggest-gap", label: "Of those, which one would take you the longest to produce?" },
+              { key: "advisor", label: "Has anyone — an accountant, an SBDC advisor, a lender — looked at your numbers with you yet?" },
+            ],
+          },
+        ],
+      },
+      {
+        key: "make-the-ask",
+        title: "Make the ask",
+        steps: [
+          {
+            key: "pitch-package",
+            title: "Your pitch or loan package",
+            label: "recommended",
+            questions: [
+              { key: "one-sentence-ask", label: "In one sentence: what are you asking for, and what will it do for the business?" },
+              { key: "why-you", label: "Why should someone bet on you specifically — track record, traction, expertise, community demand?" },
+              { key: "package-status", label: "Do you have a deck or written loan package yet, or is that still to build?" },
+            ],
+          },
+          {
+            key: "use-and-repayment",
+            title: "How you'll use it and pay it back",
+            label: "essential",
+            questions: [
+              { key: "deployment-plan", label: "Walk through where the money goes in the first 90 days after it lands." },
+              { key: "return-timeline", label: "When would you expect this spending to start generating extra revenue?" },
+              { key: "reporting-obligations", label: "If it's a grant or a loan, what reporting or conditions come attached, and can you meet them?" },
+            ],
+          },
+        ],
+      },
+    ],
   },
   {
     key: "opportunity",
@@ -396,6 +563,91 @@ export const businessModules: BusinessModule[] = [
       "SAM.gov procurement registration",
       "Capability-statement drafter",
     ],
+    // Contract work has a hard gate in front of it: certifications and
+    // registrations take weeks to months and you cannot bid without them.
+    // That's why they come first here, before anything about finding or
+    // writing bids — a member who starts at "go win one" wastes the season.
+    phases: [
+      {
+        key: "get-certified",
+        title: "Get certified & registered",
+        steps: [
+          {
+            key: "certifications",
+            title: "Certifications you may qualify for",
+            label: "essential",
+            questions: [
+              { key: "eligibility", label: "Which certifications might your ownership qualify for — MBE, WBE, DBE, veteran-owned, SBA 8(a), HUBZone?" },
+              { key: "cert-status", label: "Which have you applied for or already hold, and when do they come up for renewal?" },
+              { key: "cert-blocker", label: "If you haven't applied, what's stopping you — paperwork, not knowing where to start, unsure it's worth it?" },
+            ],
+          },
+          {
+            key: "registrations",
+            title: "Where buyers actually look for you",
+            label: "essential",
+            questions: [
+              { key: "sam-status", label: "Are you registered in SAM.gov with an active UEI (required for any federal work)?" },
+              { key: "state-local", label: "Are you registered with Wisconsin VendorNet, and with your city or county's supplier portal?" },
+              { key: "prime-portals", label: "Are you in the supplier database of any large company or prime contractor you'd want to work with?" },
+            ],
+          },
+        ],
+      },
+      {
+        key: "prove-youre-ready",
+        title: "Prove you're ready",
+        steps: [
+          {
+            key: "capability-statement",
+            title: "Your capability statement",
+            label: "essential",
+            questions: [
+              { key: "core-competencies", label: "In plain terms, what are the 3-4 things you do that a buyer would hire you for?" },
+              { key: "naics-codes", label: "Which NAICS codes describe your work?" },
+              { key: "past-performance", label: "What past jobs would you point to as proof you can deliver — and can you name the client?" },
+              { key: "differentiator", label: "Why you over the incumbent who already has this contract?" },
+            ],
+          },
+          {
+            key: "contract-readiness",
+            title: "Can you actually carry the job",
+            label: "recommended",
+            questions: [
+              { key: "insurance-bonding", label: "What are your current insurance limits, and can you get bonded if a contract requires it?" },
+              { key: "capacity", label: "What's the largest job you could take on right now without dropping existing customers?" },
+              { key: "payment-float", label: "Public and corporate buyers often pay in 30-60 days. Could you cover payroll and materials that long before getting paid?" },
+            ],
+          },
+        ],
+      },
+      {
+        key: "go-win-one",
+        title: "Go win one",
+        steps: [
+          {
+            key: "target-buyers",
+            title: "Who actually buys what you sell",
+            label: "essential",
+            questions: [
+              { key: "buyer-list", label: "Name 3 specific agencies, school districts, hospitals, or prime contractors that buy your kind of work." },
+              { key: "relationships", label: "Do you know anyone inside those organizations, or have you met their procurement staff?" },
+              { key: "subcontracting", label: "Would starting as a subcontractor to a prime be a faster way in than bidding directly?" },
+            ],
+          },
+          {
+            key: "bid-pipeline",
+            title: "Finding and answering solicitations",
+            label: "recommended",
+            questions: [
+              { key: "where-you-look", label: "Where do you currently look for open solicitations, and how often?" },
+              { key: "who-writes", label: "Who writes the response — you, a staff member, a proposal writer you'd hire?" },
+              { key: "go-no-go", label: "What's your rule for deciding a bid isn't worth the time?" },
+            ],
+          },
+        ],
+      },
+    ],
   },
   {
     key: "expansion",
@@ -406,6 +658,90 @@ export const businessModules: BusinessModule[] = [
     resources: [
       "Multi-location readiness assessment",
       "New-market research tool",
+    ],
+    // The first phase is deliberately a gate, not a warm-up: expansion
+    // multiplies whatever the business already is, including its problems.
+    // A member whose current operation only works because they're personally
+    // in it will get two struggling operations, not two good ones.
+    phases: [
+      {
+        key: "confirm-the-core",
+        title: "Confirm the core is ready",
+        steps: [
+          {
+            key: "repeatable-model",
+            title: "Is what you have repeatable",
+            label: "essential",
+            questions: [
+              { key: "unit-economics", label: "Does your current location or product line make a reliable profit, month after month?" },
+              { key: "documented", label: "Could someone else run it from your written process, or does it live in your head?" },
+              { key: "what-makes-it-work", label: "What's the real reason it works — location, your reputation, price, a relationship? Would that travel?" },
+            ],
+          },
+          {
+            key: "bench-strength",
+            title: "Who runs today's business",
+            label: "essential",
+            questions: [
+              { key: "day-to-day-owner", label: "If you spent the next six months on a new location, who runs the existing one?" },
+              { key: "ready-or-training", label: "Is that person ready today, or would they need training first?" },
+              { key: "your-time", label: "Realistically, how many hours a week could you put into an expansion without the current business slipping?" },
+            ],
+          },
+        ],
+      },
+      {
+        key: "choose-the-direction",
+        title: "Choose the direction",
+        steps: [
+          {
+            key: "expansion-type",
+            title: "Which kind of growth",
+            label: "essential",
+            questions: [
+              { key: "direction", label: "Which are you actually considering — a second location, a new city or region, a new product line, selling online, or licensing/franchising?" },
+              { key: "why-this-one", label: "Why that one rather than the others?" },
+              { key: "reversible", label: "If it doesn't work, how easily could you unwind it — and what would it cost you to walk away?" },
+            ],
+          },
+          {
+            key: "market-evidence",
+            title: "Evidence the demand is there",
+            label: "essential",
+            questions: [
+              { key: "demand-signal", label: "What actual evidence says people in the new market want this — inquiries, waitlist, competitor success, research?" },
+              { key: "competition", label: "Who's already serving that market, and what would make customers switch to you?" },
+              { key: "differences", label: "What's different there — costs, regulations, customer expectations, language, competition?" },
+            ],
+          },
+        ],
+      },
+      {
+        key: "de-risk-the-move",
+        title: "De-risk the move",
+        steps: [
+          {
+            key: "capital-and-runway",
+            title: "What it costs to get there",
+            label: "recommended",
+            questions: [
+              { key: "startup-cost", label: "What's the all-in cost to open or launch, including the months before it earns anything?" },
+              { key: "breakeven", label: "How many months until it covers its own costs, and what has to be true for that?" },
+              { key: "funding-source", label: "Where does that money come from — profits, savings, a loan, an investor?" },
+            ],
+          },
+          {
+            key: "rollout-plan",
+            title: "Milestones and the stop signal",
+            label: "recommended",
+            questions: [
+              { key: "milestones", label: "What are the 3-4 checkpoints between now and open, with rough dates?" },
+              { key: "first-90-days", label: "What does success look like in the first 90 days after launch, as a number?" },
+              { key: "stop-rule", label: "What result would tell you to stop or pull back — and would you actually act on it?" },
+            ],
+          },
+        ],
+      },
     ],
   },
   {
@@ -418,6 +754,91 @@ export const businessModules: BusinessModule[] = [
       "Succession plan outline",
       "Exit-options guide",
       "WCCC mentorship matching",
+    ],
+    // This module touches tax, estate, and legal territory. Every question
+    // here asks what the member has IN PLACE or has DECIDED — never what the
+    // law or the tax code requires. Where a professional is needed, the
+    // question asks whether one has been engaged. Same line the AI prompts
+    // in app/api/ai/ hold.
+    phases: [
+      {
+        key: "decide-what-happens-next",
+        title: "Decide what happens next",
+        steps: [
+          {
+            key: "exit-intent",
+            title: "What you actually want",
+            label: "essential",
+            questions: [
+              { key: "timeline", label: "When would you like to step back — within 2 years, 5 years, 10, or you're not sure yet?" },
+              { key: "what-you-want-left", label: "What do you want to be true about the business after you're no longer running it?" },
+              { key: "personal-need", label: "What do you need to get out of it personally — a sale price, ongoing income, a job for family, or just a clean stop?" },
+            ],
+          },
+          {
+            key: "exit-options",
+            title: "The realistic paths",
+            label: "essential",
+            questions: [
+              { key: "paths-considered", label: "Which have you considered — passing it to family, selling to an employee or partner, selling to an outside buyer, merging, or winding it down?" },
+              { key: "family-conversation", label: "If family is part of the plan, have you actually talked with them about whether they want it?" },
+              { key: "leading-option", label: "Which path are you leaning toward today, and what makes you unsure?" },
+            ],
+          },
+        ],
+      },
+      {
+        key: "make-it-transferable",
+        title: "Make it transferable",
+        steps: [
+          {
+            key: "owner-dependence",
+            title: "How much of this is you",
+            label: "essential",
+            questions: [
+              { key: "only-you", label: "What do you do that nobody else in the business can currently do?" },
+              { key: "relationships", label: "Which customer or supplier relationships are with you personally rather than with the business?" },
+              { key: "if-you-left", label: "If you stopped tomorrow, what breaks first — and how long before customers notice?" },
+            ],
+          },
+          {
+            key: "books-and-value",
+            title: "What a buyer or successor would inspect",
+            label: "essential",
+            questions: [
+              { key: "clean-financials", label: "Are the last 3 years of financials clean and separate from your personal finances?" },
+              { key: "valuation", label: "Has the business ever been formally valued, or do you have a number in your head?" },
+              { key: "contracts-and-ip", label: "Are your lease, key contracts, licenses, and brand or recipes documented and transferable to someone else?" },
+            ],
+          },
+        ],
+      },
+      {
+        key: "hand-it-over",
+        title: "Hand it over",
+        steps: [
+          {
+            key: "successor-plan",
+            title: "Who takes it, and how",
+            label: "recommended",
+            questions: [
+              { key: "successor", label: "Is there a specific person in mind, and do they know?" },
+              { key: "training-gap", label: "What would they need to learn, and how long would that take?" },
+              { key: "handover-shape", label: "Would you hand over all at once, or step back gradually while they take more on?" },
+            ],
+          },
+          {
+            key: "professional-and-personal",
+            title: "Your team and your own plan",
+            label: "recommended",
+            questions: [
+              { key: "advisors-engaged", label: "Have you talked with an attorney, an accountant, or a financial adviser about this yet?" },
+              { key: "documents-in-place", label: "Is anything written down — a succession plan, a buy-sell agreement, a will or trust covering the business?" },
+              { key: "life-after", label: "What does your income and your time look like the year after you hand it off?" },
+            ],
+          },
+        ],
+      },
     ],
   },
 ];
