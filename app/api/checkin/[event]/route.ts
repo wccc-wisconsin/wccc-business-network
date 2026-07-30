@@ -30,7 +30,19 @@ export async function GET(
     return NextResponse.redirect(new URL("/login", request.url));
   }
 
-  await recordEventAttendance(userId, matchedEvent.title);
+  // Check the result before claiming success. recordEventAttendance returns
+  // { ok: false } on a real write failure — most likely a foreign-key
+  // violation because this Clerk user has no `members` row yet (signed up but
+  // never finished onboarding). Redirecting to checkin=success regardless
+  // meant the attendee saw "✓ You're checked in" while nothing was recorded,
+  // and staff had no way to notice until the attendance numbers came up short.
+  const result = await recordEventAttendance(userId, matchedEvent.title);
+
+  if (!result.ok) {
+    dashboardUrl.searchParams.set("checkin", "error");
+    dashboardUrl.searchParams.set("event", slug);
+    return NextResponse.redirect(dashboardUrl);
+  }
 
   dashboardUrl.searchParams.set("checkin", "success");
   dashboardUrl.searchParams.set("event", slug);

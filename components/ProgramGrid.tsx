@@ -7,7 +7,10 @@ export default function ProgramGrid() {
         <h2 id="programs-heading" className="font-serif text-2xl font-bold text-[#0c1e3a]">
           Our Programs
         </h2>
-        <a href="#assistant" className="text-[10px] font-bold uppercase tracking-[0.22em] text-[#a07830] hover:text-[#0c1e3a] transition">
+        {/* Same as UpcomingEvents: the dashboard holds the full program list
+            with working Enroll buttons, so send people there rather than
+            scrolling them to the AI chat panel. */}
+        <a href="/dashboard" className="text-[10px] font-bold uppercase tracking-[0.22em] text-[#a07830] hover:text-[#0c1e3a] transition">
           View All →
         </a>
       </div>

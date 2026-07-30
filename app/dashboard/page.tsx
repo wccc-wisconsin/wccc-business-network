@@ -12,9 +12,14 @@ import ActionButtonForm from "@/components/ActionButtonForm";
 import CommunityHubLinks from "@/components/CommunityHubLinks";
 import { events } from "@/data/events";
 import { programs } from "@/data/programs";
-import { roadmapTracks as allRoadmapTracks, isModuleUnlocked } from "@/data/modules";
+import {
+  roadmapTracks as allRoadmapTracks,
+  isModuleUnlocked,
+  stepsForModule,
+} from "@/data/modules";
 import {
   getBusinessAssessment,
+  getCompletedStepsByModule,
   getMemberById,
   getMemberDashboard,
   getMemberDecisions,
@@ -23,6 +28,7 @@ import {
 } from "@/lib/appStore";
 import { SAVED_DECISIONS_LIMIT } from "@/data/decisions";
 import { slugifyEventTitle } from "@/lib/eventSlug";
+import AICoach from "@/components/AICoach";
 import BusinessAssessmentCard from "@/components/BusinessAssessmentCard";
 import DashboardRoadmapTabs from "@/components/DashboardRoadmapTabs";
 import DecisionGrillPanel from "@/components/DecisionGrillPanel";
@@ -95,12 +101,14 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
     .filter(Boolean);
   const isStaff = staffEmails.includes(member.email.toLowerCase());
 
-  const [dashboard, memberOpportunities, businessAssessment, decisions] = await Promise.all([
-    getMemberDashboard(userId),
-    getMemberOpportunities(userId),
-    getBusinessAssessment(userId),
-    getMemberDecisions(userId, SAVED_DECISIONS_LIMIT),
-  ]);
+  const [dashboard, memberOpportunities, businessAssessment, decisions, completedByModule] =
+    await Promise.all([
+      getMemberDashboard(userId),
+      getMemberOpportunities(userId),
+      getBusinessAssessment(userId),
+      getMemberDecisions(userId, SAVED_DECISIONS_LIMIT),
+      getCompletedStepsByModule(userId),
+    ]);
   const freeModuleKey = businessAssessment?.freeModuleKey ?? null;
   const registeredTitles = new Set(
     dashboard.registrations.map((r) => r.eventTitle),
@@ -119,6 +127,35 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
   const roadmapTracks = allRoadmapTracks.filter(
     (track) => track.key === member.journey || member.journey === "both",
   );
+
+  // Real roadmap progress, from completed guided steps.
+  //
+  // Denominator is the modules this member can actually open, not all seven —
+  // measuring a network-tier member against six modules they can't unlock
+  // would report ~4% and call it their progress. Modules without `phases`
+  // (the ones still on the plain resource-list view) have no steps to
+  // complete, so they're skipped on both sides of the ratio.
+  //
+  // Completed step keys are intersected with each module's current step list
+  // because module_step_progress rows outlive edits to data/modules.ts —
+  // counting stored rows directly would let progress exceed 100%.
+  const unlockedModules = roadmapTracks
+    .flatMap((track) => track.modules)
+    .filter((mod) => isModuleUnlocked(member.membershipTier, mod, freeModuleKey));
+
+  let totalSteps = 0;
+  let completedSteps = 0;
+  for (const mod of unlockedModules) {
+    const steps = stepsForModule(mod);
+    if (steps.length === 0) continue;
+    const done = new Set(completedByModule[mod.key] ?? []);
+    totalSteps += steps.length;
+    completedSteps += steps.filter((step) => done.has(step.key)).length;
+  }
+  const roadmapProgress = totalSteps
+    ? Math.round((completedSteps / totalSteps) * 100)
+    : 0;
+  const totalModules = roadmapTracks.reduce((n, track) => n + track.modules.length, 0);
 
   return (
     <main className="min-h-screen bg-[#0f2d4a] text-white">
@@ -152,6 +189,17 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
         {checkin === "invalid" && (
           <div className="mb-6 rounded-[8px] border border-red-400/40 bg-red-400/10 px-5 py-3 text-sm font-semibold text-red-300">
             That check-in code didn&apos;t match a current event. Ask a staff member for help.
+          </div>
+        )}
+        {/* The scan matched a real event but the write failed — usually because
+            this account has no members row yet. Tell the attendee plainly
+            instead of showing the success banner over a check-in that didn't
+            happen (see app/api/checkin/[event]/route.ts). */}
+        {checkin === "error" && (
+          <div className="mb-6 rounded-[8px] border border-amber-400/40 bg-amber-400/10 px-5 py-3 text-sm font-semibold text-amber-300">
+            We couldn&apos;t record your check-in
+            {checkinEventTitle ? ` for ${checkinEventTitle}` : ""}. Please scan again, or ask a
+            staff member to check you in manually.
           </div>
         )}
 
@@ -201,18 +249,57 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                     : "Know Your Business"}{" "}
                   progress
                 </span>
-                <span>{dashboard.progress}%</span>
+                {/* Raw counts sit next to the percentage so the number is
+                    checkable rather than something the member has to trust. */}
+                <span>
+                  {totalSteps > 0
+                    ? `${completedSteps} of ${totalSteps} steps · ${roadmapProgress}%`
+                    : "Not started"}
+                </span>
               </div>
               <div className="h-3 rounded-full bg-white/12">
                 <div
-                  className="h-3 rounded-full bg-[#d7a84d]"
-                  style={{ width: `${dashboard.progress}%` }}
+                  className="h-3 rounded-full bg-[#d7a84d] transition-all"
+                  style={{ width: `${roadmapProgress}%` }}
                 />
               </div>
+              {/* totalSteps is 0 only when none of the member's unlocked
+                  modules has guided steps yet — which today is every member on
+                  the personal track, since those four modules have no `phases`
+                  defined. Telling them to "start working through the steps"
+                  would point at something that isn't there, so the copy points
+                  at the resource lists that do exist. */}
+              {totalSteps === 0 && (
+                <p className="mt-2 text-xs text-white/45">
+                  Guided steps for this track are still being built. The modules below have
+                  resources you can use now.
+                </p>
+              )}
             </div>
           </div>
 
+          {/* Four numbers a member can act on.
+              "Events attended" and "Tracked sign-ins" used to sit here. The
+              first is fed only by QR check-in, which is switched off, so it
+              read 0 for everyone; the second was a security log presented as
+              an achievement. Both are replaced with roadmap figures, which is
+              what this dashboard is actually for. */}
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-1">
+            <div className="rounded-[8px] border border-white/10 bg-white/5 p-5">
+              <div className="font-serif text-4xl font-bold text-[#d7a84d]">
+                {completedSteps}
+              </div>
+              <div className="mt-1 text-sm text-white/70">
+                Roadmap steps completed
+              </div>
+            </div>
+            <div className="rounded-[8px] border border-white/10 bg-white/5 p-5">
+              <div className="font-serif text-4xl font-bold text-[#d7a84d]">
+                {unlockedModules.length}
+                <span className="text-2xl text-white/35">/{totalModules}</span>
+              </div>
+              <div className="mt-1 text-sm text-white/70">Modules unlocked</div>
+            </div>
             <div className="rounded-[8px] border border-white/10 bg-white/5 p-5">
               <div className="font-serif text-4xl font-bold text-[#d7a84d]">
                 {dashboard.registrations.length}
@@ -221,21 +308,9 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
             </div>
             <div className="rounded-[8px] border border-white/10 bg-white/5 p-5">
               <div className="font-serif text-4xl font-bold text-[#d7a84d]">
-                {dashboard.attendance.length}
-              </div>
-              <div className="mt-1 text-sm text-white/70">Events attended</div>
-            </div>
-            <div className="rounded-[8px] border border-white/10 bg-white/5 p-5">
-              <div className="font-serif text-4xl font-bold text-[#d7a84d]">
                 {dashboard.enrollments.length}
               </div>
               <div className="mt-1 text-sm text-white/70">Program enrollments</div>
-            </div>
-            <div className="rounded-[8px] border border-white/10 bg-white/5 p-5">
-              <div className="font-serif text-4xl font-bold text-[#d7a84d]">
-                {dashboard.loginEvents.length}
-              </div>
-              <div className="mt-1 text-sm text-white/70">Tracked sign-ins</div>
             </div>
           </div>
         </section>
@@ -293,6 +368,15 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
             roadmap's fixed stages don't cover ("should I sign this lease?"),
             and above Funding & Programs because deciding usually comes first.
             See components/DecisionGrillPanel.tsx and app/api/ai/grill/route.ts. */}
+        {/* The coach used to live only on module detail pages, so a member on
+            the dashboard had no way to just ask a question — the only AI here
+            was the Decision Grill, which requires you to already know you're
+            weighing a decision. Mounted without a moduleKey it answers across
+            their whole business, using the same context the grill gets. */}
+        <div className="mt-6">
+          <AICoach />
+        </div>
+
         <DecisionGrillPanel initialDecisions={decisions} />
 
         <OpportunitiesPanel initialOpportunities={memberOpportunities} />
@@ -455,7 +539,12 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
           </section>
         )}
 
-        <section className="mt-6 grid gap-6 lg:grid-cols-[1fr_0.8fr]">
+        {/* A "Login audit" panel used to sit to the right of this, listing
+            sign-in timestamps and raw user-agent strings. That's diagnostic
+            output, not something a member benefits from seeing, so it's gone
+            and Recent activity now takes the full width. Sign-ins are still
+            recorded in login_events if an audit trail is ever needed. */}
+        <section className="mt-6">
           <div className="rounded-[8px] border border-white/10 bg-[#132f52] p-5">
             <h2 className="font-serif text-3xl font-bold">Recent activity</h2>
             <div className="mt-5 space-y-3">
@@ -477,23 +566,6 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
               ) : (
                 <p className="text-sm text-white/65">No activity yet.</p>
               )}
-            </div>
-          </div>
-
-          <div className="rounded-[8px] border border-white/10 bg-[#132f52] p-5">
-            <h2 className="font-serif text-3xl font-bold">Login audit</h2>
-            <div className="mt-5 space-y-3">
-              {dashboard.loginEvents.slice(0, 5).map((event) => (
-                <div
-                  key={event.id}
-                  className="rounded-[8px] border border-white/10 bg-white/5 p-4"
-                >
-                  <div className="font-bold">{formatDate(event.at)}</div>
-                  <p className="mt-1 line-clamp-2 text-xs text-white/55">
-                    {event.userAgent}
-                  </p>
-                </div>
-              ))}
             </div>
           </div>
         </section>

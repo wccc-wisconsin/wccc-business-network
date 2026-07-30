@@ -7,7 +7,11 @@ export default function UpcomingEvents() {
         <h2 id="events-heading" className="font-serif text-2xl font-bold text-[#0c1e3a]">
           Upcoming Events
         </h2>
-        <a href="#assistant" className="text-[10px] font-bold uppercase tracking-[0.22em] text-[#a07830] hover:text-[#0c1e3a] transition">
+        {/* Points at the dashboard, not #assistant. The dashboard is where the
+            full events list with working Register buttons lives; signed-out
+            visitors get redirected to /login, which is the right funnel.
+            Scrolling to the AI chat panel was a dead end. */}
+        <a href="/dashboard" className="text-[10px] font-bold uppercase tracking-[0.22em] text-[#a07830] hover:text-[#0c1e3a] transition">
           View All →
         </a>
       </div>
@@ -30,8 +34,11 @@ export default function UpcomingEvents() {
               <p className="mt-1 text-xs text-[#94a3b8]">{event.date} · {event.time} · {event.location}</p>
             </div>
 
+            {/* Registration actually happens on the dashboard (server action
+                registerForEventAction). This used to scroll to the AI chat
+                panel, so clicking "Register" never registered anyone. */}
             <a
-              href="#assistant"
+              href="/dashboard"
               className="whitespace-nowrap rounded border border-[#0c1e3a] px-4 py-2 text-[10px] font-bold uppercase tracking-[0.16em] text-[#0c1e3a] transition hover:bg-[#0c1e3a] hover:text-white"
             >
               Register

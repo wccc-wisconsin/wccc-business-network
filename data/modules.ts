@@ -76,6 +76,31 @@ export function isModuleUnlocked(
 // The 7 engines of the AI Business Builder, in lifecycle order:
 // Launch (set up) -> Revenue (sell) -> Growth (scale) -> Capital (fund)
 // -> Opportunity (win contracts) -> Expansion (multiply) -> Legacy (hand off)
+//
+// How `minTier` is meant to divide, and why:
+//
+//   network (free)  Launch — become a real, legal, payable business.
+//   individual      Revenue — get found and get paid.
+//   business        Everything else: Growth, Capital, Opportunity,
+//                   Expansion, Legacy.
+//   corporate       No extra modules.
+//
+// Roadmap content deliberately tops out at Business. Corporate is a
+// sponsorship tier — the membership page sells it as staff seats, prominent
+// directory listing and sponsorship opportunities, none of which are content.
+// Gating three modules behind it made the code contradict the published
+// pricing, and put MBE/DBE certification (Opportunity) behind the $1,500 door
+// for exactly the members most likely to need it.
+//
+// The underlying mistake was gating by lifecycle stage, which assumes where a
+// business is in its life predicts what it can pay. A ten-year-old contractor
+// chasing their first public contract is further along than a startup and may
+// have less cash. Stage and budget are independent, so tiers shouldn't track
+// stage.
+//
+// This is a pricing decision as much as a code one — if WCCC wants the old
+// split back it's one word per module, and the three affected ones are
+// commented inline.
 export const businessModules: BusinessModule[] = [
   {
     key: "launch",
@@ -557,7 +582,14 @@ export const businessModules: BusinessModule[] = [
     icon: "🤝",
     label: "Opportunity",
     tagline: "Win contracts",
-    minTier: "corporate",
+    // Was "corporate" ($1,500/yr). MBE/DBE certification and procurement
+    // registration are close to the core of what a chamber rooted in
+    // Asian-American heritage exists to help with, and the businesses that
+    // need them are rarely the ones who can afford the top tier — gating
+    // stage by price assumes lifecycle position predicts budget, which it
+    // doesn't. See the note above businessModules on how tiers are meant to
+    // divide.
+    minTier: "business",
     resources: [
       "MBE / DBE certification help",
       "SAM.gov procurement registration",
@@ -654,7 +686,9 @@ export const businessModules: BusinessModule[] = [
     icon: "🏢",
     label: "Expansion",
     tagline: "Multiply",
-    minTier: "corporate",
+    // Was "corporate" — see the Opportunity note above and the tier rationale
+    // over businessModules. Roadmap content now tops out at Business.
+    minTier: "business",
     resources: [
       "Multi-location readiness assessment",
       "New-market research tool",
@@ -749,7 +783,10 @@ export const businessModules: BusinessModule[] = [
     icon: "👑",
     label: "Legacy",
     tagline: "Hand it off",
-    minTier: "corporate",
+    // Was "corporate" — see the Opportunity note above. Succession planning is
+    // for owners winding down, who are often the least likely to be paying the
+    // top tier.
+    minTier: "business",
     resources: [
       "Succession plan outline",
       "Exit-options guide",

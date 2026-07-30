@@ -5,15 +5,20 @@ import { useState, useTransition } from "react";
 type Message = { role: "user" | "assistant"; content: string };
 
 type Props = {
-  moduleKey: string;
-  moduleLabel: string;
+  /**
+   * The module the member is currently viewing, when there is one. Omitted on
+   * the dashboard, where the coach answers across their whole business rather
+   * than one stage — the API route treats it as optional and builds the
+   * member's full context either way.
+   */
+  moduleKey?: string;
+  moduleLabel?: string;
 };
 
-// Freeform AI Coach chat at the bottom of each module page. Conversation
-// lives only in this component's state — not persisted across visits (the
-// shared template only calls for the coach to be "aware of the member's
-// industry/stage/progress", which the API route already injects fresh into
-// the system prompt on every request, so nothing is lost by not saving history).
+// Freeform AI Coach chat. Conversation lives only in this component's state —
+// not persisted across visits (the route injects the member's context fresh
+// into the system prompt on every request, so nothing is lost by not saving
+// history).
 export default function AICoach({ moduleKey, moduleLabel }: Props) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
@@ -50,9 +55,13 @@ export default function AICoach({ moduleKey, moduleLabel }: Props) {
   return (
     <div className="rounded-[8px] border border-white/10 bg-[#132f52] p-5">
       <p className="text-xs font-bold uppercase tracking-[0.3em] text-[#d7a84d]">AI Coach</p>
-      <h2 className="mt-1 font-serif text-xl font-bold text-white">Ask about {moduleLabel}</h2>
+      <h2 className="mt-1 font-serif text-xl font-bold text-white">
+        {moduleLabel ? `Ask about ${moduleLabel}` : "Ask your coach"}
+      </h2>
       <p className="mt-1 text-sm text-white/50">
-        Freeform questions — the coach knows your industry, business, and progress in this module.
+        {moduleLabel
+          ? "Freeform questions — the coach knows your business and where you are in this module."
+          : "Freeform questions — the coach knows your business, your membership, and your progress across every module."}
       </p>
 
       <div className="mt-4 max-h-80 space-y-3 overflow-y-auto">
@@ -88,7 +97,11 @@ export default function AICoach({ moduleKey, moduleLabel }: Props) {
             }
           }}
           rows={2}
-          placeholder="Ask the AI Coach anything about this stage of your business…"
+          placeholder={
+            moduleLabel
+              ? "Ask the AI Coach anything about this stage of your business…"
+              : "Ask the AI Coach anything about your business…"
+          }
           className="flex-1 rounded border border-white/15 bg-[#0f2d4a] px-3 py-2 text-sm text-white outline-none focus:border-[#d7a84d]/50"
         />
         <button
