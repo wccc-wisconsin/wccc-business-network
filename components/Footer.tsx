@@ -1,5 +1,8 @@
+// Every entry here must resolve to a real page or a real on-page anchor.
+// "About WCCC" used to sit at the top of this list pointing at href="#",
+// which silently jumped to the top of the page instead of going anywhere.
+// It's out until there's an /about page to point it at.
 const quickLinks = [
-  { label: "About WCCC", href: "#" },
   { label: "Membership", href: "/login" },
   { label: "Programs", href: "#programs" },
   { label: "Events", href: "#events" },
@@ -81,10 +84,13 @@ export default function Footer() {
 
         <div className="border-t border-[#e8e3db] pt-6 flex flex-wrap items-center justify-between gap-4 text-[11px] text-[#94a3b8]">
           <span>© {new Date().getFullYear()} Wisconsin Chinese Chamber of Commerce. All rights reserved.</span>
-          <div className="flex gap-5">
-            <a href="#" className="hover:text-[#64748b] transition">Privacy Policy</a>
-            <a href="#" className="hover:text-[#64748b] transition">Terms of Use</a>
-          </div>
+          {/* Privacy Policy and Terms of Use links lived here pointing at
+              href="#". Rather than show links that go nowhere, they're removed
+              until the actual policy pages exist — at which point add them back
+              here pointing at /privacy and /terms. */}
+          <a href="mailto:info@wisccc.org" className="hover:text-[#64748b] transition">
+            info@wisccc.org
+          </a>
         </div>
       </div>
     </footer>

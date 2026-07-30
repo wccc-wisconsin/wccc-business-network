@@ -1,11 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
-import {
-  getBusinessAssessment,
-  getMemberById,
-  saveMemberDecision,
-  type DecisionBrief,
-} from "@/lib/appStore";
+import { saveMemberDecision, type DecisionBrief } from "@/lib/appStore";
+import { buildMemberContext } from "@/lib/memberContext";
 import { callClaude, parseClaudeJson, type ChatMessage } from "@/lib/ai";
 import {
   MAX_ANSWER_LENGTH,
@@ -97,17 +93,16 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const [member, assessment] = await Promise.all([
-    getMemberById(userId),
-    getBusinessAssessment(userId),
-  ]);
-  if (!member) {
+  // Same member context every other AI surface gets — the grill used to build
+  // its own narrower version (profile + Business Snapshot stage only), so it
+  // couldn't reference the member's roadmap standing while interrogating a
+  // decision that often bears directly on it.
+  const memberContext = await buildMemberContext(userId);
+  if (!memberContext) {
     return NextResponse.json({ ok: false, error: "Member profile not found." }, { status: 404 });
   }
 
-  const context = `You are grilling ${member.name || "a member"}, who runs ${member.businessName || "a small business"} (industry: ${member.industry || "not specified"}) in ${member.city || "Wisconsin"}.${
-    assessment ? ` Their Business Snapshot puts them at: ${assessment.stage}.` : ""
-  } The decision on the table: "${topic}"`;
+  const context = `${memberContext.summary}\n\nThe decision on the table: "${topic}"`;
 
   return phase === "question"
     ? askNextQuestion(context, messages, questionsAsked)

@@ -49,22 +49,24 @@ export type MemberActivity = {
   createdAt: string;
 };
 
-export type LoginEvent = {
-  id: string;
-  memberId: string;
-  sessionId: string;
-  email: string;
-  at: string;
-  userAgent: string;
-};
-
+// `progress` used to live here as a number invented from event registrations
+// and program enrollments (25 + regs*15 + enrolls*18), while being labelled
+// "Know Your Business progress" on the dashboard — so five event signups read
+// as 100% and finishing a whole roadmap module read as 25%. Real roadmap
+// progress is now derived from module_step_progress via
+// getCompletedStepsByModule below, and computed in the dashboard page where
+// the member's unlocked modules are already known.
+//
+// `loginEvents` is also gone: its only two consumers (a "Tracked sign-ins"
+// stat card and a "Login audit" panel showing raw user-agent strings) were
+// developer instrumentation shown to members as if it were a feature. Sign-ins
+// are still written to login_events by recordMemberSignIn, they're just not
+// queried on every dashboard load anymore — one fewer round trip per view.
 export type MemberDashboard = {
   registrations: EventRegistration[];
   enrollments: ProgramEnrollment[];
-  loginEvents: LoginEvent[];
   attendance: EventAttendance[];
   activities: MemberActivity[];
-  progress: number;
 };
 
 // Minimal row shapes for the raw rows Supabase returns (snake_case columns).
@@ -81,14 +83,6 @@ type ProgramEnrollmentRow = {
   id: string;
   member_id: string;
   program_title: string;
-  created_at: string;
-};
-type LoginEventRow = {
-  id: string;
-  member_id: string;
-  session_id: string;
-  email: string;
-  user_agent: string;
   created_at: string;
 };
 type EventAttendanceRow = {
@@ -243,7 +237,6 @@ export async function getMemberDashboard(memberId: string): Promise<MemberDashbo
   const [
     { data: regRows },
     { data: enrollRows },
-    { data: loginRows },
     { data: attendanceRows },
     { data: activityRows },
   ] = await Promise.all([
@@ -254,11 +247,6 @@ export async function getMemberDashboard(memberId: string): Promise<MemberDashbo
       .order("created_at", { ascending: false }),
     supabase
       .from("program_enrollments")
-      .select("*")
-      .eq("member_id", memberId)
-      .order("created_at", { ascending: false }),
-    supabase
-      .from("login_events")
       .select("*")
       .eq("member_id", memberId)
       .order("created_at", { ascending: false }),
@@ -293,17 +281,6 @@ export async function getMemberDashboard(memberId: string): Promise<MemberDashbo
     createdAt: r.created_at,
   }));
 
-  const loginEvents: LoginEvent[] = (
-    (loginRows ?? []) as LoginEventRow[]
-  ).map((r) => ({
-    id: r.id,
-    memberId: r.member_id,
-    sessionId: r.session_id,
-    email: r.email,
-    at: r.created_at,
-    userAgent: r.user_agent,
-  }));
-
   const attendance: EventAttendance[] = (
     (attendanceRows ?? []) as EventAttendanceRow[]
   ).map((r) => ({
@@ -324,9 +301,46 @@ export async function getMemberDashboard(memberId: string): Promise<MemberDashbo
     createdAt: r.created_at,
   }));
 
-  const progress = Math.min(100, 25 + registrations.length * 15 + enrollments.length * 18);
+  return { registrations, enrollments, attendance, activities };
+}
 
-  return { registrations, enrollments, loginEvents, attendance, activities, progress };
+/**
+ * Every *completed* roadmap step for a member, grouped by module key.
+ *
+ * getModuleProgress above is per-module and returns answers too — that's what
+ * a module detail page needs. The dashboard needs completion across all seven
+ * modules at once, so this is a single query rather than seven.
+ *
+ * Callers should intersect these step keys with the module's current step list
+ * from data/modules.ts. Rows persist after a step is renamed or removed, so
+ * counting them blind would let a member's progress exceed 100%.
+ */
+export async function getCompletedStepsByModule(
+  memberId: string,
+): Promise<Record<string, string[]>> {
+  try {
+    const { data, error } = await db()
+      .from("module_step_progress")
+      .select("module_key, step_key")
+      .eq("member_id", memberId)
+      .eq("completed", true);
+
+    if (error) {
+      console.error("getCompletedStepsByModule: failed to load", error);
+      return {};
+    }
+
+    const grouped: Record<string, string[]> = {};
+    for (const row of (data ?? []) as { module_key: string; step_key: string }[]) {
+      (grouped[row.module_key] ??= []).push(row.step_key);
+    }
+    return grouped;
+  } catch (error) {
+    // Same degradation as the rest of the module_step_progress helpers: an
+    // empty result reads as "nothing completed yet", which renders fine.
+    console.error("getCompletedStepsByModule: Supabase unavailable", error);
+    return {};
+  }
 }
 
 export async function registerForEvent(

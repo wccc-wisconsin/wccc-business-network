@@ -1,32 +1,31 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
-import { getMemberById, getModuleProgress } from "@/lib/appStore";
-import { findModule, stepsForModule } from "@/data/modules";
+import { findModule } from "@/data/modules";
+import { buildMemberContext } from "@/lib/memberContext";
 import { callClaude, type ChatMessage } from "@/lib/ai";
 
-// Freeform AI Coach chat at the bottom of each module page. Aware of the
-// member's industry/business, and their progress within the current
-// module, per the shared template — not a generic chatbot.
+// Freeform AI Coach chat. Runs on module pages (where it's told which module
+// the member is looking at) and on the dashboard (where it isn't), so
+// moduleKey is optional — the member's full context comes from
+// buildMemberContext either way, which is what stops this being a generic
+// chatbot regardless of where it's mounted.
 export async function POST(request: NextRequest) {
   const { userId } = await auth();
   if (!userId) {
     return NextResponse.json({ ok: false, error: "Please sign in again." }, { status: 401 });
   }
 
-  const member = await getMemberById(userId);
-  if (!member) {
-    return NextResponse.json({ ok: false, error: "Member profile not found." }, { status: 404 });
-  }
-
   const body = await request.json().catch(() => null);
   const moduleKey = typeof body?.moduleKey === "string" ? body.moduleKey : null;
   const messages = body?.messages;
-  if (!moduleKey || !Array.isArray(messages)) {
-    return NextResponse.json({ ok: false, error: "Missing moduleKey or messages." }, { status: 400 });
+  if (!Array.isArray(messages)) {
+    return NextResponse.json({ ok: false, error: "Missing messages." }, { status: 400 });
   }
 
-  const found = findModule(moduleKey);
-  if (!found) {
+  // A module key is optional, but if one is supplied it has to be real —
+  // otherwise the prompt would claim the member is looking at something that
+  // doesn't exist.
+  if (moduleKey && !findModule(moduleKey)) {
     return NextResponse.json({ ok: false, error: "That module couldn't be found." }, { status: 404 });
   }
 
@@ -44,11 +43,16 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ ok: false, error: "No question to answer." }, { status: 400 });
   }
 
-  const progress = await getModuleProgress(userId, moduleKey);
-  const steps = stepsForModule(found.module);
-  const completedCount = steps.filter((s) => progress[s.key]?.completed).length;
+  const context = await buildMemberContext(userId, moduleKey);
+  if (!context) {
+    return NextResponse.json({ ok: false, error: "Member profile not found." }, { status: 404 });
+  }
 
-  const systemPrompt = `You are the WCCC AI Business Coach, a feature of the Wisconsin Chinese Chamber of Commerce member portal's AI Business Builder. You're helping ${member.name || "a member"}, who runs ${member.businessName || "a small business"} (industry: ${member.industry || "not specified"}) in ${member.city || "Wisconsin"}. They are currently on the "${found.module.label}" engine (${found.module.tagline}) and have completed ${completedCount} of ${steps.length} steps in it. Be concise, practical, and specific to their situation — no generic encouragement or filler. Where relevant, reference real Wisconsin resources (WI DFI, Wisconsin SBDC, WEDC, SCORE, WCCC programs) instead of vague suggestions. Keep replies to a few short paragraphs at most.`;
+  const systemPrompt = `You are the WCCC AI Business Coach, a feature of the Wisconsin Chinese Chamber of Commerce member portal's AI Business Builder.
+
+${context.summary}
+
+Be concise, practical, and specific to their situation — no generic encouragement or filler. Where relevant, reference real Wisconsin resources (WI DFI, Wisconsin SBDC, WEDC, SCORE, WCCC programs) instead of vague suggestions. If you are not confident a named program is currently active, describe the type of resource and where to look rather than inventing a name. You are not their attorney, accountant, or financial adviser — if something genuinely needs one, say so rather than advising it yourself. Keep replies to a few short paragraphs at most.`;
 
   const result = await callClaude(systemPrompt, safeMessages, 500);
   if (!result.ok) {

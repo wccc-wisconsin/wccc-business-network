@@ -13,7 +13,11 @@
 }
 
 * { box-sizing: border-box; }
-html { scroll-behavior: smooth; }
+/* The site header is `sticky top-0` and roughly 73px tall, so an un-padded
+   anchor jump leaves the target heading sitting underneath it. Reserve the
+   header's height (plus a little breathing room) at the top of every scroll
+   so #events, #programs, #partners etc. land with their headings visible. */
+html { scroll-behavior: smooth; scroll-padding-top: 88px; }
 
 body {
   background: var(--background);

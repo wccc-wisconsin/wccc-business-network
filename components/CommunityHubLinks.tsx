@@ -1,36 +1,8 @@
-const hubLinks = [
-  {
-    icon: "🏢",
-    label: "Business Directory",
-    description: "Find and support Asian-owned businesses across Wisconsin.",
-    href: "https://hub.wcccbusinessnetwork.org/members",
-  },
-  {
-    icon: "📅",
-    label: "Community Events",
-    description: "WCCC, WEDC & Wisconsin Asian community events calendar.",
-    href: "https://hub.wcccbusinessnetwork.org/events",
-  },
-  {
-    icon: "📌",
-    label: "Opportunities & RFPs",
-    description: "Live Milwaukee County bids and contract opportunities.",
-    href: "https://hub.wcccbusinessnetwork.org/opportunities",
-  },
-  {
-    icon: "🎬",
-    label: "Member Spotlights",
-    description: "Video stories from WCCC business owners across the state.",
-    href: "https://hub.wcccbusinessnetwork.org/",
-  },
-];
+import { hubLinks } from "@/data/hub";
 
-// Wisconsin Asian Hub (hub.wcccbusinessnetwork.org) is a separate site under
-// the same organization — its own business directory, events calendar,
-// bid/RFP board, and video spotlights. This portal doesn't have API access
-// to pull that data in live, so for now this links members straight out to
-// it instead of duplicating (and risking drifting from) content WCCC
-// already maintains over there.
+// The signed-in view of the Wisconsin Asian Hub links. The link list moved to
+// data/hub.ts so the public homepage (components/HubHighlights.tsx) renders
+// the same set without a second copy to keep in sync.
 export default function CommunityHubLinks() {
   return (
     <section className="mt-6 rounded-[8px] border border-white/10 bg-[#132f52] p-6">

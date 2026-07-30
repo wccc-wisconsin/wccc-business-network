@@ -214,11 +214,12 @@ export default async function OnboardingPage() {
             Join WCCC — Access My Dashboard →
           </button>
 
+          {/* Terms of Use and Privacy Policy were links pointing at href="#",
+              which went nowhere — worse than plain text on a consent line,
+              since it looks like the policies are one click away. Kept as text
+              until real /terms and /privacy pages exist, then re-link here. */}
           <p className="text-center text-xs text-[#94a3b8]">
-            By joining you agree to our{" "}
-            <a href="#" className="underline hover:text-[#0c1e3a]">Terms of Use</a>{" "}
-            and{" "}
-            <a href="#" className="underline hover:text-[#0c1e3a]">Privacy Policy</a>.
+            By joining you agree to our Terms of Use and Privacy Policy.
           </p>
         </form>
       </div>
