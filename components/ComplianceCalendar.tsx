@@ -6,11 +6,16 @@ import {
 } from "@/data/compliance";
 
 /**
- * Upcoming filing deadlines for Wisconsin small businesses.
+ * Upcoming filing deadlines for Wisconsin small businesses — payroll tax,
+ * estimated tax, and the Wisconsin annual report. These carry penalties when
+ * missed, which is the whole reason the portal surfaces them.
  *
- * A server component with no member input and no AI call: the dates are known,
- * so they render instantly on page load rather than sitting behind a button.
- * That's the whole point — an owner shouldn't have to ask what's due.
+ * No member input and no AI call: the dates are known, so they render on page
+ * load rather than sitting behind a button.
+ *
+ * Renders content only, with no outer card — it lives inside the Events
+ * section's tab panel (see EventsTabs), which supplies the chrome. Styled for
+ * that section's light cream card rather than the dark dashboard background.
  *
  * Each row names who it applies to and links to the agency, because the portal
  * doesn't collect entity type or formation date and therefore cannot know
@@ -25,7 +30,6 @@ const HOW_MANY_SHOWN = 5;
 
 function formatDate(iso: string) {
   return new Intl.DateTimeFormat("en", {
-    weekday: "short",
     month: "long",
     day: "numeric",
     year: "numeric",
@@ -43,9 +47,9 @@ function countdown(days: number) {
 
 /** Red inside a week, amber inside a month, plain after that. */
 function urgencyClasses(days: number) {
-  if (days <= 7) return "border-red-400/40 bg-red-400/10 text-red-300";
-  if (days <= 30) return "border-[#d7a84d]/40 bg-[#d7a84d]/10 text-[#d7a84d]";
-  return "border-white/15 bg-white/5 text-white/60";
+  if (days <= 7) return "border-red-300 bg-red-50 text-red-700";
+  if (days <= 30) return "border-[#d7a84d] bg-[#fdf6ec] text-[#9b6b1f]";
+  return "border-[#0f2d4a]/15 bg-white text-slate-500";
 }
 
 export default function ComplianceCalendar() {
@@ -55,40 +59,29 @@ export default function ComplianceCalendar() {
   const needsRefresh = remaining < NEEDS_REFRESH_THRESHOLD;
 
   return (
-    <section className="mt-6 rounded-[8px] border border-white/10 bg-[#132f52] p-6">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <p className="text-xs font-bold uppercase tracking-[0.3em] text-[#d7a84d]">
-            Compliance Calendar
-          </p>
-          <h2 className="mt-1 font-serif text-2xl font-bold text-white">What&apos;s coming due</h2>
-          <p className="mt-1 max-w-2xl text-sm text-white/50">
-            Wisconsin and federal filing deadlines. Not all of these apply to every business —
-            each one says who it&apos;s for. Confirm your own dates with the agency.
-          </p>
-        </div>
-        <span className="shrink-0 text-xs text-white/35">
-          Checked {formatDate(LAST_VERIFIED)}
-        </span>
-      </div>
+    <div>
+      <p className="text-sm leading-6 text-slate-600">
+        Wisconsin and federal filing deadlines. Not all of these apply to every business — each
+        one says who it&apos;s for. Confirm your own dates with the agency.
+      </p>
 
       {upcoming.length === 0 ? (
-        <p className="mt-5 text-sm text-white/60">
+        <p className="mt-4 text-sm text-slate-600">
           No dates on file. The deadline list needs updating — email info@wisccc.org.
         </p>
       ) : (
-        <ul className="mt-5 space-y-3">
+        <ul className="mt-4 space-y-3">
           {upcoming.map((item) => {
             const days = daysUntil(item.date, now);
             return (
               <li
                 key={item.key}
-                className="rounded-[8px] border border-white/10 bg-white/5 p-4"
+                className="rounded-[8px] border border-[#0f2d4a]/10 bg-white p-4"
               >
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div className="min-w-0">
-                    <p className="font-bold text-white">{item.title}</p>
-                    <p className="mt-0.5 text-xs font-semibold uppercase tracking-[0.12em] text-[#d7a84d]/80">
+                    <h3 className="text-base font-bold">{item.title}</h3>
+                    <p className="mt-0.5 text-xs font-bold uppercase tracking-[0.15em] text-[#9b6b1f]">
                       {item.appliesTo}
                     </p>
                   </div>
@@ -99,15 +92,15 @@ export default function ComplianceCalendar() {
                   </span>
                 </div>
 
-                <p className="mt-2 text-sm leading-6 text-white/65">{item.detail}</p>
+                <p className="mt-2 text-sm leading-6 text-slate-600">{item.detail}</p>
 
                 <div className="mt-3 flex flex-wrap items-center gap-3 text-xs">
-                  <span className="text-white/45">{formatDate(item.date)}</span>
+                  <span className="font-semibold text-slate-500">{formatDate(item.date)}</span>
                   <a
                     href={item.sourceUrl}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="font-bold text-[#d7a84d] transition hover:text-[#e8bd6a]"
+                    className="font-bold text-[#9b6b1f] underline-offset-2 hover:underline"
                   >
                     {item.sourceName} ↗
                   </a>
@@ -119,14 +112,15 @@ export default function ComplianceCalendar() {
       )}
 
       {/* Shown to members too, not hidden in a log: a calendar quietly running
-          out of dates is exactly how this feature would rot without anyone
-          noticing. */}
+          out of dates is exactly how this feature would rot unnoticed. */}
       {needsRefresh && (
-        <p className="mt-4 rounded-[8px] border border-amber-400/30 bg-amber-400/10 px-4 py-3 text-xs text-amber-300">
+        <p className="mt-4 rounded-[8px] border border-amber-300 bg-amber-50 px-4 py-3 text-xs text-amber-800">
           Only {remaining} deadline{remaining === 1 ? "" : "s"} left on file — this calendar needs
           next year&apos;s dates added. Email info@wisccc.org if it looks out of date.
         </p>
       )}
-    </section>
+
+      <p className="mt-4 text-xs text-slate-400">Dates last checked {formatDate(LAST_VERIFIED)}</p>
+    </div>
   );
 }

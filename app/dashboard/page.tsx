@@ -31,6 +31,7 @@ import { slugifyEventTitle } from "@/lib/eventSlug";
 import AICoach from "@/components/AICoach";
 import BusinessAssessmentCard from "@/components/BusinessAssessmentCard";
 import ComplianceCalendar from "@/components/ComplianceCalendar";
+import EventsTabs from "@/components/EventsTabs";
 import DashboardRoadmapTabs from "@/components/DashboardRoadmapTabs";
 import DecisionGrillPanel from "@/components/DecisionGrillPanel";
 import RoadmapModuleList from "@/components/RoadmapModuleList";
@@ -321,11 +322,6 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
             based on their stated top priority, regardless of membership
             tier. Sits above the roadmap since its free-unlock badge shows
             up there. See data/assessment.ts and components/BusinessAssessmentCard.tsx. */}
-        {/* Sits above the Snapshot because it's the one panel with dates that
-            pass whether or not the member acts. Needs no input and makes no AI
-            call, so it's populated the instant the page renders. */}
-        <ComplianceCalendar />
-
         <BusinessAssessmentCard
           key={businessAssessment?.updatedAt ?? "new"}
           initialAssessment={businessAssessment}
@@ -390,9 +386,13 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
         <CommunityHubLinks />
 
         <section className="mt-6 grid gap-6 lg:grid-cols-2">
-          <div className="rounded-[8px] bg-[#f8f1e7] p-5 text-[#0f2d4a]">
-            <h2 className="font-serif text-3xl font-bold">Events</h2>
-            <div className="mt-5 space-y-3">
+          {/* Events and compliance deadlines share one card behind tabs: both
+              answer "what's coming up", and the deadline list doesn't warrant
+              its own section above the roadmap. */}
+          <EventsTabs
+            compliance={<ComplianceCalendar />}
+            events={
+            <div className="space-y-3">
               {events.map((event) => {
                 const isRegistered = registeredTitles.has(event.title);
                 const hasAttended = attendedTitles.has(event.title);
@@ -436,7 +436,8 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                 );
               })}
             </div>
-          </div>
+            }
+          />
 
           <div className="rounded-[8px] bg-[#f8f1e7] p-5 text-[#0f2d4a]">
             <h2 className="font-serif text-3xl font-bold">Programs</h2>
