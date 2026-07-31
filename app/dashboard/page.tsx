@@ -30,6 +30,7 @@ import { SAVED_DECISIONS_LIMIT } from "@/data/decisions";
 import { slugifyEventTitle } from "@/lib/eventSlug";
 import AICoach from "@/components/AICoach";
 import BusinessAssessmentCard from "@/components/BusinessAssessmentCard";
+import ComplianceCalendar from "@/components/ComplianceCalendar";
 import DashboardRoadmapTabs from "@/components/DashboardRoadmapTabs";
 import DecisionGrillPanel from "@/components/DecisionGrillPanel";
 import RoadmapModuleList from "@/components/RoadmapModuleList";
@@ -320,6 +321,11 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
             based on their stated top priority, regardless of membership
             tier. Sits above the roadmap since its free-unlock badge shows
             up there. See data/assessment.ts and components/BusinessAssessmentCard.tsx. */}
+        {/* Sits above the Snapshot because it's the one panel with dates that
+            pass whether or not the member acts. Needs no input and makes no AI
+            call, so it's populated the instant the page renders. */}
+        <ComplianceCalendar />
+
         <BusinessAssessmentCard
           key={businessAssessment?.updatedAt ?? "new"}
           initialAssessment={businessAssessment}

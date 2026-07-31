@@ -315,6 +315,126 @@ export async function getMemberDashboard(memberId: string): Promise<MemberDashbo
  * from data/modules.ts. Rows persist after a step is renamed or removed, so
  * counting them blind would let a member's progress exceed 100%.
  */
+// ---------------------------------------------------------------------------
+// Module toolkit — documents generated from a module's tools (data/modules.ts)
+// using the member's saved guided-step answers. Backed by member_documents,
+// which may not be migrated onto the live database yet, so every function here
+// degrades to an empty/no-op result like the module_summaries helpers above:
+// the member still gets the generated document on screen, it just isn't kept.
+// ---------------------------------------------------------------------------
+
+export type MemberDocument = {
+  id: string;
+  moduleKey: string;
+  toolKey: string;
+  title: string;
+  content: string;
+  createdAt: string;
+};
+
+type MemberDocumentRow = {
+  id: string;
+  module_key: string;
+  tool_key: string;
+  title: string;
+  content: string;
+  created_at: string;
+};
+
+/** A member's generated documents, newest first. */
+export async function getMemberDocuments(
+  memberId: string,
+  limit = 20,
+): Promise<MemberDocument[]> {
+  try {
+    const { data, error } = await db()
+      .from("member_documents")
+      .select("id, module_key, tool_key, title, content, created_at")
+      .eq("member_id", memberId)
+      .order("created_at", { ascending: false })
+      .limit(limit);
+
+    if (error) {
+      console.error("getMemberDocuments: failed to load", error);
+      return [];
+    }
+
+    return ((data ?? []) as MemberDocumentRow[]).map((r) => ({
+      id: r.id,
+      moduleKey: r.module_key,
+      toolKey: r.tool_key,
+      title: r.title,
+      content: r.content,
+      createdAt: r.created_at,
+    }));
+  } catch (error) {
+    console.error("getMemberDocuments: Supabase unavailable", error);
+    return [];
+  }
+}
+
+/**
+ * How many documents this member has generated in the last 24 hours.
+ *
+ * Backs the per-member daily cap in the generation route. Each generation is a
+ * paid API call triggered by a button, so without a ceiling one member holding
+ * down Generate is an unbounded bill. Counts with `head: true` so no rows come
+ * back over the wire.
+ *
+ * Returns null if the count can't be read — the caller treats that as "don't
+ * know" and allows the request rather than locking members out of a working
+ * feature because the count query failed.
+ */
+export async function countDocumentsSince(
+  memberId: string,
+  since: Date,
+): Promise<number | null> {
+  try {
+    const { count, error } = await db()
+      .from("member_documents")
+      .select("id", { count: "exact", head: true })
+      .eq("member_id", memberId)
+      .gte("created_at", since.toISOString());
+
+    if (error) {
+      console.error("countDocumentsSince: failed to count", error);
+      return null;
+    }
+    return count ?? 0;
+  } catch (error) {
+    console.error("countDocumentsSince: Supabase unavailable", error);
+    return null;
+  }
+}
+
+export async function saveMemberDocument(
+  memberId: string,
+  moduleKey: string,
+  toolKey: string,
+  title: string,
+  content: string,
+): Promise<{ ok: boolean }> {
+  try {
+    const { error } = await db().from("member_documents").insert({
+      member_id: memberId,
+      module_key: moduleKey,
+      tool_key: toolKey,
+      title,
+      content,
+      created_at: new Date().toISOString(),
+    });
+
+    if (error) {
+      console.error("saveMemberDocument: failed to insert", error);
+      return { ok: false };
+    }
+    return { ok: true };
+  } catch (error) {
+    console.error("saveMemberDocument: Supabase unavailable", error);
+    return { ok: false };
+  }
+}
+
 export async function getCompletedStepsByModule(
   memberId: string,
 ): Promise<Record<string, string[]>> {

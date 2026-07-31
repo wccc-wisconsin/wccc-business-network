@@ -25,6 +25,29 @@ export type ModulePhase = {
   steps: ModuleStep[];
 };
 
+/**
+ * A document a member can generate for their own business from this module.
+ *
+ * The `resources` array below has always advertised things like "SOP template
+ * generator" and "First-customer outreach generator", but rendered them as
+ * plain text — a member could read the name of a tool and never use it. These
+ * are the real thing: each one produces a document written from the member's
+ * profile and the answers they've already saved in this module's guided steps,
+ * so the output is about their business rather than a generic template.
+ */
+export type ModuleTool = {
+  key: string;
+  title: string;
+  /** One line on the card — what the member walks away with. */
+  description: string;
+  /**
+   * Appended to the system prompt. Says exactly what to produce and in what
+   * shape. Keep these specific: a vague brief is what makes AI output read
+   * like filler.
+   */
+  brief: string;
+};
+
 export type BusinessModule = {
   key: string;
   icon: string;
@@ -33,6 +56,12 @@ export type BusinessModule = {
   /** Minimum tier required to unlock this module. */
   minTier: MembershipTierKey;
   resources: string[];
+  /**
+   * Document generators for this module. Optional because they're being added
+   * one module at a time — Revenue has them today. Modules without `tools`
+   * simply don't render the toolkit panel.
+   */
+  tools?: ModuleTool[];
   /**
    * The full guided-steps template (phases -> steps -> guided questions).
    * Optional because it's being filled in one module at a time, in lifecycle
@@ -242,6 +271,29 @@ export const businessModules: BusinessModule[] = [
       "AI-drafted 90-day marketing plan",
       "First-customer outreach generator",
       "Sales & follow-up system",
+    ],
+    // The three resources above that describe generators are real here — each
+    // one writes from the member's saved answers in this module rather than
+    // producing a blank template.
+    tools: [
+      {
+        key: "marketing-plan",
+        title: "90-Day Marketing Plan",
+        description: "A week-by-week plan built around the channels and customers you described.",
+        brief: `Write a 90-day marketing plan for this business, organised as three 30-day phases with a short heading for each. Under each phase give 3-4 specific actions, each one a concrete thing the owner does — not a category. Use the channels, customer description and capacity the member actually described; if they named a channel, plan for that channel rather than suggesting a different one. Where their answers show they lack something needed (no website, no customer list), say so plainly and put the fix in phase one. End with 3 numbers they should track. Keep it under 500 words. No preamble, no encouragement.`,
+      },
+      {
+        key: "outreach-email",
+        title: "First-Customer Outreach",
+        description: "Two ready-to-send emails aimed at the customers you're actually targeting.",
+        brief: `Write two short outreach emails this owner could send today to win a customer, using the customer type and offer they described. Label them "Email 1 — cold introduction" and "Email 2 — follow-up if no reply". Each needs a subject line and a body under 120 words, in plain language a busy person reads on a phone. Reference what this business actually sells and who actually buys it. Do not use marketing clichés, do not invent testimonials, statistics, or credentials they did not give you. End with one line naming the single detail they should personalise before sending.`,
+      },
+      {
+        key: "follow-up-system",
+        title: "Sales Follow-Up System",
+        description: "A simple cadence so quotes and enquiries stop falling through the cracks.",
+        brief: `Design a lightweight follow-up system for this business, based on how they said they currently track sales and get paid. Give a numbered sequence of contact points after an initial enquiry or quote (timing plus what to say at each), sized to a working owner rather than a sales team. Then give a 3-line description of the simplest way to track it given the tools they already mentioned — if they said spreadsheet, build it around a spreadsheet, don't sell them software. Note plainly if their current setup would lose track of a lead. Under 400 words.`,
+      },
     ],
     // Second full guided-steps template after Launch — same shape (3
     // phases, 6 steps), scoped to Revenue's actual job: get found, get the
@@ -973,6 +1025,20 @@ export const roadmapTracks: RoadmapTrackMeta[] = [
  * app/dashboard/roadmap/[module]/page.tsx) across every track, plus the
  * track it belongs to and its position for prev/next navigation.
  */
+/**
+ * Looks up one generator by module and tool key. Returns null for an unknown
+ * pair so the API route can reject a request rather than trusting a tool key
+ * sent by the client — the brief becomes part of a system prompt, so it has to
+ * come from this file and never from the request body.
+ */
+export function findTool(moduleKey: string, toolKey: string) {
+  const found = findModule(moduleKey);
+  if (!found) return null;
+  const tool = found.module.tools?.find((t) => t.key === toolKey);
+  if (!tool) return null;
+  return { module: found.module, tool };
+}
+
 export function findModule(moduleKey: string) {
   for (const track of roadmapTracks) {
     const index = track.modules.findIndex((m) => m.key === moduleKey);

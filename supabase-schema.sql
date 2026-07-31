@@ -207,6 +207,33 @@ create table if not exists member_decisions (
 create index if not exists member_decisions_member_created_idx
   on member_decisions (member_id, created_at desc);
 
+-- Module toolkit: documents a member generates for their own business from a
+-- module's tools (see `tools` on BusinessModule in data/modules.ts) — a 90-day
+-- marketing plan, outreach emails, a follow-up system. Written from their
+-- saved guided-step answers, so each one is specific to their business.
+--
+-- Unlike module_summaries (one row per member per module, regenerating
+-- overwrites), this keeps a history: these are work product a member may want
+-- to come back to, and losing last month's marketing plan because they
+-- generated a new one would be its own bug.
+create table if not exists member_documents (
+  id uuid primary key default gen_random_uuid(),
+  member_id text not null references members(id) on delete cascade,
+  module_key text not null,
+  tool_key text not null,
+  title text not null,
+  content text not null,
+  created_at timestamptz not null default now()
+);
+
+-- Kept, for the same reason as member_decisions_member_created_idx: no unique
+-- constraint on this table to piggyback on, and both queries against it filter
+-- on member_id and order by created_at desc — the document list, and the
+-- 24-hour count backing the per-member daily generation cap. One index scan
+-- serves both instead of reading every row a member owns and sorting.
+create index if not exists member_documents_member_created_idx
+  on member_documents (member_id, created_at desc);
+
 -- Disable RLS (service role key bypasses it anyway, but keeps it simple)
 alter table members disable row level security;
 alter table login_events disable row level security;
@@ -219,3 +246,4 @@ alter table module_summaries disable row level security;
 alter table member_opportunities disable row level security;
 alter table business_assessments disable row level security;
 alter table member_decisions disable row level security;
+alter table member_documents disable row level security;

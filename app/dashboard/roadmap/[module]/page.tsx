@@ -5,6 +5,7 @@ import { findModule, isModuleUnlocked, tierMeetsMinimum, stepsForModule } from "
 import {
   getBusinessAssessment,
   getMemberById,
+  getMemberDocuments,
   getModuleProgress,
   getModuleSummary,
   type ModuleSummary,
@@ -13,6 +14,7 @@ import {
 import StepCard from "@/components/StepCard";
 import AICoach from "@/components/AICoach";
 import ModuleSummaryPanel from "@/components/ModuleSummaryPanel";
+import ModuleToolkit from "@/components/ModuleToolkit";
 
 const tierLabels: Record<string, string> = {
   network: "Network",
@@ -52,10 +54,19 @@ export default async function ModulePage({ params }: ModulePageProps) {
   const steps = stepsForModule(mod);
   const hasGuidedSteps = steps.length > 0;
 
+  // Documents are only fetched when this module actually has tools, so modules
+  // without a toolkit don't pay for a query that can only return an empty list.
+  const moduleTools = mod.tools ?? [];
+  const hasToolkit = unlocked && hasGuidedSteps && moduleTools.length > 0;
+
   const [progress, summary]: [Record<string, StepProgress>, ModuleSummary | null] =
     unlocked && hasGuidedSteps
       ? await Promise.all([getModuleProgress(userId, mod.key), getModuleSummary(userId, mod.key)])
       : [{}, null];
+
+  const moduleDocuments = hasToolkit
+    ? (await getMemberDocuments(userId)).filter((d) => d.moduleKey === mod.key)
+    : [];
 
   const completedCount = steps.filter((s) => progress[s.key]?.completed).length;
   const percentComplete = hasGuidedSteps ? Math.round((completedCount / steps.length) * 100) : 0;
@@ -178,6 +189,17 @@ export default async function ModulePage({ params }: ModulePageProps) {
                   defaultOpen={i === 0}
                 />
               ))}
+
+              {/* Sits above the summary panel: the summary describes what the
+                  member wrote, the toolkit turns it into something they can
+                  actually use. Only renders for modules with `tools` defined. */}
+              {hasToolkit && (
+                <ModuleToolkit
+                  moduleKey={mod.key}
+                  tools={moduleTools}
+                  initialDocuments={moduleDocuments}
+                />
+              )}
 
               <ModuleSummaryPanel moduleKey={mod.key} defaultTitle={summaryTitle} initialSummary={summary} />
 

@@ -32,27 +32,56 @@ const initialFormState: FormState = { ok: false, error: null };
 // remounts, and the in-progress form + error message stay visible.
 export default function BusinessAssessmentCard({ initialAssessment }: Props) {
   const [isEditing, setIsEditing] = useState(!initialAssessment);
+  // Collapsed by default once the snapshot has been taken: at that point the
+  // card is a result the member has already seen, and leaving it expanded
+  // pushed the roadmap and everything below it off the first screen. A member
+  // who hasn't taken it yet still gets it open, since that's the one case
+  // where the card is the thing they should act on.
+  const [isOpen, setIsOpen] = useState(!initialAssessment);
   const [state, formAction, isSaving] = useActionState(saveBusinessAssessmentAction, initialFormState);
 
   const unlockedModule = initialAssessment?.freeModuleKey
     ? businessModules.find((m) => m.key === initialAssessment.freeModuleKey)
     : null;
 
+  // Editing always forces the body open — collapsing a form mid-edit would
+  // hide unsaved answers with no indication of where they went.
+  const expanded = isOpen || isEditing;
+
+  // Collapsed, the header has to carry the result on its own, otherwise
+  // collapsing loses the stage and the free-module unlock entirely.
+  const collapsedSummary = initialAssessment
+    ? `${initialAssessment.stage}${unlockedModule ? ` · ${unlockedModule.label} unlocked free` : ""}`
+    : "7 quick questions unlock one roadmap module free, matched to what you need most right now.";
+
   return (
     <section className="mt-6 rounded-[8px] border border-white/10 bg-[#132f52] p-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <p className="text-xs font-bold uppercase tracking-[0.3em] text-[#d7a84d]">Business Snapshot</p>
-          <h2 className="mt-1 font-serif text-2xl font-bold text-white">
-            {initialAssessment ? "Your business, at a glance" : "Tell us where your business stands"}
-          </h2>
-          <p className="mt-1 text-sm text-white/50">
-            {initialAssessment
-              ? "7 quick questions — update anytime as your business changes."
-              : "7 quick questions unlock one roadmap module free, matched to what you need most right now."}
-          </p>
-        </div>
-        {!isEditing && (
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <button
+          type="button"
+          onClick={() => setIsOpen((o) => !o)}
+          aria-expanded={expanded}
+          aria-controls="business-snapshot-body"
+          className="flex flex-1 items-start gap-3 text-left"
+        >
+          <span className="mt-1 text-lg leading-none text-white/40" aria-hidden="true">
+            {expanded ? "−" : "+"}
+          </span>
+          <span>
+            <span className="block text-xs font-bold uppercase tracking-[0.3em] text-[#d7a84d]">
+              Business Snapshot
+            </span>
+            <span className="mt-1 block font-serif text-2xl font-bold text-white">
+              {initialAssessment ? "Your business, at a glance" : "Tell us where your business stands"}
+            </span>
+            <span className="mt-1 block text-sm text-white/50">
+              {expanded && initialAssessment
+                ? "7 quick questions — update anytime as your business changes."
+                : collapsedSummary}
+            </span>
+          </span>
+        </button>
+        {!isEditing && expanded && (
           <button
             type="button"
             onClick={() => setIsEditing(true)}
@@ -62,6 +91,8 @@ export default function BusinessAssessmentCard({ initialAssessment }: Props) {
           </button>
         )}
       </div>
+
+      <div id="business-snapshot-body" hidden={!expanded}>
 
       {!isEditing && initialAssessment && (
         <div className="mt-5 grid gap-4 sm:grid-cols-[auto_1fr] sm:items-center">
@@ -166,6 +197,8 @@ export default function BusinessAssessmentCard({ initialAssessment }: Props) {
           </div>
         </form>
       )}
+
+      </div>
     </section>
   );
 }
