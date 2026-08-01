@@ -18,6 +18,20 @@
 /** When a person last checked these dates against the sources. */
 export const LAST_VERIFIED = "2026-07-30";
 
+/**
+ * Which members an item is for, expressed so it can be checked against the
+ * facts in data/facts.ts rather than only read by a human.
+ *
+ * `appliesTo` below stays regardless — it's the sentence a member reads. This
+ * is the machine-checkable version of the same claim, and the two must agree.
+ * When a member's facts don't settle the question, the item is still shown:
+ * a missed filing costs more than a row that turned out not to apply.
+ */
+export type ComplianceAudience =
+  | { kind: "employers" }
+  | { kind: "estimated-tax" }
+  | { kind: "annual-report"; quarter: 1 | 2 | 3 | 4; includesForeign?: boolean };
+
 export type ComplianceItem = {
   key: string;
   /** ISO date (YYYY-MM-DD). Treated as a calendar date, not an instant. */
@@ -28,6 +42,8 @@ export type ComplianceItem = {
   detail: string;
   sourceName: string;
   sourceUrl: string;
+  /** Absent means it applies to every business. */
+  audience?: ComplianceAudience;
 };
 
 /**
@@ -55,6 +71,7 @@ const IRS_SOURCE = {
 export const complianceItems: ComplianceItem[] = [
   {
     key: "941-q2-2026",
+    audience: { kind: "employers" },
     date: "2026-07-31",
     title: "Form 941 — Q2 payroll tax return",
     appliesTo: "Businesses with employees",
@@ -64,6 +81,7 @@ export const complianceItems: ComplianceItem[] = [
   },
   {
     key: "est-tax-q3-2026",
+    audience: { kind: "estimated-tax" },
     date: "2026-09-15",
     title: "Federal estimated tax — Q3 payment",
     appliesTo: "Owners paying themselves without withholding",
@@ -73,6 +91,7 @@ export const complianceItems: ComplianceItem[] = [
   },
   {
     key: "wi-annual-q3-2026",
+    audience: { kind: "annual-report", quarter: 3 },
     date: "2026-09-30",
     title: "Wisconsin annual report",
     appliesTo: "LLCs and corporations formed July–September",
@@ -82,6 +101,7 @@ export const complianceItems: ComplianceItem[] = [
   },
   {
     key: "941-q3-2026",
+    audience: { kind: "employers" },
     date: "2026-11-02",
     title: "Form 941 — Q3 payroll tax return",
     appliesTo: "Businesses with employees",
@@ -91,6 +111,7 @@ export const complianceItems: ComplianceItem[] = [
   },
   {
     key: "wi-annual-q4-2026",
+    audience: { kind: "annual-report", quarter: 4 },
     date: "2026-12-31",
     title: "Wisconsin annual report",
     appliesTo: "LLCs and corporations formed October–December",
@@ -100,6 +121,7 @@ export const complianceItems: ComplianceItem[] = [
   },
   {
     key: "est-tax-q4-2026",
+    audience: { kind: "estimated-tax" },
     date: "2027-01-15",
     title: "Federal estimated tax — Q4 payment",
     appliesTo: "Owners paying themselves without withholding",
@@ -108,6 +130,7 @@ export const complianceItems: ComplianceItem[] = [
   },
   {
     key: "941-q4-2026",
+    audience: { kind: "employers" },
     date: "2027-02-01",
     title: "Form 941 — Q4 payroll tax return",
     appliesTo: "Businesses with employees",
@@ -117,6 +140,7 @@ export const complianceItems: ComplianceItem[] = [
   },
   {
     key: "wi-annual-q1-2027",
+    audience: { kind: "annual-report", quarter: 1, includesForeign: true },
     date: "2027-03-31",
     title: "Wisconsin annual report",
     appliesTo: "LLCs and corporations formed January–March, and all foreign entities",
@@ -126,6 +150,7 @@ export const complianceItems: ComplianceItem[] = [
   },
   {
     key: "est-tax-q1-2027",
+    audience: { kind: "estimated-tax" },
     date: "2027-04-15",
     title: "Federal estimated tax — Q1 payment",
     appliesTo: "Owners paying themselves without withholding",
@@ -134,6 +159,7 @@ export const complianceItems: ComplianceItem[] = [
   },
   {
     key: "wi-annual-q2-2027",
+    audience: { kind: "annual-report", quarter: 2 },
     date: "2027-06-30",
     title: "Wisconsin annual report",
     appliesTo: "LLCs and corporations formed April–June",
@@ -165,10 +191,8 @@ export function daysUntil(iso: string, now: Date): number {
   return Math.round((target.getTime() - today.getTime()) / 86_400_000);
 }
 
-/** Upcoming items only (today counts as upcoming), soonest first. */
-export function upcomingCompliance(now: Date, limit?: number): ComplianceItem[] {
-  const upcoming = complianceItems
-    .filter((item) => daysUntil(item.date, now) >= 0)
-    .sort((a, b) => a.date.localeCompare(b.date));
-  return typeof limit === "number" ? upcoming.slice(0, limit) : upcoming;
-}
+// `upcomingCompliance` used to live here and returned this list filtered to
+// future dates. It was removed rather than left in place when deadlinesForMember
+// (lib/deadlines.ts) took over: that function does the same filtering plus the
+// member's own renewal dates, and keeping both would have meant two answers to
+// "what's coming up" that could drift apart without anything failing.

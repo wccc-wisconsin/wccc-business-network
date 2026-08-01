@@ -11,13 +11,17 @@ import {
   saveStepAnswers,
   setStepCompleted,
   upsertMember,
+  upsertMemberFacts,
+  type FactWrite,
   type JourneyType,
   type MembershipTier,
 } from "@/lib/appStore";
 import { events } from "@/data/events";
 import { programs } from "@/data/programs";
-import { findStep } from "@/data/modules";
-import { assessmentQuestions, computeAssessment } from "@/data/assessment";
+import { findStep, stepProvenanceLabel } from "@/data/modules";
+import { assessmentQuestions, computeAssessment, profileQuestions } from "@/data/assessment";
+import { factDefinition, isValidFactValue } from "@/data/facts";
+import { factWritesFromAnswers } from "@/lib/carryOver";
 
 // Shared result shape for the useActionState-driven forms below (Register,
 // Enroll, Check in) so a failed Supabase write can show the member an actual
@@ -160,16 +164,40 @@ export async function saveStepProgressAction(
     answers[q.key] = fieldValue(formData, q.key);
   }
 
-  const [answersResult, completedResult] = await Promise.all([
+  // Answers that own a fact are promoted to the member's profile, so the next
+  // module that asks the same thing already has it. See lib/carryOver.ts.
+  const factWrites = factWritesFromAnswers(
+    found.step.questions,
+    answers,
+    moduleKey,
+    stepProvenanceLabel(found.module, found.step),
+  );
+
+  const [answersResult, completedResult, factsResult] = await Promise.all([
     saveStepAnswers(userId, moduleKey, stepKey, answers),
     setStepCompleted(userId, moduleKey, stepKey, completed),
+    upsertMemberFacts(userId, factWrites),
   ]);
 
   revalidatePath(`/dashboard/roadmap/${moduleKey}`);
+  // Facts feed the deadline list and the profile card on the dashboard, so a
+  // save here can change what renders there.
+  if (factWrites.length > 0) revalidatePath("/dashboard");
 
   if (!answersResult.ok || !completedResult.ok) {
     return { ok: false, error: "Couldn't save — please try again in a moment." };
   }
+
+  // The step itself saved; only the profile copy didn't. Reporting failure
+  // would push the member to re-submit work that is already stored, so this
+  // is logged rather than surfaced — the next save picks the facts back up.
+  if (!factsResult.ok) {
+    console.error("saveStepProgressAction: step saved but facts did not", {
+      moduleKey,
+      stepKey,
+    });
+  }
+
   return { ok: true, error: null };
 }
 
@@ -195,12 +223,35 @@ export async function saveBusinessAssessmentAction(
     answers[q.key] = value;
   }
 
+  // Profile facts ride along with the Snapshot but are optional and unscored:
+  // anything left blank or malformed is skipped rather than blocking the save.
+  // A member who answers three of seven still gets those three carried into
+  // their modules and their deadline list.
+  const factWrites: FactWrite[] = [];
+  for (const key of profileQuestions) {
+    const def = factDefinition(key);
+    if (!def) continue;
+    const value = fieldValue(formData, `fact_${key}`);
+    if (!isValidFactValue(def, value)) continue;
+    factWrites.push({ key, value, source: "profile", sourceLabel: "Business Snapshot" });
+  }
+
   const { score, stage, freeModuleKey } = computeAssessment(answers);
-  const result = await saveBusinessAssessment(userId, answers, score, stage, freeModuleKey);
+  const [result, factsResult] = await Promise.all([
+    saveBusinessAssessment(userId, answers, score, stage, freeModuleKey),
+    upsertMemberFacts(userId, factWrites),
+  ]);
   revalidatePath("/dashboard");
 
   if (!result.ok) {
     return { ok: false, error: "Couldn't save your Business Snapshot — please try again in a moment." };
   }
+
+  // As in saveStepProgressAction: the Snapshot itself is stored, so don't send
+  // the member back through the form over the profile half.
+  if (!factsResult.ok) {
+    console.error("saveBusinessAssessmentAction: snapshot saved but facts did not");
+  }
+
   return { ok: true, error: null };
 }

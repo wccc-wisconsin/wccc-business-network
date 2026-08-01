@@ -1,4 +1,5 @@
 import { businessModules } from "@/data/modules";
+import { factDefinition } from "@/data/facts";
 
 // The "Business Snapshot" — a short onboarding-style questionnaire that
 // classifies where a member's business actually is (not just which
@@ -128,6 +129,44 @@ if (process.env.NODE_ENV !== "production") {
 }
 
 export const assessmentQuestions: AssessmentQuestion[] = [...scoredQuestions, priorityQuestion];
+
+/**
+ * The profile section of the Snapshot: fact keys (see data/facts.ts) asked
+ * alongside the scored questions.
+ *
+ * These are NOT scored and NOT required. That distinction is the whole design.
+ * The scored questions are a quiz whose output is a stage label — every one
+ * has to be answered for the number to mean anything, which is why the form
+ * rejects a partial submission. Profile facts are just things the portal
+ * knows about the business; each one stands alone, so a member who fills in
+ * three of seven is better served than one who abandons the form because it
+ * got long.
+ *
+ * Chosen for immediate payoff rather than completeness. Each of these either
+ * filters the deadline calendar (so the member sees their own dates instead of
+ * everyone's) or gets carried into a guided step they haven't reached yet. The
+ * rest of the catalog is filled in from the profile card and the modules
+ * themselves, whenever the member happens to get to it.
+ */
+export const profileQuestions: string[] = [
+  "entity_structure",
+  "formation_date",
+  "formation_state",
+  "has_employees",
+  "pays_estimated_tax",
+  "seller_permit",
+  "target_customer",
+];
+
+// Same guard as the priority question above: a profile key that names no real
+// fact would render an empty field and silently save nothing.
+if (process.env.NODE_ENV !== "production") {
+  for (const key of profileQuestions) {
+    if (!factDefinition(key)) {
+      throw new Error(`profileQuestions lists "${key}", which is not a fact in data/facts.ts`);
+    }
+  }
+}
 
 export type BusinessStage = "Idea Stage" | "Early Stage" | "Growth Stage" | "Established";
 

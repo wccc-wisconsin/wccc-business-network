@@ -2,6 +2,7 @@
 
 import { useActionState, useState, useTransition } from "react";
 import type { ModuleStep } from "@/data/modules";
+import type { QuestionCarryOver } from "@/lib/carryOver";
 import type { FormState } from "@/app/actions";
 import { saveStepProgressAction } from "@/app/actions";
 
@@ -15,7 +16,15 @@ type Props = {
   initialAnswers: Record<string, string>;
   initialCompleted: boolean;
   defaultOpen: boolean;
+  /** Per-question prefill and context resolved from the member's facts. */
+  carryOver: Record<string, QuestionCarryOver>;
 };
+
+function formatShortDate(iso: string) {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return "";
+  return new Intl.DateTimeFormat("en", { day: "numeric", month: "short" }).format(date);
+}
 
 const initialFormState: FormState = { ok: false, error: null };
 
@@ -23,14 +32,40 @@ const initialFormState: FormState = { ok: false, error: null };
 // question fields (saved together via saveStepProgressAction), plus a
 // "Review my answers" button that calls /api/ai/review-step directly so
 // feedback shows up inline without a full page action/redirect.
-export default function StepCard({ moduleKey, step, initialAnswers, initialCompleted, defaultOpen }: Props) {
+export default function StepCard({
+  moduleKey,
+  step,
+  initialAnswers,
+  initialCompleted,
+  defaultOpen,
+  carryOver,
+}: Props) {
   const [open, setOpen] = useState(defaultOpen);
+
+  // A carried-over value is seeded into the box, not just shown beside it, so
+  // "Save" confirms it in one click instead of making the member retype what
+  // the portal already knows. It is never silent: the provenance line below
+  // the field says where it came from until the member edits it.
   const [values, setValues] = useState<Record<string, string>>(() => {
     const base: Record<string, string> = {};
-    for (const q of step.questions) base[q.key] = initialAnswers[q.key] ?? "";
+    for (const q of step.questions) {
+      base[q.key] = initialAnswers[q.key] ?? carryOver[q.key]?.prefill?.value ?? "";
+    }
     return base;
   });
+
+  // Questions still showing an untouched carried-over value. Editing one drops
+  // it from the set, so the provenance line disappears the moment it stops
+  // being true.
+  const [carried, setCarried] = useState<Set<string>>(() => {
+    const keys = step.questions
+      .filter((q) => !initialAnswers[q.key] && carryOver[q.key]?.prefill)
+      .map((q) => q.key);
+    return new Set(keys);
+  });
+
   const [completed, setCompleted] = useState(initialCompleted);
+  const carriedCount = carried.size;
   const [state, formAction, isSaving] = useActionState(saveStepProgressAction, initialFormState);
 
   const [review, setReview] = useState<ReviewResult | null>(null);
@@ -103,18 +138,70 @@ export default function StepCard({ moduleKey, step, initialAnswers, initialCompl
               Mark this step complete
             </label>
 
-            {step.questions.map((q) => (
-              <div key={q.key}>
-                <label className="mb-1 block text-xs font-semibold text-white/60">{q.label}</label>
-                <textarea
-                  name={q.key}
-                  value={values[q.key]}
-                  onChange={(e) => setValues((v) => ({ ...v, [q.key]: e.target.value }))}
-                  rows={2}
-                  className="w-full rounded border border-white/15 bg-[#0f2d4a] px-3 py-2 text-sm text-white outline-none focus:border-[#d7a84d]/50"
-                />
-              </div>
-            ))}
+            {step.questions.map((q) => {
+              const info = carryOver[q.key];
+              const isCarried = carried.has(q.key);
+              const prefill = info?.prefill;
+
+              return (
+                <div key={q.key}>
+                  <label className="mb-1 block text-xs font-semibold text-white/60">{q.label}</label>
+
+                  {info?.context.map((entry) => (
+                    <p
+                      key={entry.label}
+                      className="mb-1 text-[11px] leading-5 text-white/45"
+                    >
+                      <span className="font-semibold text-white/60">{entry.label}:</span>{" "}
+                      {entry.value}
+                      {entry.stale && <span className="text-white/35"> · worth re-checking</span>}
+                    </p>
+                  ))}
+
+                  <textarea
+                    name={q.key}
+                    value={values[q.key]}
+                    onChange={(e) => {
+                      const next = e.target.value;
+                      setValues((v) => ({ ...v, [q.key]: next }));
+                      if (isCarried) {
+                        setCarried((set) => {
+                          const copy = new Set(set);
+                          copy.delete(q.key);
+                          return copy;
+                        });
+                      }
+                    }}
+                    rows={2}
+                    className={`w-full rounded border px-3 py-2 text-sm text-white outline-none focus:border-[#d7a84d]/50 ${
+                      isCarried ? "border-[#d7a84d]/40 bg-[#0f2d4a]" : "border-white/15 bg-[#0f2d4a]"
+                    }`}
+                  />
+
+                  {isCarried && prefill && (
+                    <p className="mt-1 text-[11px] leading-5 text-[#d7a84d]/80">
+                      Carried from {prefill.origin}
+                      {formatShortDate(prefill.updatedAt) && ` · ${formatShortDate(prefill.updatedAt)}`}
+                      {prefill.stale
+                        ? " · check this is still right"
+                        : " · edit if this has changed"}
+                    </p>
+                  )}
+                </div>
+              );
+            })}
+
+            {/* Prefilled is not the same as answered. Saving is still an
+                explicit act, and only saving marks the step complete — a
+                carried-over value that nobody looked at shouldn't move the
+                progress bar. */}
+            {carriedCount > 0 && (
+              <p className="text-xs text-white/55">
+                {carriedCount} of {step.questions.length} answer
+                {step.questions.length === 1 ? "" : "s"} carried over from what you&apos;ve
+                already told us. Check them, then save.
+              </p>
+            )}
 
             <div className="flex flex-wrap items-center gap-3">
               <button

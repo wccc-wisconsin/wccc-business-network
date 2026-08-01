@@ -4,8 +4,16 @@ import {
   getBusinessAssessment,
   getCompletedStepsByModule,
   getMemberById,
+  getMemberFacts,
   type Member,
+  type MemberFact,
 } from "@/lib/appStore";
+import {
+  displayFactValue,
+  factDefinition,
+  isFactStale,
+  type FactDefinition,
+} from "@/data/facts";
 import {
   isModuleUnlocked,
   roadmapTracks,
@@ -43,7 +51,43 @@ export type MemberContext = {
   member: Member;
   /** Ready-to-embed prose describing the member for a system prompt. */
   summary: string;
+  /** The member's facts, for callers that need the values rather than prose. */
+  facts: Record<string, MemberFact>;
 };
+
+/**
+ * The facts section of the summary.
+ *
+ * Written as "the member told us X" rather than "X is true", and stale values
+ * are marked as such, because everything here is self-reported and some of it
+ * is months old. An assistant that treats a year-old headcount as current
+ * gives advice built on a business that no longer exists — and does it
+ * confidently, which is worse than not knowing.
+ */
+function factLines(facts: Record<string, MemberFact>, now: Date): string {
+  const entries: { def: FactDefinition; fact: MemberFact }[] = [];
+  for (const fact of Object.values(facts)) {
+    const def = factDefinition(fact.key);
+    // A fact whose definition has since been removed from the catalog is
+    // skipped rather than rendered raw: without a label it would reach the
+    // prompt as an unexplained key/value pair.
+    if (def) entries.push({ def, fact });
+  }
+
+  if (entries.length === 0) {
+    return "You have no saved details about this business beyond the profile above — ask for specifics rather than assuming them.";
+  }
+
+  const lines = entries
+    .sort((a, b) => a.def.label.localeCompare(b.def.label))
+    .map(({ def, fact }) => {
+      const value = displayFactValue(def, fact.value);
+      const stale = isFactStale(def, fact.confirmedAt, now);
+      return `- ${def.label}: ${value}${stale ? " (last confirmed a while ago — worth checking before relying on it)" : ""}`;
+    });
+
+  return `What they've told the portal about their business:\n${lines.join("\n")}`;
+}
 
 /** Per-module completion, used for the roadmap section of the summary. */
 type ModuleStanding = {
@@ -111,10 +155,11 @@ export async function buildMemberContext(
   memberId: string,
   focusModuleKey?: string | null,
 ): Promise<MemberContext | null> {
-  const [member, assessment, completedByModule] = await Promise.all([
+  const [member, assessment, completedByModule, facts] = await Promise.all([
     getMemberById(memberId),
     getBusinessAssessment(memberId),
     getCompletedStepsByModule(memberId),
+    getMemberFacts(memberId),
   ]);
 
   if (!member) return null;
@@ -143,6 +188,8 @@ export async function buildMemberContext(
     );
   }
 
+  parts.push(factLines(facts, new Date()));
+
   parts.push(roadmapLines(standings));
 
   if (focus) {
@@ -158,5 +205,9 @@ export async function buildMemberContext(
     "Roadmap steps are marked complete by the member themselves and are not verified, so treat them as intent rather than proof of finished work.",
   );
 
-  return { member, summary: parts.join("\n\n") };
+  parts.push(
+    "Everything above is what the member typed, not verified fact. Where a detail matters to your answer and isn't listed, ask for it instead of inventing it.",
+  );
+
+  return { member, summary: parts.join("\n\n"), facts };
 }

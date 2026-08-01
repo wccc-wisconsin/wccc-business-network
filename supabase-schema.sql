@@ -234,6 +234,44 @@ create table if not exists member_documents (
 create index if not exists member_documents_member_created_idx
   on member_documents (member_id, created_at desc);
 
+-- Member facts: the canonical answers about one business, so the portal asks
+-- for a thing once and reuses it everywhere. See data/facts.ts for the
+-- catalog and the reasoning.
+--
+-- One row per member per fact — writing the same fact again overwrites it,
+-- because there is only ever one current answer to "what is your entity
+-- structure". `source` and `source_label` record where the value last came
+-- from ("launch" / "Register your business & EIN") so the UI can tell the
+-- member why a box was already filled in; provenance the member can't see is
+-- provenance they can't correct.
+--
+-- `confirmed_at` is separate from `updated_at` on purpose. Re-saving a step
+-- without touching a carried-over value still means the member looked at it
+-- and let it stand, which is what the staleness check in data/facts.ts reads.
+-- `updated_at` only moves when the value itself changes.
+--
+-- Values are stored as text regardless of the fact's declared type. Dates are
+-- ISO YYYY-MM-DD strings and choice facts hold their option value; both are
+-- validated against the catalog before they get here (isValidFactValue), so
+-- the column stays one shape and the meaning lives in one place.
+create table if not exists member_facts (
+  id uuid primary key default gen_random_uuid(),
+  member_id text not null references members(id) on delete cascade,
+  fact_key text not null,
+  value text not null,
+  source text not null default 'profile',
+  source_label text not null default '',
+  updated_at timestamptz not null default now(),
+  confirmed_at timestamptz not null default now(),
+  unique(member_id, fact_key)
+);
+
+-- No separate member_id index, for the same reason the three dropped above
+-- were redundant: every read here is "all facts for this member", which the
+-- unique(member_id, fact_key) btree already serves through its leading
+-- column. This table takes a write on every guided-step save, so a duplicate
+-- index would cost on the hot path and buy nothing.
+
 -- Disable RLS (service role key bypasses it anyway, but keeps it simple)
 alter table members disable row level security;
 alter table login_events disable row level security;
@@ -247,3 +285,4 @@ alter table member_opportunities disable row level security;
 alter table business_assessments disable row level security;
 alter table member_decisions disable row level security;
 alter table member_documents disable row level security;
+alter table member_facts disable row level security;
