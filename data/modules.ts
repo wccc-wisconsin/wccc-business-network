@@ -1,3 +1,5 @@
+import { factDefinition } from "@/data/facts";
+
 export type MembershipTierKey = "network" | "individual" | "business" | "corporate";
 
 // "Essential" = can't operate without it. "Recommended" = important, but can
@@ -9,6 +11,26 @@ export type GuidedQuestion = {
   key: string;
   label: string;
   placeholder?: string;
+  /**
+   * This question IS a fact (see data/facts.ts). The member's stored answer
+   * prefills the box, labelled with where it came from, and saving writes
+   * back to the fact.
+   *
+   * Only `text` and `date` facts may be used here — a free-text box writing
+   * back to a `choice` fact would corrupt the option value that the deadline
+   * filters read. Enforced at module load below.
+   */
+  factKey?: string;
+  /**
+   * Facts that inform this question without answering it. Shown above the
+   * box as read-only context, never prefilled into it.
+   *
+   * This is the difference between helpful and wrong. "Are your books current
+   * enough to hand someone a P&L?" is not the same question as "how do you
+   * track income and expenses?" — but knowing the member answered
+   * "spreadsheet" three months ago means they aren't starting from nothing.
+   */
+  relatedFacts?: string[];
 };
 
 export type ModuleStep = {
@@ -34,6 +56,16 @@ export type ModulePhase = {
  * are the real thing: each one produces a document written from the member's
  * profile and the answers they've already saved in this module's guided steps,
  * so the output is about their business rather than a generic template.
+ *
+ * Since member facts joined the shared context (lib/memberContext.ts), a brief
+ * can also lean on things the member entered in a different module — the
+ * capability statement below reads NAICS codes, certifications and insurance
+ * limits that may never have been typed in Opportunity at all.
+ *
+ * Every brief carries the same instruction in its own words: use what the
+ * member gave you, and mark what's missing rather than filling it in. A
+ * capability statement with an invented client list is not a lesser document,
+ * it's a liability the member hands to a buyer.
  */
 export type ModuleTool = {
   key: string;
@@ -57,9 +89,9 @@ export type BusinessModule = {
   minTier: MembershipTierKey;
   resources: string[];
   /**
-   * Document generators for this module. Optional because they're being added
-   * one module at a time — Revenue has them today. Modules without `tools`
-   * simply don't render the toolkit panel.
+   * Document generators for this module. All seven business modules have them;
+   * the personal track doesn't yet. Modules without `tools` simply don't
+   * render the toolkit panel.
    */
   tools?: ModuleTool[];
   /**
@@ -148,6 +180,20 @@ export const businessModules: BusinessModule[] = [
     // steps (7, 9, 10) live in Revenue and the CRM/ops step (8) lives in
     // Growth, since those are really selling and scaling work, not "become
     // a legal business" work.
+    tools: [
+      {
+        key: "licence-action-list",
+        title: "Licences & Permits Action List",
+        description: "Exactly which registrations you still owe, in the order they have to happen.",
+        brief: `Write an ordered action list of the registrations, licences and permits this business still needs, based on what they said they hold and what their industry and city require. Number the steps in the order they must actually happen — an EIN before a bank account, a seller's permit before taxable sales — and say in one line why each precedes the next where the order matters. For each item give the issuing body by name, and where the member already told you they hold it, mark it done rather than repeating it. Name only Wisconsin bodies you are certain of (WI DFI, IRS, Wisconsin Department of Revenue, the city or county clerk); where a specific licence depends on facts you weren't given, say what determines it and who to ask instead of guessing. Do not invent fees or processing times. Under 450 words.`,
+      },
+      {
+        key: "contract-terms-sheet",
+        title: "Your Standard Terms Sheet",
+        description: "The terms you should be putting in front of customers, in plain language.",
+        brief: `Draft a plain-language terms sheet this owner could attach to a quote or invoice, built from how they said they get paid and what they sell. Cover: what is included and excluded, payment timing and method, deposit, cancellation and rescheduling, and what happens if the customer changes the scope. Write it in short numbered clauses a customer will actually read, not legal boilerplate. Where their answers show a gap that has probably already cost them money — no deposit, no cancellation window — flag it in one sentence before the clause. End with a single line stating this is a starting point to have reviewed, not legal advice, and that a Wisconsin attorney should see it before it's used on anything substantial. Under 450 words.`,
+      },
+    ],
     phases: [
       {
         key: "prove-it",
@@ -158,7 +204,7 @@ export const businessModules: BusinessModule[] = [
             title: "Validate your business idea",
             label: "essential",
             questions: [
-              { key: "problem", label: "What problem does your business solve, and for whom?" },
+              { key: "problem", label: "What problem does your business solve, and for whom?", relatedFacts: ["target_customer"] },
               { key: "proof", label: "Who are 2-3 real people who've told you they'd pay for this?" },
               { key: "test", label: "What's the smallest version of this you could test in the next 30 days?" },
             ],
@@ -184,8 +230,8 @@ export const businessModules: BusinessModule[] = [
             title: "Register your business & EIN",
             label: "essential",
             questions: [
-              { key: "structure", label: "What business structure are you using (LLC, sole prop, corporation)?" },
-              { key: "dfi-status", label: "Have you registered with WI DFI yet? If not, what's blocking you?" },
+              { key: "structure", label: "What business structure are you using (LLC, sole prop, corporation)?", relatedFacts: ["entity_structure"] },
+              { key: "dfi-status", label: "Have you registered with WI DFI yet? If not, what's blocking you?", relatedFacts: ["formation_date", "formation_state"] },
               { key: "ein-status", label: "Do you have your EIN from the IRS yet?" },
             ],
           },
@@ -200,8 +246,8 @@ export const businessModules: BusinessModule[] = [
             label: "essential",
             questions: [
               { key: "industry-license", label: "Does your industry need a specific license or permit to operate (food service, contractor, childcare, cosmetology, liquor, professional license)?" },
-              { key: "license-status", label: "Which of those do you already hold, and which are still outstanding?" },
-              { key: "seller-permit", label: "Do you sell anything taxable in Wisconsin, and do you have a seller's permit from the Department of Revenue?" },
+              { key: "license-status", label: "Which of those do you already hold, and which are still outstanding?", factKey: "industry_license" },
+              { key: "seller-permit", label: "Do you sell anything taxable in Wisconsin, and do you have a seller's permit from the Department of Revenue?", relatedFacts: ["seller_permit"] },
               { key: "local-requirements", label: "Have you checked with your city or county about zoning, signage, or occupancy requirements at your location?" },
             ],
           },
@@ -210,9 +256,9 @@ export const businessModules: BusinessModule[] = [
             title: "Bank account & insurance",
             label: "essential",
             questions: [
-              { key: "bank-account", label: "Have you opened a dedicated business bank account?" },
+              { key: "bank-account", label: "Have you opened a dedicated business bank account?", relatedFacts: ["bank_account"] },
               { key: "insurance-type", label: "What type of insurance does your business need (general liability, professional, etc.)?" },
-              { key: "insurance-provider", label: "Who's your insurance provider, or are you still shopping?" },
+              { key: "insurance-provider", label: "Who's your insurance provider, or are you still shopping?", factKey: "insurance_carrier" },
             ],
           },
           {
@@ -241,7 +287,7 @@ export const businessModules: BusinessModule[] = [
             title: "Accounting & accept payments",
             label: "essential",
             questions: [
-              { key: "tracking", label: "How will you track income and expenses (software, spreadsheet, bookkeeper)?" },
+              { key: "tracking", label: "How will you track income and expenses (software, spreadsheet, bookkeeper)?", factKey: "bookkeeping_system" },
               { key: "payment-methods", label: "How will customers pay you (card, invoice, cash, online)?" },
               { key: "tax-savings", label: "Do you have a system for setting aside money for taxes?" },
             ],
@@ -336,7 +382,7 @@ export const businessModules: BusinessModule[] = [
             title: "Outreach & pipeline",
             label: "essential",
             questions: [
-              { key: "next-prospects", label: "Who are 5 real, specific people or businesses you could reach out to this week?" },
+              { key: "next-prospects", label: "Who are 5 real, specific people or businesses you could reach out to this week?", relatedFacts: ["target_customer"] },
               { key: "outreach-method", label: "How do you typically reach out (call, email, in-person, social DM)?" },
               { key: "blocker", label: "What's actually stopping you from reaching out today?" },
             ],
@@ -367,7 +413,7 @@ export const businessModules: BusinessModule[] = [
             title: "Suppliers, inventory & what it costs you",
             label: "essential",
             questions: [
-              { key: "cost-per-sale", label: "For your best-selling product or service, what does it actually cost you to deliver one?" },
+              { key: "cost-per-sale", label: "For your best-selling product or service, what does it actually cost you to deliver one?", relatedFacts: ["pricing_basis"] },
               { key: "supplier-terms", label: "Who are your main suppliers, and what terms are you on (pay up front, net 30, no set terms)?" },
               { key: "supplier-risk", label: "Is there any supplier or ingredient you'd struggle to replace if they raised prices or stopped delivering?" },
               { key: "inventory-waste", label: "If you carry inventory, how do you decide how much to hold — and how much goes to waste or sits unsold?" },
@@ -378,7 +424,7 @@ export const businessModules: BusinessModule[] = [
             title: "Pricing & sales process",
             label: "essential",
             questions: [
-              { key: "pricing-basis", label: "How did you set your current prices (cost-based, competitor-based, gut feeling)?" },
+              { key: "pricing-basis", label: "How did you set your current prices (cost-based, competitor-based, gut feeling)?", factKey: "pricing_basis" },
               { key: "close-rate", label: "Out of 10 people who show real interest, roughly how many become paying customers?" },
               { key: "objection", label: "What's the most common reason someone says no?" },
             ],
@@ -416,6 +462,26 @@ export const businessModules: BusinessModule[] = [
     // stage the question isn't "do you have tools" but "do the tools run
     // without you". Questions deliberately ask for real numbers where a number
     // exists; "I don't know" is itself a useful answer for the AI coach.
+    tools: [
+      {
+        key: "core-sop",
+        title: "SOP for Your Core Process",
+        description: "The job you described, written down so someone else could run it.",
+        brief: `Turn the core process this member described into a written standard operating procedure. Structure it as numbered steps from the moment a customer says yes to the moment the job is closed out, each step naming who does it and what "done" looks like. Use their actual wording for the work — their tools, their sequence — rather than a generic service workflow. Where they said a step lives only in their head or depends on them personally, mark it clearly as a handover risk and write the step in enough detail that someone else could follow it. Finish with a short list of the decisions that still need the owner, and why. Under 600 words.`,
+      },
+      {
+        key: "classification-memo",
+        title: "Employee vs Contractor Memo",
+        description: "Where your current setup stands, and what to check before it becomes a problem.",
+        brief: `Write a short internal memo on how this business currently classifies the people who work with it, based on what they described. Lay out the practical difference between a W-2 employee and a 1099 contractor in terms of control, tools, and who sets the hours. Then, for each arrangement they described, say which way it appears to lean and which specific facts would settle it. Name the Wisconsin obligations that follow from having employees — withholding registration, unemployment insurance, worker's compensation — without stating dollar thresholds or rates you aren't certain of. Be explicit that misclassification is decided by the agencies on the facts, not by what the parties agreed, and that this memo is a prompt to get an accountant's view rather than a determination. Under 500 words.`,
+      },
+      {
+        key: "monthly-numbers",
+        title: "Your Monthly Numbers Review",
+        description: "The three numbers you named, turned into a review you can actually hold.",
+        brief: `Design a monthly numbers review for this owner around the metrics they said they'd want to see. For each metric: where the figure comes from given the tools they already use, what a healthy direction looks like for a business like theirs, and the one decision it should inform. If they named a metric they currently can't pull, say plainly what would have to change to make it available, and give an interim proxy they can get today. Then give a 30-minute agenda for the review itself, sized for one person. Do not invent benchmark figures for their industry — if a healthy range depends on data you don't have, say what to compare against instead. Under 450 words.`,
+      },
+    ],
     phases: [
       {
         key: "systemize-the-work",
@@ -462,7 +528,7 @@ export const businessModules: BusinessModule[] = [
             title: "Cash flow & profitability",
             label: "recommended",
             questions: [
-              { key: "monthly-costs", label: "Roughly what does it cost to keep the doors open for one month?" },
+              { key: "monthly-costs", label: "Roughly what does it cost to keep the doors open for one month?", factKey: "monthly_costs" },
               { key: "profit-by-service", label: "Which of your products or services actually makes the most profit, not just the most revenue?" },
               { key: "cash-cushion", label: "How many months could the business cover its costs if revenue stopped tomorrow?" },
             ],
@@ -513,9 +579,9 @@ export const businessModules: BusinessModule[] = [
             title: "Payroll, classification & the paperwork",
             label: "essential",
             questions: [
-              { key: "worker-classification", label: "For each person who works with you, are they set up as a W-2 employee or a 1099 contractor — and are you confident that's the right classification?" },
-              { key: "payroll-setup", label: "How do you run payroll and withholding (payroll service, accountant, by hand, not yet)?" },
-              { key: "state-registrations", label: "Are you registered with Wisconsin for withholding and unemployment insurance, and do you carry workers' compensation coverage?" },
+              { key: "worker-classification", label: "For each person who works with you, are they set up as a W-2 employee or a 1099 contractor — and are you confident that's the right classification?", relatedFacts: ["has_employees"] },
+              { key: "payroll-setup", label: "How do you run payroll and withholding (payroll service, accountant, by hand, not yet)?", relatedFacts: ["has_employees"] },
+              { key: "state-registrations", label: "Are you registered with Wisconsin for withholding and unemployment insurance, and do you carry workers' compensation coverage?", relatedFacts: ["has_employees"] },
               { key: "onboarding-records", label: "Do you keep signed offer letters, I-9s, and W-4s on file for everyone?" },
             ],
           },
@@ -548,6 +614,20 @@ export const businessModules: BusinessModule[] = [
     // two questions every lender and grant reviewer opens with: how much,
     // and what does your business actually look like on paper. Members who
     // skip to "make the ask" are the ones who get declined.
+    tools: [
+      {
+        key: "lender-packet",
+        title: "Lender Packet Checklist",
+        description: "Everything a lender will ask for, marked against what you already have.",
+        brief: `Produce the document checklist this member needs to assemble before approaching a lender or grant programme, based on the funding type they said they're pursuing and what they told you they already have ready. Group into "you have this", "you have this but it needs work", and "you don't have this yet", using their own answers to place each item — do not put something in "you have this" unless they said so. For each missing item, say who produces it (them, their accountant, their bank) and roughly what it involves. Where they named a specific route — SBA, a community lender such as WWBIC, a bank, a grant — note any documents particular to it, and say plainly when a requirement depends on the individual lender rather than being universal. Under 500 words.`,
+      },
+      {
+        key: "funding-request",
+        title: "One-Page Funding Request",
+        description: "Your ask, written the way a lender reads it.",
+        brief: `Write a one-page funding request for this business using the amount, use of funds, and repayment capacity they described. Structure: the ask in one sentence with the figure; what the money buys, itemised; what it changes about the business; how it gets repaid, referencing what they said the business could absorb monthly; and why this owner specifically. Use only figures the member gave you — if a number needed to make the case is missing, leave a clearly marked blank like [monthly revenue] rather than estimating it. Write it in the register of a person who runs the business, not a consultant. End with the two questions a lender is most likely to ask given the gaps in what they've told you. Under 450 words.`,
+      },
+    ],
     phases: [
       {
         key: "know-what-you-need",
@@ -568,8 +648,8 @@ export const businessModules: BusinessModule[] = [
             title: "Where you stand today",
             label: "essential",
             questions: [
-              { key: "revenue-trend", label: "What did the business bring in over the last 12 months, and is that trending up or down?" },
-              { key: "books-current", label: "Are your books current enough that you could hand someone a P&L this week?" },
+              { key: "revenue-trend", label: "What did the business bring in over the last 12 months, and is that trending up or down?", relatedFacts: ["monthly_costs"] },
+              { key: "books-current", label: "Are your books current enough that you could hand someone a P&L this week?", relatedFacts: ["bookkeeping_system"] },
               { key: "credit-and-debt", label: "What debt is the business already carrying, and roughly where does your credit stand?" },
             ],
           },
@@ -594,9 +674,9 @@ export const businessModules: BusinessModule[] = [
             title: "What they'll ask you for",
             label: "recommended",
             questions: [
-              { key: "documents-ready", label: "Which of these do you have ready: business plan, financial projections, last 2 years of tax returns, bank statements?" },
+              { key: "documents-ready", label: "Which of these do you have ready: business plan, financial projections, last 2 years of tax returns, bank statements?", relatedFacts: ["bookkeeping_system"] },
               { key: "biggest-gap", label: "Of those, which one would take you the longest to produce?" },
-              { key: "advisor", label: "Has anyone — an accountant, an SBDC advisor, a lender — looked at your numbers with you yet?" },
+              { key: "advisor", label: "Has anyone — an accountant, an SBDC advisor, a lender — looked at your numbers with you yet?", factKey: "advisor" },
             ],
           },
         ],
@@ -651,6 +731,20 @@ export const businessModules: BusinessModule[] = [
     // registrations take weeks to months and you cannot bid without them.
     // That's why they come first here, before anything about finding or
     // writing bids — a member who starts at "go win one" wastes the season.
+    tools: [
+      {
+        key: "capability-statement",
+        title: "Capability Statement",
+        description: "The one-page document every public buyer asks for, built from your profile.",
+        brief: `Write a capability statement for this business in the standard sections public and corporate buyers expect: Core Competencies, Differentiators, Past Performance, and Company Data. Use the member's own capabilities, NAICS codes, certifications, insurance limits and past work — this document's whole value is that it is specific. Core Competencies should be scannable phrases, not paragraphs. Differentiators must say why them over an incumbent, drawn from what they told you rather than adjectives. Under Company Data list the identifiers a buyer needs (legal name, location, NAICS, certifications, UEI or SAM status, insurance) and put a clearly marked placeholder such as [UEI — add from SAM.gov] wherever they haven't given you the value. Invent nothing: no clients they didn't name, no certifications they don't hold, no coverage limits they didn't state. Note in one closing line that a buyer-facing version should fit on a single page.`,
+      },
+      {
+        key: "bid-go-no-go",
+        title: "Bid Go / No-Go Scorecard",
+        description: "A rule for deciding which bids are worth your time — before you start writing.",
+        brief: `Build a go/no-go scorecard this owner can apply to a solicitation in fifteen minutes, using the capacity, cash position and certifications they described. Give 8-10 criteria as questions with a clear pass/fail or scored answer — capacity against the contract size, payment terms against their float, certification and insurance requirements against what they hold, whether they know the buyer, whether the incumbent is beatable. Weight the ones that should be automatic disqualifiers and say so. Then give the decision rule: what score means bid, what means partner or subcontract instead, what means walk away. Reference their own stated limits — the largest job they said they could take, the float they said they could cover — rather than generic thresholds. Under 450 words.`,
+      },
+    ],
     phases: [
       {
         key: "get-certified",
@@ -661,8 +755,8 @@ export const businessModules: BusinessModule[] = [
             title: "Certifications you may qualify for",
             label: "essential",
             questions: [
-              { key: "eligibility", label: "Which certifications might your ownership qualify for — MBE, WBE, DBE, veteran-owned, SBA 8(a), HUBZone?" },
-              { key: "cert-status", label: "Which have you applied for or already hold, and when do they come up for renewal?" },
+              { key: "eligibility", label: "Which certifications might your ownership qualify for — MBE, WBE, DBE, veteran-owned, SBA 8(a), HUBZone?", relatedFacts: ["ownership_basis", "entity_structure"] },
+              { key: "cert-status", label: "Which have you applied for or already hold, and when do they come up for renewal?", factKey: "certifications_held" },
               { key: "cert-blocker", label: "If you haven't applied, what's stopping you — paperwork, not knowing where to start, unsure it's worth it?" },
             ],
           },
@@ -671,7 +765,7 @@ export const businessModules: BusinessModule[] = [
             title: "Where buyers actually look for you",
             label: "essential",
             questions: [
-              { key: "sam-status", label: "Are you registered in SAM.gov with an active UEI (required for any federal work)?" },
+              { key: "sam-status", label: "Are you registered in SAM.gov with an active UEI (required for any federal work)?", relatedFacts: ["sam_registration_date"] },
               { key: "state-local", label: "Are you registered with Wisconsin VendorNet, and with your city or county's supplier portal?" },
               { key: "prime-portals", label: "Are you in the supplier database of any large company or prime contractor you'd want to work with?" },
             ],
@@ -687,8 +781,8 @@ export const businessModules: BusinessModule[] = [
             title: "Your capability statement",
             label: "essential",
             questions: [
-              { key: "core-competencies", label: "In plain terms, what are the 3-4 things you do that a buyer would hire you for?" },
-              { key: "naics-codes", label: "Which NAICS codes describe your work?" },
+              { key: "core-competencies", label: "In plain terms, what are the 3-4 things you do that a buyer would hire you for?", factKey: "core_capabilities" },
+              { key: "naics-codes", label: "Which NAICS codes describe your work?", factKey: "naics_codes" },
               { key: "past-performance", label: "What past jobs would you point to as proof you can deliver — and can you name the client?" },
               { key: "differentiator", label: "Why you over the incumbent who already has this contract?" },
             ],
@@ -698,8 +792,8 @@ export const businessModules: BusinessModule[] = [
             title: "Can you actually carry the job",
             label: "recommended",
             questions: [
-              { key: "insurance-bonding", label: "What are your current insurance limits, and can you get bonded if a contract requires it?" },
-              { key: "capacity", label: "What's the largest job you could take on right now without dropping existing customers?" },
+              { key: "insurance-bonding", label: "What are your current insurance limits, and can you get bonded if a contract requires it?", factKey: "insurance_limits" },
+              { key: "capacity", label: "What's the largest job you could take on right now without dropping existing customers?", relatedFacts: ["monthly_costs"] },
               { key: "payment-float", label: "Public and corporate buyers often pay in 30-60 days. Could you cover payroll and materials that long before getting paid?" },
             ],
           },
@@ -749,6 +843,14 @@ export const businessModules: BusinessModule[] = [
     // multiplies whatever the business already is, including its problems.
     // A member whose current operation only works because they're personally
     // in it will get two struggling operations, not two good ones.
+    tools: [
+      {
+        key: "expansion-brief",
+        title: "Expansion Feasibility Brief",
+        description: "The case for and against the move you're considering, on one page.",
+        brief: `Write a feasibility brief for the specific expansion this member is weighing. Sections: what they're proposing, in their own terms; what has to be true for it to work, as a list of testable conditions rather than hopes; what the evidence they gave actually supports and where it runs out; the money — start-up cost, months to break even, and where the funding comes from, using only figures they provided; and what they'd give up by doing it, including their own time. Close with the three cheapest tests they could run in the next 60 days to reduce the biggest unknown before committing capital. Be direct where their own answers undercut the case — an expansion built on a base they described as unprofitable or undocumented should hear that plainly. Under 550 words.`,
+      },
+    ],
     phases: [
       {
         key: "confirm-the-core",
@@ -759,7 +861,7 @@ export const businessModules: BusinessModule[] = [
             title: "Is what you have repeatable",
             label: "essential",
             questions: [
-              { key: "unit-economics", label: "Does your current location or product line make a reliable profit, month after month?" },
+              { key: "unit-economics", label: "Does your current location or product line make a reliable profit, month after month?", relatedFacts: ["monthly_costs"] },
               { key: "documented", label: "Could someone else run it from your written process, or does it live in your head?" },
               { key: "what-makes-it-work", label: "What's the real reason it works — location, your reputation, price, a relationship? Would that travel?" },
             ],
@@ -811,7 +913,7 @@ export const businessModules: BusinessModule[] = [
             title: "What it costs to get there",
             label: "recommended",
             questions: [
-              { key: "startup-cost", label: "What's the all-in cost to open or launch, including the months before it earns anything?" },
+              { key: "startup-cost", label: "What's the all-in cost to open or launch, including the months before it earns anything?", relatedFacts: ["monthly_costs"] },
               { key: "breakeven", label: "How many months until it covers its own costs, and what has to be true for that?" },
               { key: "funding-source", label: "Where does that money come from — profits, savings, a loan, an investor?" },
             ],
@@ -849,6 +951,14 @@ export const businessModules: BusinessModule[] = [
     // law or the tax code requires. Where a professional is needed, the
     // question asks whether one has been engaged. Same line the AI prompts
     // in app/api/ai/ hold.
+    tools: [
+      {
+        key: "succession-outline",
+        title: "Succession Outline",
+        description: "What has to be true before you can hand this over, in sequence.",
+        brief: `Write a succession outline for this business from what the member described about their timeline, their preferred path and their successor. Cover: where the business is dependent on them personally and what would have to be transferred or documented for each; the state of the records and what a buyer or successor would need to see; the relationships that sit with them rather than the business, and how those move; and a rough sequence with timeframes working back from the timeline they named. Where they've said family is involved but conversations haven't happened, put that first — it determines everything after it. Name the advisers this needs (attorney, accountant, valuation professional) and what each one is for. Be clear that valuation, tax treatment and the structure of any transfer are decisions for those professionals, not this document. Under 550 words.`,
+      },
+    ],
     phases: [
       {
         key: "decide-what-happens-next",
@@ -895,9 +1005,9 @@ export const businessModules: BusinessModule[] = [
             title: "What a buyer or successor would inspect",
             label: "essential",
             questions: [
-              { key: "clean-financials", label: "Are the last 3 years of financials clean and separate from your personal finances?" },
+              { key: "clean-financials", label: "Are the last 3 years of financials clean and separate from your personal finances?", relatedFacts: ["bookkeeping_system"] },
               { key: "valuation", label: "Has the business ever been formally valued, or do you have a number in your head?" },
-              { key: "contracts-and-ip", label: "Are your lease, key contracts, licenses, and brand or recipes documented and transferable to someone else?" },
+              { key: "contracts-and-ip", label: "Are your lease, key contracts, licenses, and brand or recipes documented and transferable to someone else?", relatedFacts: ["lease_end_date", "certifications_held"] },
             ],
           },
         ],
@@ -1063,4 +1173,75 @@ export function findStep(moduleKey: string, stepKey: string) {
   const step = stepsForModule(found.module).find((s) => s.key === stepKey);
   if (!step) return null;
   return { module: found.module, step };
+}
+
+/** Every guided question in every track, with where it lives. */
+export function allGuidedQuestions() {
+  return roadmapTracks.flatMap((track) =>
+    track.modules.flatMap((mod) =>
+      stepsForModule(mod).flatMap((step) =>
+        step.questions.map((question) => ({ module: mod, step, question })),
+      ),
+    ),
+  );
+}
+
+/**
+ * The provenance line a member sees above a carried-over answer, e.g.
+ * "Launch › Register your business & EIN". Built here so the module page and
+ * the profile agree on the wording.
+ */
+export function stepProvenanceLabel(mod: BusinessModule, step: ModuleStep): string {
+  return `${mod.label} › ${step.title}`;
+}
+
+// Fact wiring checks, enforced at module load in development — same guard
+// pattern as data/assessment.ts and data/facts.ts.
+//
+// These catch the two ways the carry-over feature can silently do damage: a
+// question pointing at a fact that no longer exists (so the prefill quietly
+// never happens), and a free-text box bound to a `choice` fact (so saving
+// writes prose into a field the deadline filters compare against option
+// values). The second one would look fine on screen and break the calendar.
+if (process.env.NODE_ENV !== "production") {
+  for (const { module: mod, step, question } of allGuidedQuestions()) {
+    const where = `${mod.key}/${step.key}/${question.key}`;
+
+    if (question.factKey) {
+      const def = factDefinition(question.factKey);
+      if (!def) {
+        throw new Error(`Guided question ${where} has factKey "${question.factKey}" with no such fact`);
+      }
+      if (def.type === "choice") {
+        throw new Error(
+          `Guided question ${where} binds to choice fact "${def.key}". Choice facts are read-only in modules — use relatedFacts instead.`,
+        );
+      }
+    }
+
+    for (const related of question.relatedFacts ?? []) {
+      if (!factDefinition(related)) {
+        throw new Error(`Guided question ${where} lists relatedFact "${related}" with no such fact`);
+      }
+      if (related === question.factKey) {
+        throw new Error(`Guided question ${where} lists its own factKey in relatedFacts`);
+      }
+    }
+  }
+
+  // A fact written by two different questions would flip-flop depending on
+  // which module the member touched last, with no way to tell which answer
+  // was meant. Facts may be READ anywhere, but written from exactly one place.
+  const writers = new Map<string, string>();
+  for (const { module: mod, step, question } of allGuidedQuestions()) {
+    if (!question.factKey) continue;
+    const existing = writers.get(question.factKey);
+    const where = `${mod.key}/${step.key}/${question.key}`;
+    if (existing) {
+      throw new Error(
+        `Fact "${question.factKey}" is written by two questions (${existing} and ${where}). Only one may own it.`,
+      );
+    }
+    writers.set(question.factKey, where);
+  }
 }

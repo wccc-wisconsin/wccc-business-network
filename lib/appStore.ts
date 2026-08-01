@@ -1053,3 +1053,142 @@ export async function saveBusinessAssessment(
     return { ok: false };
   }
 }
+
+export type MemberFact = {
+  key: string;
+  value: string;
+  /** Where the value last came from: a module key, or "profile". */
+  source: string;
+  /** Human-readable origin, e.g. "Launch › Register your business". */
+  sourceLabel: string;
+  updatedAt: string;
+  confirmedAt: string;
+};
+
+/** A fact about to be written. `value` is assumed already validated. */
+export type FactWrite = {
+  key: string;
+  value: string;
+  source: string;
+  sourceLabel: string;
+};
+
+/** Every fact on file for one member, keyed by fact key. */
+export async function getMemberFacts(memberId: string): Promise<Record<string, MemberFact>> {
+  try {
+    const { data, error } = await db()
+      .from("member_facts")
+      .select("fact_key, value, source, source_label, updated_at, confirmed_at")
+      .eq("member_id", memberId);
+
+    if (error) {
+      console.error("getMemberFacts: failed to load", error);
+      return {};
+    }
+
+    const rows = (data ?? []) as {
+      fact_key: string;
+      value: string;
+      source: string | null;
+      source_label: string | null;
+      updated_at: string;
+      confirmed_at: string;
+    }[];
+
+    return Object.fromEntries(
+      rows.map((r) => [
+        r.fact_key,
+        {
+          key: r.fact_key,
+          value: r.value,
+          source: r.source ?? "profile",
+          sourceLabel: r.source_label ?? "",
+          updatedAt: r.updated_at,
+          confirmedAt: r.confirmed_at,
+        },
+      ]),
+    );
+  } catch (error) {
+    console.error("getMemberFacts: Supabase unavailable", error);
+    return {};
+  }
+}
+
+/**
+ * Writes a batch of facts for one member.
+ *
+ * Last write wins, which is the right rule here: the member is looking at the
+ * value as they save it, so the most recent statement is the best one we have.
+ *
+ * The read-then-write is deliberate. A save where the value is unchanged is
+ * still a signal — the member saw the carried-over answer and let it stand —
+ * so it moves `confirmed_at` forward without touching `updated_at`. Bumping
+ * both would make everything look freshly edited and destroy the provenance
+ * line; bumping neither would let a confirmed fact keep reading as stale.
+ *
+ * Empty values are skipped rather than stored. A member clearing a box is
+ * far more often "I don't want to answer here" than "delete what you know
+ * about my business", and blanking a fact from one module would wipe it from
+ * every other surface that reads it.
+ */
+export async function upsertMemberFacts(
+  memberId: string,
+  writes: FactWrite[],
+): Promise<{ ok: boolean }> {
+  const meaningful = writes.filter((w) => w.value.trim() !== "");
+  if (meaningful.length === 0) return { ok: true };
+
+  try {
+    const supabase = db();
+    const now = new Date().toISOString();
+
+    const { data: existingRows } = await supabase
+      .from("member_facts")
+      .select("fact_key, value, source, source_label, updated_at")
+      .eq("member_id", memberId)
+      .in(
+        "fact_key",
+        meaningful.map((w) => w.key),
+      );
+
+    const existing = new Map(
+      ((existingRows ?? []) as {
+        fact_key: string;
+        value: string;
+        source: string | null;
+        source_label: string | null;
+        updated_at: string;
+      }[]).map((r) => [r.fact_key, r]),
+    );
+
+    const rows = meaningful.map((w) => {
+      const prior = existing.get(w.key);
+      const unchanged = prior?.value === w.value;
+      return {
+        member_id: memberId,
+        fact_key: w.key,
+        value: w.value,
+        // An unchanged value keeps the origin it was first given, so the UI
+        // still says "carried from Launch" rather than crediting whichever
+        // module the member most recently re-confirmed it in.
+        source: unchanged ? (prior?.source ?? w.source) : w.source,
+        source_label: unchanged ? (prior?.source_label ?? w.sourceLabel) : w.sourceLabel,
+        updated_at: unchanged ? (prior?.updated_at ?? now) : now,
+        confirmed_at: now,
+      };
+    });
+
+    const { error } = await supabase
+      .from("member_facts")
+      .upsert(rows, { onConflict: "member_id,fact_key" });
+
+    if (error) {
+      console.error("upsertMemberFacts: failed to upsert", error);
+      return { ok: false };
+    }
+    return { ok: true };
+  } catch (error) {
+    console.error("upsertMemberFacts: Supabase unavailable", error);
+    return { ok: false };
+  }
+}

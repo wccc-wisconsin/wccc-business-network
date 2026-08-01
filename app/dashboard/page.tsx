@@ -23,6 +23,7 @@ import {
   getMemberById,
   getMemberDashboard,
   getMemberDecisions,
+  getMemberFacts,
   getMemberOpportunities,
   recordMemberSignIn,
 } from "@/lib/appStore";
@@ -103,14 +104,21 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
     .filter(Boolean);
   const isStaff = staffEmails.includes(member.email.toLowerCase());
 
-  const [dashboard, memberOpportunities, businessAssessment, decisions, completedByModule] =
+  const [dashboard, memberOpportunities, businessAssessment, decisions, completedByModule, facts] =
     await Promise.all([
       getMemberDashboard(userId),
       getMemberOpportunities(userId),
       getBusinessAssessment(userId),
       getMemberDecisions(userId, SAVED_DECISIONS_LIMIT),
       getCompletedStepsByModule(userId),
+      getMemberFacts(userId),
     ]);
+
+  // Raw stored values (option values, not labels) — the Snapshot form needs
+  // them to re-select the right radio and refill the right box.
+  const factValues = Object.fromEntries(
+    Object.entries(facts).map(([key, fact]) => [key, fact.value]),
+  );
   const freeModuleKey = businessAssessment?.freeModuleKey ?? null;
   const registeredTitles = new Set(
     dashboard.registrations.map((r) => r.eventTitle),
@@ -325,6 +333,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
         <BusinessAssessmentCard
           key={businessAssessment?.updatedAt ?? "new"}
           initialAssessment={businessAssessment}
+          initialFacts={factValues}
         />
 
         {/* Roadmap(s) — 7-stage tracks, gated by membership tier (plus the
@@ -390,7 +399,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
               answer "what's coming up", and the deadline list doesn't warrant
               its own section above the roadmap. */}
           <EventsTabs
-            compliance={<ComplianceCalendar />}
+            compliance={<ComplianceCalendar facts={facts} />}
             events={
             <div className="space-y-3">
               {events.map((event) => {

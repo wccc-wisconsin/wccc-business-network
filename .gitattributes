@@ -1,0 +1,18 @@
+# Normalise line endings so a file edited on Windows and a file edited by a
+# tool on Linux don't show up as a whole-file rewrite in every diff.
+#
+# Without this, `git diff` on this repo reported thousands of changed lines
+# that were only CR characters — which buries real changes and makes review
+# close to useless. `text=auto eol=lf` stores LF in the repository and leaves
+# the working copy alone; every modern Windows editor handles LF fine.
+* text=auto eol=lf
+
+# Binaries must never be touched.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.woff binary
+*.woff2 binary
+*.pdf binary

@@ -6,11 +6,14 @@ import {
   getBusinessAssessment,
   getMemberById,
   getMemberDocuments,
+  getMemberFacts,
   getModuleProgress,
   getModuleSummary,
+  type MemberFact,
   type ModuleSummary,
   type StepProgress,
 } from "@/lib/appStore";
+import { carryOverForQuestion, type QuestionCarryOver } from "@/lib/carryOver";
 import StepCard from "@/components/StepCard";
 import AICoach from "@/components/AICoach";
 import ModuleSummaryPanel from "@/components/ModuleSummaryPanel";
@@ -59,10 +62,37 @@ export default async function ModulePage({ params }: ModulePageProps) {
   const moduleTools = mod.tools ?? [];
   const hasToolkit = unlocked && hasGuidedSteps && moduleTools.length > 0;
 
-  const [progress, summary]: [Record<string, StepProgress>, ModuleSummary | null] =
+  const [progress, summary, facts]: [
+    Record<string, StepProgress>,
+    ModuleSummary | null,
+    Record<string, MemberFact>,
+  ] =
     unlocked && hasGuidedSteps
-      ? await Promise.all([getModuleProgress(userId, mod.key), getModuleSummary(userId, mod.key)])
-      : [{}, null];
+      ? await Promise.all([
+          getModuleProgress(userId, mod.key),
+          getModuleSummary(userId, mod.key),
+          getMemberFacts(userId),
+        ])
+      : [{}, null, {}];
+
+  // Carry-over is resolved server-side, once per render, against a single
+  // `now`. Doing it per-StepCard on the client would mean shipping every fact
+  // to the browser and letting each card disagree about what counts as stale.
+  const carryOverNow = new Date();
+  const carryOverByStep: Record<string, Record<string, QuestionCarryOver>> = {};
+  for (const step of steps) {
+    const answers = progress[step.key]?.answers ?? {};
+    const perQuestion: Record<string, QuestionCarryOver> = {};
+    for (const question of step.questions) {
+      perQuestion[question.key] = carryOverForQuestion(
+        question,
+        facts,
+        answers[question.key] ?? "",
+        carryOverNow,
+      );
+    }
+    carryOverByStep[step.key] = perQuestion;
+  }
 
   const moduleDocuments = hasToolkit
     ? (await getMemberDocuments(userId)).filter((d) => d.moduleKey === mod.key)
@@ -187,6 +217,7 @@ export default async function ModulePage({ params }: ModulePageProps) {
                   initialAnswers={progress[step.key]?.answers ?? {}}
                   initialCompleted={progress[step.key]?.completed ?? false}
                   defaultOpen={i === 0}
+                  carryOver={carryOverByStep[step.key] ?? {}}
                 />
               ))}
 
