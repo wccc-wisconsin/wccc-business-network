@@ -27,6 +27,11 @@ body {
 
 a { text-decoration: none; }
 
+/* Horizontal chip strips (the dashboard's sticky section nav) scroll by drag
+   and by tap, so the scrollbar is only ever visual noise across the chips. */
+.no-scrollbar { scrollbar-width: none; -ms-overflow-style: none; }
+.no-scrollbar::-webkit-scrollbar { display: none; }
+
 /* Marquee */
 @keyframes marquee {
   0% { transform: translateX(0); }
@@ -79,6 +84,12 @@ a { text-decoration: none; }
     transition: background 0.2s;
   }
   .btn-navy:hover { background: #1a3358; }
+
+  /* 28px of side padding on each button is a lot of the width of a 360px
+     phone, and these buttons sit in rows of two or three. */
+  @media (max-width: 640px) {
+    .btn-navy, .btn-gold-outline { padding-left: 18px; padding-right: 18px; }
+  }
 
   .btn-gold-outline {
     display: inline-flex;

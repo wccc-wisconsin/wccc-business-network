@@ -2,7 +2,7 @@ import { journeyCards } from "@/data/programs";
 
 export default function JourneyCards() {
   return (
-    <section className="bg-[#faf8f5] px-6 py-20" aria-labelledby="journeys">
+    <section className="bg-[#faf8f5] px-4 py-14 sm:px-6 sm:py-20" aria-labelledby="journeys">
       <div className="mx-auto max-w-7xl">
         {/* Section header */}
         <div className="mb-12 flex items-end justify-between border-b border-[#e8e3db] pb-6">

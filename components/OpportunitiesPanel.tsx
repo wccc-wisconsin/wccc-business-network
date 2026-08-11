@@ -52,7 +52,7 @@ export default function OpportunitiesPanel({ initialOpportunities }: Props) {
   }
 
   return (
-    <section className="mt-6 rounded-[8px] border border-white/10 bg-[#132f52] p-6">
+    <section className="mt-6 rounded-[8px] border border-white/10 bg-[#132f52] p-5 sm:p-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <p className="text-xs font-bold uppercase tracking-[0.3em] text-[#d7a84d]">

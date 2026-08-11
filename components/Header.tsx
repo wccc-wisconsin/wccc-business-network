@@ -1,7 +1,10 @@
 import { auth } from "@clerk/nextjs/server";
 import { UserButton } from "@clerk/nextjs";
+import MobileNav, { type NavItem } from "@/components/MobileNav";
 
-const navItems = [
+// Shared by the desktop link row and the mobile disclosure panel, so the two
+// can't drift apart.
+const navItems: NavItem[] = [
   { label: "Events", href: "#events" },
   { label: "Programs", href: "#programs" },
   { label: "Partners", href: "#partners" },
@@ -13,9 +16,9 @@ export default async function Header() {
 
   return (
     <header className="sticky top-0 z-20 bg-white border-b border-[#e8e3db]">
-      <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-4">
+      <div className="mx-auto flex max-w-7xl items-center justify-between gap-3 px-4 py-3 sm:px-6 sm:py-4">
         {/* Logo */}
-        <a href="#top" className="flex items-center gap-3" aria-label="WCCC home">
+        <a href="#top" className="flex min-w-0 items-center gap-3" aria-label="WCCC home">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src="/wccc-logo.jpg" alt="WCCC logo" className="h-10 w-10 rounded-full object-cover" />
           <span className="hidden sm:block">
@@ -39,21 +42,24 @@ export default async function Header() {
           ))}
         </nav>
 
-        {/* Actions */}
-        <div className="flex items-center gap-3">
+        {/* Actions. On phones the secondary "Sign In" text link is dropped —
+            "Join WCCC" goes to the same page, and two links plus the menu
+            button don't fit beside the logo at 360px. */}
+        <div className="flex shrink-0 items-center gap-2 sm:gap-3">
           {userId ? (
-            <div className="flex items-center gap-3">
+            <>
               <a href="/dashboard" className="btn-navy">Dashboard</a>
               <UserButton />
-            </div>
+            </>
           ) : (
             <>
-              <a href="/login" className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#64748b] transition hover:text-[#0c1e3a]">
+              <a href="/login" className="hidden text-[11px] font-semibold uppercase tracking-[0.14em] text-[#64748b] transition hover:text-[#0c1e3a] sm:inline">
                 Sign In
               </a>
               <a href="/login" className="btn-navy">Join WCCC</a>
             </>
           )}
+          <MobileNav items={navItems} />
         </div>
       </div>
     </header>

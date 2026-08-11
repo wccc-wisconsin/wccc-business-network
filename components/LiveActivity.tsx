@@ -18,7 +18,7 @@ export default async function LiveActivity() {
   ];
 
   return (
-    <section className="bg-[#0f2d4a] px-6 py-10" aria-label="Live member portal activity">
+    <section className="bg-[#0f2d4a] px-4 py-8 sm:px-6 sm:py-10" aria-label="Live member portal activity">
       <div className="mx-auto max-w-7xl">
         <p className="text-xs font-bold uppercase tracking-[0.3em] text-[#d7a84d]">
           Live from the member portal

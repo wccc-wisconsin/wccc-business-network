@@ -34,7 +34,7 @@ export default function Home() {
           in both places put a duplicate ID in the DOM (invalid HTML). The inner
           one is the better scroll target anyway: it lands on the Events column
           rather than the top of the band that also holds Programs. */}
-      <section className="bg-white px-6 py-16">
+      <section className="bg-white px-4 py-12 sm:px-6 sm:py-16">
         <div className="mx-auto grid max-w-7xl gap-12 lg:grid-cols-2">
           <UpcomingEvents />
           <ProgramGrid />

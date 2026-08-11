@@ -26,7 +26,7 @@ export default function AiAssistantPanel() {
   }
 
   return (
-    <section id="assistant" className="bg-[#faf8f5] px-6 py-20">
+    <section id="assistant" className="bg-[#faf8f5] px-4 py-14 sm:px-6 sm:py-20">
       <div className="mx-auto max-w-3xl">
         <div className="mb-8 text-center">
           <p className="text-[10px] font-bold uppercase tracking-[0.38em] text-[#a07830] mb-3">Member Services</p>

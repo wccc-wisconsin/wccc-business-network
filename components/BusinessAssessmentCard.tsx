@@ -63,7 +63,7 @@ export default function BusinessAssessmentCard({ initialAssessment, initialFacts
     : "7 quick questions unlock one roadmap module free, matched to what you need most right now.";
 
   return (
-    <section className="mt-6 rounded-[8px] border border-white/10 bg-[#132f52] p-6">
+    <section className="mt-6 rounded-[8px] border border-white/10 bg-[#132f52] p-5 sm:p-6">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <button
           type="button"

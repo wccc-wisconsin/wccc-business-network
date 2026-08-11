@@ -34,6 +34,7 @@ import BusinessAssessmentCard from "@/components/BusinessAssessmentCard";
 import ComplianceCalendar from "@/components/ComplianceCalendar";
 import EventsTabs from "@/components/EventsTabs";
 import DashboardRoadmapTabs from "@/components/DashboardRoadmapTabs";
+import DashboardSectionNav, { type DashboardSection } from "@/components/DashboardSectionNav";
 import DecisionGrillPanel from "@/components/DecisionGrillPanel";
 import RoadmapModuleList from "@/components/RoadmapModuleList";
 import OpportunitiesPanel from "@/components/OpportunitiesPanel";
@@ -167,30 +168,60 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
     : 0;
   const totalModules = roadmapTracks.reduce((n, track) => n + track.modules.length, 0);
 
+  // Jump-nav targets for the sticky section nav. Built here rather than inside
+  // the nav component so the list can't claim a section this particular member
+  // doesn't get: the roadmap disappears if their journey matches no track, and
+  // the upgrade banner only exists on the free tier. Every id below must match
+  // an `id` on a wrapper in the markup — that pairing is what makes the links
+  // work, so keep them together when adding a panel.
+  const sectionNavItems: DashboardSection[] = [
+    { id: "overview", label: "Overview" },
+    { id: "snapshot", label: "Snapshot" },
+    ...(roadmapTracks.length > 0
+      ? [{ id: "roadmap", label: "Roadmap" } as DashboardSection]
+      : []),
+    { id: "coach", label: "AI Coach" },
+    { id: "decisions", label: "Decisions" },
+    { id: "funding", label: "Funding" },
+    { id: "community", label: "Community" },
+    { id: "events", label: "Events" },
+    { id: "programs", label: "Programs" },
+    ...(member.membershipTier === "network"
+      ? [{ id: "upgrade", label: "Upgrade" } as DashboardSection]
+      : []),
+    { id: "activity", label: "Activity" },
+  ];
+
   return (
     <main className="min-h-screen bg-[#0f2d4a] text-white">
-      <header className="border-b border-white/10 bg-[#091e33] px-6 py-4">
-        <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-4">
-          <Link href="/" className="flex items-center gap-3">
-            <span className="flex h-11 w-11 items-center justify-center rounded-[8px] bg-[#d7a84d] font-serif text-xl font-bold text-[#0f2d4a]">
+      <header className="border-b border-white/10 bg-[#091e33] px-4 py-3 sm:px-6 sm:py-4">
+        <div className="mx-auto flex max-w-7xl items-center justify-between gap-3">
+          <Link href="/" className="flex min-w-0 items-center gap-3">
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[8px] bg-[#d7a84d] font-serif text-lg font-bold text-[#0f2d4a] sm:h-11 sm:w-11 sm:text-xl">
               W
             </span>
-            <span>
-              <span className="block font-serif text-2xl font-bold">WCCC</span>
-              <span className="block text-xs uppercase tracking-[0.22em] text-[#f1c864]">
+            <span className="min-w-0">
+              <span className="block font-serif text-xl font-bold sm:text-2xl">WCCC</span>
+              <span className="block text-[10px] uppercase tracking-[0.18em] text-[#f1c864] sm:text-xs sm:tracking-[0.22em]">
                 Member Dashboard
               </span>
             </span>
           </Link>
 
-          <div className="flex items-center gap-4">
-            <span className="text-sm text-white/60">{member.email}</span>
+          <div className="flex shrink-0 items-center gap-4">
+            {/* Hidden on phones: it's a long string next to the avatar in a
+                cramped bar, and the welcome card below already shows it. */}
+            <span className="hidden text-sm text-white/60 lg:inline">{member.email}</span>
             <UserButton />
           </div>
         </div>
       </header>
 
-      <div className="mx-auto max-w-7xl px-6 py-8">
+      <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 sm:py-8">
+        {/* Sticky jump-nav. Rendered first so it pins to the top of the
+            viewport as soon as the header above scrolls away. */}
+        <DashboardSectionNav sections={sectionNavItems} />
+
         {checkin === "success" && (
           <div className="mb-6 rounded-[8px] border border-emerald-400/40 bg-emerald-400/10 px-5 py-3 text-sm font-semibold text-emerald-300">
             ✓ You&apos;re checked in{checkinEventTitle ? ` to ${checkinEventTitle}` : ""}. Thanks for coming out!
@@ -213,13 +244,18 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
           </div>
         )}
 
-        <section className="grid gap-5 lg:grid-cols-[1.2fr_0.8fr]">
-          <div className="rounded-[8px] border border-[#d7a84d]/30 bg-[#132f52] p-6">
+        <section id="overview" className="grid gap-5 lg:grid-cols-[1.2fr_0.8fr]">
+          <div className="rounded-[8px] border border-[#d7a84d]/30 bg-[#132f52] p-5 sm:p-6">
             <p className="text-xs font-bold uppercase tracking-[0.3em] text-[#d7a84d]">
               Welcome back
             </p>
-            <h1 className="mt-3 font-serif text-5xl font-bold">{member.name}</h1>
-            <p className="mt-3 text-sm leading-6 text-white/68">
+            {/* Names and emails are member-supplied and can be long, so the
+                display size steps down on narrow screens and both lines are
+                allowed to break rather than push the card sideways. */}
+            <h1 className="mt-3 break-words font-serif text-3xl font-bold sm:text-4xl lg:text-5xl">
+              {member.name}
+            </h1>
+            <p className="mt-3 break-words text-sm leading-6 text-white/68">
               {member.businessName || "No organization added"} · {member.email}
             </p>
             <div className="mt-2 flex flex-wrap gap-3">
@@ -294,33 +330,36 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
               read 0 for everyone; the second was a security log presented as
               an achievement. Both are replaced with roadmap figures, which is
               what this dashboard is actually for. */}
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-1">
-            <div className="rounded-[8px] border border-white/10 bg-white/5 p-5">
-              <div className="font-serif text-4xl font-bold text-[#d7a84d]">
+          {/* Two-up on phones rather than four stacked full-width cards —
+              four numbers shouldn't cost a screen and a half of scrolling
+              before the member reaches anything they can act on. */}
+          <div className="grid grid-cols-2 gap-3 lg:grid-cols-1">
+            <div className="rounded-[8px] border border-white/10 bg-white/5 p-4 sm:p-5">
+              <div className="font-serif text-3xl font-bold text-[#d7a84d] sm:text-4xl">
                 {completedSteps}
               </div>
-              <div className="mt-1 text-sm text-white/70">
+              <div className="mt-1 text-xs text-white/70 sm:text-sm">
                 Roadmap steps completed
               </div>
             </div>
-            <div className="rounded-[8px] border border-white/10 bg-white/5 p-5">
-              <div className="font-serif text-4xl font-bold text-[#d7a84d]">
+            <div className="rounded-[8px] border border-white/10 bg-white/5 p-4 sm:p-5">
+              <div className="font-serif text-3xl font-bold text-[#d7a84d] sm:text-4xl">
                 {unlockedModules.length}
-                <span className="text-2xl text-white/35">/{totalModules}</span>
+                <span className="text-xl text-white/35 sm:text-2xl">/{totalModules}</span>
               </div>
-              <div className="mt-1 text-sm text-white/70">Modules unlocked</div>
+              <div className="mt-1 text-xs text-white/70 sm:text-sm">Modules unlocked</div>
             </div>
-            <div className="rounded-[8px] border border-white/10 bg-white/5 p-5">
-              <div className="font-serif text-4xl font-bold text-[#d7a84d]">
+            <div className="rounded-[8px] border border-white/10 bg-white/5 p-4 sm:p-5">
+              <div className="font-serif text-3xl font-bold text-[#d7a84d] sm:text-4xl">
                 {dashboard.registrations.length}
               </div>
-              <div className="mt-1 text-sm text-white/70">Event registrations</div>
+              <div className="mt-1 text-xs text-white/70 sm:text-sm">Event registrations</div>
             </div>
-            <div className="rounded-[8px] border border-white/10 bg-white/5 p-5">
-              <div className="font-serif text-4xl font-bold text-[#d7a84d]">
+            <div className="rounded-[8px] border border-white/10 bg-white/5 p-4 sm:p-5">
+              <div className="font-serif text-3xl font-bold text-[#d7a84d] sm:text-4xl">
                 {dashboard.enrollments.length}
               </div>
-              <div className="mt-1 text-sm text-white/70">Program enrollments</div>
+              <div className="mt-1 text-xs text-white/70 sm:text-sm">Program enrollments</div>
             </div>
           </div>
         </section>
@@ -330,11 +369,18 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
             based on their stated top priority, regardless of membership
             tier. Sits above the roadmap since its free-unlock badge shows
             up there. See data/assessment.ts and components/BusinessAssessmentCard.tsx. */}
-        <BusinessAssessmentCard
-          key={businessAssessment?.updatedAt ?? "new"}
-          initialAssessment={businessAssessment}
-          initialFacts={factValues}
-        />
+        {/* Each panel below is wrapped in an anchor div rather than having an
+            id threaded into the component, so the jump-nav targets live in one
+            readable list here next to `sectionNavItems`. The wrappers are
+            layout-neutral — the panels keep their own `mt-6`, which collapses
+            through the bare div. */}
+        <div id="snapshot">
+          <BusinessAssessmentCard
+            key={businessAssessment?.updatedAt ?? "new"}
+            initialAssessment={businessAssessment}
+            initialFacts={factValues}
+          />
+        </div>
 
         {/* Roadmap(s) — 7-stage tracks, gated by membership tier (plus the
             one free module from the Business Snapshot above), chosen by
@@ -344,15 +390,21 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
             Networking are each spotlighted on their own tab instead of
             stacked one after another. */}
         {roadmapTracks.length > 1 ? (
-          <DashboardRoadmapTabs
-            tracks={roadmapTracks}
-            membershipTier={member.membershipTier}
-            tierLabels={tierLabels}
-            freeModuleKey={freeModuleKey}
-          />
+          <div id="roadmap">
+            <DashboardRoadmapTabs
+              tracks={roadmapTracks}
+              membershipTier={member.membershipTier}
+              tierLabels={tierLabels}
+              freeModuleKey={freeModuleKey}
+            />
+          </div>
         ) : (
           roadmapTracks.map((track) => (
-            <section key={track.key} className="mt-6 rounded-[8px] border border-white/10 bg-[#132f52] p-6">
+            <section
+              key={track.key}
+              id="roadmap"
+              className="mt-6 rounded-[8px] border border-white/10 bg-[#132f52] p-4 sm:p-6"
+            >
               <div className="mb-5">
                 <p className="text-xs font-bold uppercase tracking-[0.3em] text-[#d7a84d]">{track.eyebrow}</p>
                 <h2 className="mt-1 font-serif text-2xl font-bold text-white">{track.heading}</h2>
@@ -384,17 +436,23 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
             was the Decision Grill, which requires you to already know you're
             weighing a decision. Mounted without a moduleKey it answers across
             their whole business, using the same context the grill gets. */}
-        <div className="mt-6">
+        <div id="coach" className="mt-6">
           <AICoach />
         </div>
 
-        <DecisionGrillPanel initialDecisions={decisions} />
+        <div id="decisions">
+          <DecisionGrillPanel initialDecisions={decisions} />
+        </div>
 
-        <OpportunitiesPanel initialOpportunities={memberOpportunities} />
+        <div id="funding">
+          <OpportunitiesPanel initialOpportunities={memberOpportunities} />
+        </div>
 
-        <CommunityHubLinks />
+        <div id="community">
+          <CommunityHubLinks />
+        </div>
 
-        <section className="mt-6 grid gap-6 lg:grid-cols-2">
+        <section id="events" className="mt-6 grid gap-6 lg:grid-cols-2">
           {/* Events and compliance deadlines share one card behind tabs: both
               answer "what's coming up", and the deadline list doesn't warrant
               its own section above the roadmap. */}
@@ -448,7 +506,11 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
             }
           />
 
-          <div className="rounded-[8px] bg-[#f8f1e7] p-5 text-[#0f2d4a]">
+          {/* On large screens this sits beside the Events card, so the two
+              share a scroll position and the nav highlight will favour
+              Programs; both jump links still land correctly at every width,
+              and on phones (where the cards stack) each highlights on its own. */}
+          <div id="programs" className="rounded-[8px] bg-[#f8f1e7] p-4 text-[#0f2d4a] sm:p-5">
             <h2 className="font-serif text-3xl font-bold">Programs</h2>
             <div className="mt-5 grid gap-3 sm:grid-cols-2">
               {programs.map((program) => {
@@ -529,7 +591,10 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
 
         {/* Upgrade banner for network (free) members */}
         {member.membershipTier === "network" && (
-          <section className="mt-6 rounded-[8px] border border-[#d7a84d]/40 bg-gradient-to-r from-[#d7a84d]/10 to-transparent p-6">
+          <section
+            id="upgrade"
+            className="mt-6 rounded-[8px] border border-[#d7a84d]/40 bg-gradient-to-r from-[#d7a84d]/10 to-transparent p-5 sm:p-6"
+          >
             <div className="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <p className="text-xs font-bold uppercase tracking-[0.25em] text-[#d7a84d] mb-1">Unlock Full Membership</p>
@@ -560,8 +625,8 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
             output, not something a member benefits from seeing, so it's gone
             and Recent activity now takes the full width. Sign-ins are still
             recorded in login_events if an audit trail is ever needed. */}
-        <section className="mt-6">
-          <div className="rounded-[8px] border border-white/10 bg-[#132f52] p-5">
+        <section id="activity" className="mt-6">
+          <div className="rounded-[8px] border border-white/10 bg-[#132f52] p-4 sm:p-5">
             <h2 className="font-serif text-3xl font-bold">Recent activity</h2>
             <div className="mt-5 space-y-3">
               {dashboard.activities.length ? (
