@@ -30,8 +30,11 @@ export default function DashboardRoadmapTabs({ tracks, membershipTier, tierLabel
 
   if (!active) return null;
 
+  // Tighter padding on phones than the other panels get: the card deck below
+  // is sized as a percentage of this box, so every pixel of padding comes
+  // straight off the width of the stage card.
   return (
-    <section className="mt-6 rounded-[8px] border border-white/10 bg-[#132f52] p-6">
+    <section className="mt-6 rounded-[8px] border border-white/10 bg-[#132f52] p-4 sm:p-6">
       <div className="mb-5 flex flex-wrap gap-2 border-b border-white/10 pb-5">
         {tracks.map((track) => (
           <button

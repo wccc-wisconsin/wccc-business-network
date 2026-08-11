@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState, type TouchEvent } from "react";
 import Link from "next/link";
 import type { BusinessModule, MembershipTierKey } from "@/data/modules";
 import { isModuleUnlocked, tierMeetsMinimum } from "@/data/modules";
@@ -17,9 +17,13 @@ type Props = {
 // previous stage peeking in from the left edge and the next stage peeking
 // in from the right — never stacked directly behind the active card, so
 // their text never bleeds through it. Forward/back arrows and a row of
-// dots move through the deck; clicking a peeking card also jumps to it.
+// dots move through the deck, clicking a peeking card jumps to it, and on
+// touch screens a horizontal swipe moves it a card at a time.
 // Shared by the single-track view (app/dashboard/page.tsx) and the tabbed
 // view (DashboardRoadmapTabs.tsx) so the two can't drift apart.
+/** Horizontal travel below which a touch is treated as a tap, not a swipe. */
+const SWIPE_MIN_PX = 45;
+
 export default function RoadmapModuleList({ modules, membershipTier, tierLabels, freeModuleKey }: Props) {
   const [index, setIndex] = useState(0);
   const total = modules.length;
@@ -41,6 +45,34 @@ export default function RoadmapModuleList({ modules, membershipTier, tierLabels,
     return () => window.removeEventListener("keydown", onKey);
   }, [total]);
 
+  // Swipe. The arrows and dots are the only way through the deck otherwise,
+  // and on a phone a horizontal drag is what people try first.
+  //
+  // Nothing here calls preventDefault and the handlers are React's (which
+  // attach passively for touch), so a vertical drag still scrolls the page
+  // normally — the gesture is only claimed when it's clearly sideways.
+  const touchStart = useRef<{ x: number; y: number } | null>(null);
+
+  function onTouchStart(e: TouchEvent) {
+    const t = e.touches[0];
+    touchStart.current = t ? { x: t.clientX, y: t.clientY } : null;
+  }
+
+  function onTouchEnd(e: TouchEvent) {
+    const start = touchStart.current;
+    touchStart.current = null;
+    const t = e.changedTouches[0];
+    if (!start || !t) return;
+
+    const dx = t.clientX - start.x;
+    const dy = t.clientY - start.y;
+    if (Math.abs(dx) < SWIPE_MIN_PX || Math.abs(dx) <= Math.abs(dy)) return;
+
+    setIndex((i) =>
+      dx < 0 ? Math.min(i + 1, total - 1) : Math.max(i - 1, 0),
+    );
+  }
+
   if (total === 0) return null;
 
   const clamped = Math.min(index, total - 1);
@@ -49,7 +81,16 @@ export default function RoadmapModuleList({ modules, membershipTier, tierLabels,
 
   return (
     <div>
-      <div className="relative min-h-[320px] sm:min-h-[260px] overflow-hidden">
+      {/* Cards are absolutely positioned and stretched to this box, and the box
+          clips — so its height has to clear the tallest card at each width.
+          Phones are the tight case: the card is only ~200px of usable width
+          there, so a stage's four resource pills wrap onto far more rows than
+          they do on a laptop and 320px cut the "Learn more" link off. */}
+      <div
+        onTouchStart={onTouchStart}
+        onTouchEnd={onTouchEnd}
+        className="relative min-h-[420px] overflow-hidden sm:min-h-[300px] lg:min-h-[260px]"
+      >
         {modules.map((mod, i) => {
           const offset = i - clamped;
           if (offset < -1 || offset > 1) return null; // only render prev / active / next
@@ -92,8 +133,16 @@ export default function RoadmapModuleList({ modules, membershipTier, tierLabels,
               <div className="mt-5">
                 {unlocked ? (
                   <div className="flex flex-wrap gap-2">
+                    {/* max-w-full is load-bearing on phones: these are flex
+                        items, whose default min-width keeps them as wide as
+                        their text, so a label like "WI DFI business
+                        registration guide" ran past the edge of the card
+                        instead of wrapping inside it. */}
                     {mod.resources.map((r) => (
-                      <span key={r} className="rounded-full border border-[#d7a84d]/25 bg-[#d7a84d]/10 px-3 py-1 text-xs text-white/80">
+                      <span
+                        key={r}
+                        className="max-w-full rounded-full border border-[#d7a84d]/25 bg-[#d7a84d]/10 px-3 py-1 text-xs break-words text-white/80"
+                      >
                         {r}
                       </span>
                     ))}

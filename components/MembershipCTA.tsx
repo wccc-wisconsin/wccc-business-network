@@ -42,7 +42,7 @@ const tiers = [
 
 export default function MembershipCTA() {
   return (
-    <section className="bg-[#0c1e3a] px-6 py-24" id="membership">
+    <section className="bg-[#0c1e3a] px-4 py-16 sm:px-6 sm:py-24" id="membership">
       <div className="mx-auto max-w-6xl">
         <div className="mb-12 text-center">
           <div className="flex items-center justify-center gap-4 mb-6">

@@ -2,7 +2,7 @@ import { partners } from "@/data/programs";
 
 export default function Partners() {
   return (
-    <section id="partners" className="bg-white px-6 py-16" aria-labelledby="partners-heading">
+    <section id="partners" className="bg-white px-4 py-12 sm:px-6 sm:py-16" aria-labelledby="partners-heading">
       <div className="mx-auto max-w-7xl">
         <div className="mb-8 flex items-end justify-between border-b border-[#e8e3db] pb-5">
           <div>

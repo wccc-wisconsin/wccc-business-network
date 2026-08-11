@@ -13,7 +13,7 @@ import { hubLinks } from "@/data/hub";
 // dashboard.
 export default function HubHighlights() {
   return (
-    <section id="community" className="bg-[#faf8f5] px-6 py-20">
+    <section id="community" className="bg-[#faf8f5] px-4 py-14 sm:px-6 sm:py-20">
       <div className="mx-auto max-w-7xl">
         <div className="mb-10 flex flex-wrap items-end justify-between gap-4 border-b border-[#e8e3db] pb-6">
           <div>

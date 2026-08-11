@@ -1,22 +1,32 @@
 export default function Hero() {
   return (
     <section id="top" aria-labelledby="home-heading" className="relative overflow-hidden">
-      {/* Full image — no cropping, section height follows the photo */}
-      <div className="relative w-full">
+      {/* The photo used to set this section's height (`h-auto`, with the copy
+          absolutely positioned over it). It's 1200×400 — a 3:1 strip — so on a
+          390px-wide phone it rendered 130px tall while the headline, paragraph
+          and buttons needed roughly 380px, and the section's `overflow-hidden`
+          cut the difference off. Anything narrower than about 1280px lost text.
+
+          Now the copy is in normal flow and sets the height, the photo is
+          absolutely positioned behind it as a cover background, and `min-h`
+          keeps the band generous on wide screens where the text is short. The
+          photo crops a little at the top and bottom on narrow screens, which
+          is the trade for the words being readable. */}
+      <div className="relative w-full min-h-[540px] sm:min-h-[460px]">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src="/wccc-hero.png"
           alt="WCCC community events"
-          className="w-full h-auto brightness-110 saturate-[1.3]"
+          className="absolute inset-0 h-full w-full object-cover brightness-110 saturate-[1.3]"
         />
 
         {/* Light overlay — photo stays visible, left edge darkened for text */}
         <div className="absolute inset-0 bg-[#0c1e3a]/35" />
-        <div className="absolute inset-y-0 left-0 w-[55%] bg-gradient-to-r from-[#0c1e3a]/50 to-transparent" />
+        <div className="absolute inset-y-0 left-0 w-full bg-gradient-to-r from-[#0c1e3a]/70 to-transparent sm:w-[55%] sm:from-[#0c1e3a]/50" />
 
         {/* Content sits on top */}
-        <div className="absolute inset-0 flex items-center">
-          <div className="mx-auto w-full max-w-7xl px-6">
+        <div className="relative flex min-h-[540px] items-center sm:min-h-[460px]">
+          <div className="mx-auto w-full max-w-7xl px-4 py-14 sm:px-6">
             <div className="max-w-2xl">
               {/* Eyebrow */}
               <div className="fade-up flex items-center gap-4 mb-5">
@@ -29,7 +39,7 @@ export default function Hero() {
               {/* Headline */}
               <h1
                 id="home-heading"
-                className="fade-up fade-up-delay-1 font-serif text-4xl font-bold leading-[1.1] text-white lg:text-5xl"
+                className="fade-up fade-up-delay-1 font-serif text-3xl font-bold leading-[1.15] text-white sm:text-4xl sm:leading-[1.1] lg:text-5xl"
               >
                 Grow as a person.{" "}
                 <em className="not-italic text-[#c9993a]">Build your business.</em>{" "}

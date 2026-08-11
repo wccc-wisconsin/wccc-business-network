@@ -114,15 +114,15 @@ export default async function ModulePage({ params }: ModulePageProps) {
 
   return (
     <main className="min-h-screen bg-[#0f2d4a] text-white">
-      <header className="border-b border-white/10 bg-[#091e33] px-6 py-4">
+      <header className="border-b border-white/10 bg-[#091e33] px-4 py-3 sm:px-6 sm:py-4">
         <div className="mx-auto flex max-w-7xl items-center justify-between gap-4">
           <Link href="/dashboard" className="flex items-center gap-3">
-            <span className="flex h-11 w-11 items-center justify-center rounded-[8px] bg-[#d7a84d] font-serif text-xl font-bold text-[#0f2d4a]">
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[8px] bg-[#d7a84d] font-serif text-lg font-bold text-[#0f2d4a] sm:h-11 sm:w-11 sm:text-xl">
               W
             </span>
             <span>
-              <span className="block font-serif text-2xl font-bold">WCCC</span>
-              <span className="block text-xs uppercase tracking-[0.22em] text-[#f1c864]">
+              <span className="block font-serif text-xl font-bold sm:text-2xl">WCCC</span>
+              <span className="block text-[10px] uppercase tracking-[0.18em] text-[#f1c864] sm:text-xs sm:tracking-[0.22em]">
                 Member Dashboard
               </span>
             </span>
@@ -130,7 +130,7 @@ export default async function ModulePage({ params }: ModulePageProps) {
         </div>
       </header>
 
-      <div className="mx-auto max-w-3xl px-6 py-10">
+      <div className="mx-auto max-w-3xl px-4 py-8 sm:px-6 sm:py-10">
         <Link
           href="/dashboard"
           className="inline-flex items-center gap-1 text-xs font-bold uppercase tracking-[0.15em] text-white/50 hover:text-white"
@@ -142,9 +142,9 @@ export default async function ModulePage({ params }: ModulePageProps) {
           {track.eyebrow} · Stage {track.modules.indexOf(mod) + 1} of {track.modules.length}
         </p>
 
-        <div className="mt-3 flex items-center gap-4">
-          <span className="text-5xl">{mod.icon}</span>
-          <h1 className="font-serif text-4xl font-bold">{mod.label}</h1>
+        <div className="mt-3 flex items-center gap-3 sm:gap-4">
+          <span className="text-4xl sm:text-5xl">{mod.icon}</span>
+          <h1 className="font-serif text-3xl font-bold break-words sm:text-4xl">{mod.label}</h1>
         </div>
         <p className="mt-3 text-base text-white/60">{mod.tagline}</p>
 
