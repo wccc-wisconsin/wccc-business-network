@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
+import { enforceAiRateLimit } from "@/lib/aiRateLimit";
 import { saveMemberDecision, type DecisionBrief } from "@/lib/appStore";
 import { buildMemberContext } from "@/lib/memberContext";
 import { callClaude, parseClaudeJson, type ChatMessage } from "@/lib/ai";
@@ -35,6 +36,11 @@ export async function POST(request: NextRequest) {
   if (!userId) {
     return NextResponse.json({ ok: false, error: "Please sign in again." }, { status: 401 });
   }
+
+  // Per-member daily cap. See lib/aiRateLimit.ts — every request past
+  // this point spends money.
+  const limited = await enforceAiRateLimit(userId, "grill");
+  if (limited) return limited;
 
   const body = await request.json().catch(() => null);
   const phase = body?.phase;

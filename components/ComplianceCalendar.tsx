@@ -10,9 +10,11 @@ import type { MemberFact } from "@/lib/appStore";
  * No AI call and no member input at render time: the dates are known and the
  * filtering is arithmetic, so it all resolves on page load.
  *
- * Renders content only, with no outer card — it lives inside the Events
- * section's tab panel (see EventsTabs), which supplies the chrome. Styled for
- * that section's light cream card rather than the dark dashboard background.
+ * Renders content only, with no outer card — the dashboard's Deadlines
+ * section supplies the chrome. Styled for that section's light cream card
+ * rather than the dark dashboard background. (It used to be one tab of a
+ * card shared with a WCCC events list; that list was placeholder content and
+ * has been removed, so this now has the section to itself.)
  *
  * Rows the member's facts couldn't settle are still shown, carrying the same
  * "who this is for" line they always had. See lib/deadlines.ts for why the

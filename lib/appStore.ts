@@ -373,40 +373,6 @@ export async function getMemberDocuments(
   }
 }
 
-/**
- * How many documents this member has generated in the last 24 hours.
- *
- * Backs the per-member daily cap in the generation route. Each generation is a
- * paid API call triggered by a button, so without a ceiling one member holding
- * down Generate is an unbounded bill. Counts with `head: true` so no rows come
- * back over the wire.
- *
- * Returns null if the count can't be read — the caller treats that as "don't
- * know" and allows the request rather than locking members out of a working
- * feature because the count query failed.
- */
-export async function countDocumentsSince(
-  memberId: string,
-  since: Date,
-): Promise<number | null> {
-  try {
-    const { count, error } = await db()
-      .from("member_documents")
-      .select("id", { count: "exact", head: true })
-      .eq("member_id", memberId)
-      .gte("created_at", since.toISOString());
-
-    if (error) {
-      console.error("countDocumentsSince: failed to count", error);
-      return null;
-    }
-    return count ?? 0;
-  } catch (error) {
-    console.error("countDocumentsSince: Supabase unavailable", error);
-    return null;
-  }
-}
-
 export async function saveMemberDocument(
   memberId: string,
   moduleKey: string,
@@ -528,7 +494,9 @@ export async function enrollInProgram(
  * Marks a member as having attended an event they registered for.
  * This is intentionally separate from registerForEvent — registering
  * happens ahead of time, attendance is only recorded once the member
- * actually checks in (see checkInForEventAction in app/actions.ts).
+ * actually checks in. The UI and server action that drove this were removed
+ * along with the placeholder events; the table and this helper are kept so
+ * check-in can be rebuilt against real events without a migration.
  */
 export async function recordEventAttendance(
   memberId: string,
@@ -1190,5 +1158,67 @@ export async function upsertMemberFacts(
   } catch (error) {
     console.error("upsertMemberFacts: Supabase unavailable", error);
     return { ok: false };
+  }
+}
+
+// ---------------------------------------------------------------------------
+// AI usage — one row per generation attempt, backing the per-member daily caps
+// in lib/aiRateLimit.ts. See the ai_usage comment in supabase-schema.sql for
+// why attempts are recorded rather than successes.
+// ---------------------------------------------------------------------------
+
+/**
+ * Records one AI generation attempt. Called before the model runs, so a request
+ * that fails still counts against the member's daily allowance.
+ *
+ * Never throws and never blocks the caller on failure: losing a usage row is
+ * not a reason to deny a member a feature that otherwise works. A Supabase
+ * outage degrades the cap toward permissive, which is the same direction
+ * countAiCallsSince fails in.
+ */
+export async function recordAiCall(memberId: string, route: string): Promise<void> {
+  try {
+    const { error } = await db().from("ai_usage").insert({
+      member_id: memberId,
+      route,
+      created_at: new Date().toISOString(),
+    });
+    if (error) console.error("recordAiCall: failed to record", error);
+  } catch (error) {
+    console.error("recordAiCall: Supabase unavailable", error);
+  }
+}
+
+/**
+ * How many AI calls this member has made since `since` — all routes, or one
+ * route when `route` is given. Counts with `head: true` so no rows travel.
+ *
+ * Returns null if the count can't be read. Callers treat null as "don't know"
+ * and allow the request, rather than locking members out of a working feature
+ * because a count query failed.
+ */
+export async function countAiCallsSince(
+  memberId: string,
+  since: Date,
+  route?: string,
+): Promise<number | null> {
+  try {
+    let query = db()
+      .from("ai_usage")
+      .select("id", { count: "exact", head: true })
+      .eq("member_id", memberId)
+      .gte("created_at", since.toISOString());
+
+    if (route) query = query.eq("route", route);
+
+    const { count, error } = await query;
+    if (error) {
+      console.error("countAiCallsSince: failed to count", error);
+      return null;
+    }
+    return count ?? 0;
+  } catch (error) {
+    console.error("countAiCallsSince: Supabase unavailable", error);
+    return null;
   }
 }

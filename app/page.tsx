@@ -1,11 +1,8 @@
 import Header from "@/components/Header";
 import Hero from "@/components/Hero";
-import EventTicker from "@/components/EventTicker";
 import Stats from "@/components/Stats";
 import LiveActivity from "@/components/LiveActivity";
 import JourneyCards from "@/components/JourneyCards";
-import UpcomingEvents from "@/components/UpcomingEvents";
-import ProgramGrid from "@/components/ProgramGrid";
 import HubHighlights from "@/components/HubHighlights";
 import AiAssistantPanel from "@/components/AiAssistantPanel";
 import MembershipCTA from "@/components/MembershipCTA";
@@ -25,26 +22,19 @@ export default function Home() {
     <main className="min-h-screen bg-[#faf8f5] text-[#0c1e3a]">
       <Header />
       <Hero />
-      <EventTicker />
       <Stats />
       <LiveActivity />
       <JourneyCards />
 
-      {/* No id here — UpcomingEvents declares id="events" itself, and having it
-          in both places put a duplicate ID in the DOM (invalid HTML). The inner
-          one is the better scroll target anyway: it lands on the Events column
-          rather than the top of the band that also holds Programs. */}
-      <section className="bg-white px-4 py-12 sm:px-6 sm:py-16">
-        <div className="mx-auto grid max-w-7xl gap-12 lg:grid-cols-2">
-          <UpcomingEvents />
-          <ProgramGrid />
-        </div>
-      </section>
+      {/* An "Upcoming Events" list and an "Our Programs" grid used to sit here,
+          both built from placeholder data that described events and programs
+          WCCC doesn't actually run. They're gone rather than rewritten: real
+          WCCC events are published on the Wisconsin Asian Hub, and the Hub
+          block below is now the site's route to them.
 
-      {/* Sits above the membership table on purpose: it's the strongest thing
-          WCCC can show a signed-out visitor for free, and the table just below
-          sells "Community directory" as the Network tier's first perk — which
-          previously had no reachable link anywhere on the public site. */}
+          That also makes this block load-bearing rather than supplementary —
+          it's the only place a signed-out visitor can find out what's
+          genuinely happening, so it moved up directly under the pathways. */}
       <HubHighlights />
 
       <AiAssistantPanel />

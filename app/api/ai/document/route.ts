@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
+import { enforceAiRateLimit } from "@/lib/aiRateLimit";
 import {
-  countDocumentsSince,
   getModuleProgress,
   saveMemberDocument,
 } from "@/lib/appStore";
@@ -18,14 +18,6 @@ import { callClaude } from "@/lib/ai";
 // actually described rather than being a template they'd have to adapt.
 
 /**
- * Ceiling on generations per member per rolling 24h. Each one is a paid API
- * call fired by a button, so without this a single member holding down
- * Generate is an unbounded bill. High enough that no honest member will reach
- * it — someone who does is either stuck or automating.
- */
-const DAILY_DOCUMENT_LIMIT = 20;
-
-/**
  * Bounded so generation reliably finishes inside the serverless function
  * timeout. The briefs in data/modules.ts all cap their output well below this;
  * this is the backstop, not the target.
@@ -37,6 +29,14 @@ export async function POST(request: NextRequest) {
   if (!userId) {
     return NextResponse.json({ ok: false, error: "Please sign in again." }, { status: 401 });
   }
+
+  // Per-member daily cap. Was a bespoke check that counted rows in
+  // member_documents; that was bypassable (deleting a document freed quota)
+  // and blind to generations that failed before saving. Now shares the
+  // attempt-based limiter with every other AI route — see lib/aiRateLimit.ts,
+  // where "document" keeps the same ceiling of 20 it had here.
+  const limited = await enforceAiRateLimit(userId, "document");
+  if (limited) return limited;
 
   const body = await request.json().catch(() => null);
   const moduleKey = typeof body?.moduleKey === "string" ? body.moduleKey : null;
@@ -51,18 +51,6 @@ export async function POST(request: NextRequest) {
   const found = findTool(moduleKey, toolKey);
   if (!found) {
     return NextResponse.json({ ok: false, error: "That tool couldn't be found." }, { status: 404 });
-  }
-
-  const dayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
-  const usedToday = await countDocumentsSince(userId, dayAgo);
-  if (usedToday !== null && usedToday >= DAILY_DOCUMENT_LIMIT) {
-    return NextResponse.json(
-      {
-        ok: false,
-        error: `You've generated ${DAILY_DOCUMENT_LIMIT} documents today. Try again tomorrow, or email info@wisccc.org if you need more.`,
-      },
-      { status: 429 },
-    );
   }
 
   const [context, progress] = await Promise.all([

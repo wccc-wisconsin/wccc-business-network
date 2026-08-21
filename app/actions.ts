@@ -4,9 +4,6 @@ import { auth, currentUser } from "@clerk/nextjs/server";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import {
-  enrollInProgram,
-  recordEventAttendance,
-  registerForEvent,
   saveBusinessAssessment,
   saveStepAnswers,
   setStepCompleted,
@@ -16,8 +13,6 @@ import {
   type JourneyType,
   type MembershipTier,
 } from "@/lib/appStore";
-import { events } from "@/data/events";
-import { programs } from "@/data/programs";
 import { findStep, stepProvenanceLabel } from "@/data/modules";
 import { assessmentQuestions, computeAssessment, profileQuestions } from "@/data/assessment";
 import { factDefinition, isValidFactValue } from "@/data/facts";
@@ -36,6 +31,12 @@ function fieldValue(formData: FormData, name: string) {
   return typeof value === "string" ? value.trim() : "";
 }
 
+// Still accepts "personal" and "both" even while the personal track is switched
+// off and the onboarding form stops offering them (PERSONAL_TRACK_ENABLED in
+// data/modules.ts). Coercing them to "business" here would quietly overwrite the
+// stored preference of members who chose one before it was disabled, and there's
+// nothing to protect against: an unexpected value just means the dashboard's
+// tracksForJourney falls back to the business roadmap.
 function journeyValue(value: string): JourneyType {
   if (value === "personal") return "personal";
   if (value === "both") return "both";
@@ -68,76 +69,6 @@ export async function completeProfileAction(formData: FormData) {
 
   revalidatePath("/dashboard");
   redirect("/dashboard");
-}
-
-export async function registerForEventAction(
-  _prevState: FormState,
-  formData: FormData,
-): Promise<FormState> {
-  const { userId } = await auth();
-  if (!userId) redirect("/login");
-
-  const eventTitle = fieldValue(formData, "eventTitle");
-  const isRealEvent = events.some((e) => e.title === eventTitle);
-  if (!isRealEvent) {
-    return { ok: false, error: "That event couldn't be found. Refresh the page and try again." };
-  }
-
-  const result = await registerForEvent(userId, eventTitle);
-  revalidatePath("/dashboard");
-
-  if (!result.ok) {
-    return { ok: false, error: "Couldn't save your registration — please try again in a moment." };
-  }
-  return { ok: true, error: null };
-}
-
-export async function enrollInProgramAction(
-  _prevState: FormState,
-  formData: FormData,
-): Promise<FormState> {
-  const { userId } = await auth();
-  if (!userId) redirect("/login");
-
-  const programTitle = fieldValue(formData, "programTitle");
-  const isRealProgram = programs.some((p) => p.title === programTitle);
-  if (!isRealProgram) {
-    return { ok: false, error: "That program couldn't be found. Refresh the page and try again." };
-  }
-
-  const result = await enrollInProgram(userId, programTitle);
-  revalidatePath("/dashboard");
-
-  if (!result.ok) {
-    return { ok: false, error: "Couldn't save your enrollment — please try again in a moment." };
-  }
-  return { ok: true, error: null };
-}
-
-// Marks the signed-in member as having attended an event they're registered
-// for. Fired either by tapping "Check in" on the dashboard, or by scanning
-// the event's QR code (see app/api/checkin/[event]/route.ts) — both paths
-// land here.
-export async function checkInForEventAction(
-  _prevState: FormState,
-  formData: FormData,
-): Promise<FormState> {
-  const { userId } = await auth();
-  if (!userId) redirect("/login");
-
-  const eventTitle = fieldValue(formData, "eventTitle");
-  const isRealEvent = events.some((e) => e.title === eventTitle);
-  if (!isRealEvent) {
-    return { ok: false, error: "That event couldn't be found. Refresh the page and try again." };
-  }
-
-  const result = await recordEventAttendance(userId, eventTitle);
-  revalidatePath("/dashboard");
-
-  if (!result.ok) {
-    return { ok: false, error: "Couldn't record your check-in — please try again in a moment." };
-  }
-  return { ok: true, error: null };
 }
 
 // Saves one guided-step's checkbox + question answers together (see

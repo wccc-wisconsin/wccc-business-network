@@ -10,12 +10,12 @@ import { getPortalActivitySummary } from "@/lib/appStore";
 export default async function LiveActivity() {
   const summary = await getPortalActivitySummary();
 
-  const items = [
-    { label: "Members on the portal", value: summary.totalMembers },
-    { label: "Event registrations", value: summary.totalEventRegistrations },
-    { label: "Event check-ins", value: summary.totalEventAttendance },
-    { label: "Program enrollments", value: summary.totalProgramEnrollments },
-  ];
+  // Event registrations, event check-ins and program enrollments used to sit
+  // beside this. All three could only ever be fed by the placeholder events
+  // and programs that have now been removed, so they'd read a permanent 0 —
+  // which says "nobody uses this" rather than "this isn't a feature". The one
+  // number left is the one the portal genuinely accumulates.
+  const items = [{ label: "Members on the portal", value: summary.totalMembers }];
 
   return (
     <section className="bg-[#0f2d4a] px-4 py-8 sm:px-6 sm:py-10" aria-label="Live member portal activity">
@@ -23,6 +23,9 @@ export default async function LiveActivity() {
         <p className="text-xs font-bold uppercase tracking-[0.3em] text-[#d7a84d]">
           Live from the member portal
         </p>
+        {/* Sized to the number of stats rather than a fixed 4-up grid, so
+            dropping the three dead counts doesn't leave one card stranded
+            across a full-width row. */}
         <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {items.map((item) => (
             <div

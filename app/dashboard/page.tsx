@@ -3,20 +3,8 @@ import { UserButton } from "@clerk/nextjs";
 import Link from "next/link";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
-import {
-  checkInForEventAction,
-  enrollInProgramAction,
-  registerForEventAction,
-} from "@/app/actions";
-import ActionButtonForm from "@/components/ActionButtonForm";
 import CommunityHubLinks from "@/components/CommunityHubLinks";
-import { events } from "@/data/events";
-import { programs } from "@/data/programs";
-import {
-  roadmapTracks as allRoadmapTracks,
-  isModuleUnlocked,
-  stepsForModule,
-} from "@/data/modules";
+import { isModuleUnlocked, stepsForModule, tracksForJourney } from "@/data/modules";
 import {
   getBusinessAssessment,
   getCompletedStepsByModule,
@@ -28,11 +16,9 @@ import {
   recordMemberSignIn,
 } from "@/lib/appStore";
 import { SAVED_DECISIONS_LIMIT } from "@/data/decisions";
-import { slugifyEventTitle } from "@/lib/eventSlug";
 import AICoach from "@/components/AICoach";
 import BusinessAssessmentCard from "@/components/BusinessAssessmentCard";
 import ComplianceCalendar from "@/components/ComplianceCalendar";
-import EventsTabs from "@/components/EventsTabs";
 import DashboardRoadmapTabs from "@/components/DashboardRoadmapTabs";
 import DashboardSectionNav, { type DashboardSection } from "@/components/DashboardSectionNav";
 import DecisionGrillPanel from "@/components/DecisionGrillPanel";
@@ -40,14 +26,6 @@ import RoadmapModuleList from "@/components/RoadmapModuleList";
 import OpportunitiesPanel from "@/components/OpportunitiesPanel";
 
 export const dynamic = "force-dynamic";
-
-// The QR check-in feature (staff QR codes + member "Check in" button) needs
-// the `event_attendance` table from supabase-schema.sql, which hasn't been
-// migrated onto the live database yet. Until that migration runs, keep the
-// UI hidden rather than showing a feature that can't record anything — the
-// backend (recordEventAttendance, checkInForEventAction, the QR route) is
-// left in place so this is a one-line flip once the table exists.
-const CHECKIN_ENABLED = false;
 
 const tierLabels: Record<string, string> = {
   network: "Network",
@@ -65,11 +43,7 @@ function formatDate(value: string) {
   }).format(new Date(value));
 }
 
-type DashboardPageProps = {
-  searchParams: Promise<{ checkin?: string; event?: string }>;
-};
-
-export default async function DashboardPage({ searchParams }: DashboardPageProps) {
+export default async function DashboardPage() {
   const { userId, sessionId } = await auth();
   if (!userId) redirect("/login");
 
@@ -85,25 +59,6 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
     sessionId,
     userAgent: headerStore.get("user-agent") ?? "Unknown browser",
   });
-
-  const { checkin, event: checkinSlug } = await searchParams;
-  const checkinEventTitle = checkinSlug
-    ? events.find((e) => slugifyEventTitle(e.title) === checkinSlug)?.title
-    : undefined;
-
-  // Absolute origin, used to build the QR check-in links below.
-  const host = headerStore.get("host") ?? "localhost:3000";
-  const protocol = host.startsWith("localhost") ? "http" : "https";
-  const siteOrigin = `${protocol}://${host}`;
-
-  // The QR check-in codes are a staff tool, not something every member needs
-  // to see. There's no admin/role system in the members table yet, so gate
-  // this on a simple env var (comma-separated staff emails) until one exists.
-  const staffEmails = (process.env.STAFF_EMAILS ?? "")
-    .split(",")
-    .map((e) => e.trim().toLowerCase())
-    .filter(Boolean);
-  const isStaff = staffEmails.includes(member.email.toLowerCase());
 
   const [dashboard, memberOpportunities, businessAssessment, decisions, completedByModule, facts] =
     await Promise.all([
@@ -121,23 +76,13 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
     Object.entries(facts).map(([key, fact]) => [key, fact.value]),
   );
   const freeModuleKey = businessAssessment?.freeModuleKey ?? null;
-  const registeredTitles = new Set(
-    dashboard.registrations.map((r) => r.eventTitle),
-  );
-  const enrolledTitles = new Set(
-    dashboard.enrollments.map((e) => e.programTitle),
-  );
-  const attendedTitles = new Set(
-    dashboard.attendance.map((a) => a.eventTitle),
-  );
 
-  // Which roadmap(s) to show depends on the journey picked at onboarding —
-  // "business" and "personal" each get their own 7-stage track; "both" gets both.
-  // Track copy/modules themselves live in data/modules.ts (shared with the
-  // per-module detail page) — this just picks which tracks apply.
-  const roadmapTracks = allRoadmapTracks.filter(
-    (track) => track.key === member.journey || member.journey === "both",
-  );
+  // Which roadmap(s) to show, from the journey picked at onboarding. The
+  // matching lives in data/modules.ts (shared with the per-module detail page)
+  // because it also has to account for tracks that are switched off — a member
+  // who signed up for "Know Yourself" before that track was disabled falls back
+  // to the business roadmap rather than to an empty dashboard.
+  const roadmapTracks = tracksForJourney(member.journey);
 
   // Real roadmap progress, from completed guided steps.
   //
@@ -184,8 +129,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
     { id: "decisions", label: "Decisions" },
     { id: "funding", label: "Funding" },
     { id: "community", label: "Community" },
-    { id: "events", label: "Events" },
-    { id: "programs", label: "Programs" },
+    { id: "deadlines", label: "Deadlines" },
     ...(member.membershipTier === "network"
       ? [{ id: "upgrade", label: "Upgrade" } as DashboardSection]
       : []),
@@ -221,28 +165,6 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
         {/* Sticky jump-nav. Rendered first so it pins to the top of the
             viewport as soon as the header above scrolls away. */}
         <DashboardSectionNav sections={sectionNavItems} />
-
-        {checkin === "success" && (
-          <div className="mb-6 rounded-[8px] border border-emerald-400/40 bg-emerald-400/10 px-5 py-3 text-sm font-semibold text-emerald-300">
-            ✓ You&apos;re checked in{checkinEventTitle ? ` to ${checkinEventTitle}` : ""}. Thanks for coming out!
-          </div>
-        )}
-        {checkin === "invalid" && (
-          <div className="mb-6 rounded-[8px] border border-red-400/40 bg-red-400/10 px-5 py-3 text-sm font-semibold text-red-300">
-            That check-in code didn&apos;t match a current event. Ask a staff member for help.
-          </div>
-        )}
-        {/* The scan matched a real event but the write failed — usually because
-            this account has no members row yet. Tell the attendee plainly
-            instead of showing the success banner over a check-in that didn't
-            happen (see app/api/checkin/[event]/route.ts). */}
-        {checkin === "error" && (
-          <div className="mb-6 rounded-[8px] border border-amber-400/40 bg-amber-400/10 px-5 py-3 text-sm font-semibold text-amber-300">
-            We couldn&apos;t record your check-in
-            {checkinEventTitle ? ` for ${checkinEventTitle}` : ""}. Please scan again, or ask a
-            staff member to check you in manually.
-          </div>
-        )}
 
         <section id="overview" className="grid gap-5 lg:grid-cols-[1.2fr_0.8fr]">
           <div className="rounded-[8px] border border-[#d7a84d]/30 bg-[#132f52] p-5 sm:p-6">
@@ -349,17 +271,23 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
               </div>
               <div className="mt-1 text-xs text-white/70 sm:text-sm">Modules unlocked</div>
             </div>
+            {/* "Event registrations" and "Program enrollments" were here.
+                Both counted rows that could only ever be created by the
+                placeholder events and programs, so with those gone the
+                numbers were frozen at zero — the same trap the two stats
+                before them fell into. These two count things the member
+                actually generates on this page. */}
             <div className="rounded-[8px] border border-white/10 bg-white/5 p-4 sm:p-5">
               <div className="font-serif text-3xl font-bold text-[#d7a84d] sm:text-4xl">
-                {dashboard.registrations.length}
+                {decisions.length}
               </div>
-              <div className="mt-1 text-xs text-white/70 sm:text-sm">Event registrations</div>
+              <div className="mt-1 text-xs text-white/70 sm:text-sm">Decisions worked through</div>
             </div>
             <div className="rounded-[8px] border border-white/10 bg-white/5 p-4 sm:p-5">
               <div className="font-serif text-3xl font-bold text-[#d7a84d] sm:text-4xl">
-                {dashboard.enrollments.length}
+                {memberOpportunities?.items.length ?? 0}
               </div>
-              <div className="mt-1 text-xs text-white/70 sm:text-sm">Program enrollments</div>
+              <div className="mt-1 text-xs text-white/70 sm:text-sm">Funding matches saved</div>
             </div>
           </div>
         </section>
@@ -452,142 +380,21 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
           <CommunityHubLinks />
         </div>
 
-        <section id="events" className="mt-6 grid gap-6 lg:grid-cols-2">
-          {/* Events and compliance deadlines share one card behind tabs: both
-              answer "what's coming up", and the deadline list doesn't warrant
-              its own section above the roadmap. */}
-          <EventsTabs
-            compliance={<ComplianceCalendar facts={facts} />}
-            events={
-            <div className="space-y-3">
-              {events.map((event) => {
-                const isRegistered = registeredTitles.has(event.title);
-                const hasAttended = attendedTitles.has(event.title);
-                return (
-                  <article
-                    key={event.title}
-                    className="rounded-[8px] border border-[#0f2d4a]/10 bg-white p-4"
-                  >
-                    <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#9b6b1f]">
-                      {event.category} · {event.date}
-                    </p>
-                    <h3 className="mt-2 text-lg font-bold">{event.title}</h3>
-                    <p className="mt-1 text-sm text-slate-600">
-                      {event.time} · {event.location}
-                    </p>
-                    <div className="mt-4 flex flex-wrap items-start gap-2">
-                      <ActionButtonForm
-                        action={registerForEventAction}
-                        fieldName="eventTitle"
-                        fieldValue={event.title}
-                        disabled={isRegistered}
-                        idleLabel="Register"
-                        disabledLabel="Registered"
-                        pendingLabel="Registering…"
-                        className="rounded-full bg-[#0f2d4a] px-4 py-2 text-sm font-bold text-white transition hover:bg-[#13345f] disabled:bg-slate-300 disabled:text-slate-600"
-                      />
-                      {CHECKIN_ENABLED && isRegistered && (
-                        <ActionButtonForm
-                          action={checkInForEventAction}
-                          fieldName="eventTitle"
-                          fieldValue={event.title}
-                          disabled={hasAttended}
-                          idleLabel="Check in"
-                          disabledLabel="✓ Attended"
-                          pendingLabel="Checking in…"
-                          className="rounded-full border border-[#0f2d4a] px-4 py-2 text-sm font-bold text-[#0f2d4a] transition hover:bg-[#0f2d4a] hover:text-white disabled:border-slate-300 disabled:text-slate-400 disabled:hover:bg-transparent"
-                        />
-                      )}
-                    </div>
-                  </article>
-                );
-              })}
-            </div>
-            }
-          />
+        {/* Compliance deadlines used to be one tab of a card whose other tab
+            listed WCCC events, sitting beside a Programs card. The events and
+            programs were placeholder content and are gone, so the deadline
+            calendar — which is real, verified Wisconsin and federal filing
+            dates — gets the section to itself. Real WCCC events are on the
+            Hub, linked from the Community panel above.
 
-          {/* On large screens this sits beside the Events card, so the two
-              share a scroll position and the nav highlight will favour
-              Programs; both jump links still land correctly at every width,
-              and on phones (where the cards stack) each highlights on its own. */}
-          <div id="programs" className="rounded-[8px] bg-[#f8f1e7] p-4 text-[#0f2d4a] sm:p-5">
-            <h2 className="font-serif text-3xl font-bold">Programs</h2>
-            <div className="mt-5 grid gap-3 sm:grid-cols-2">
-              {programs.map((program) => {
-                const isEnrolled = enrolledTitles.has(program.title);
-                return (
-                  <article
-                    key={program.title}
-                    className="rounded-[8px] border border-[#0f2d4a]/10 bg-white p-4"
-                  >
-                    <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#9b6b1f]">
-                      {program.track}
-                    </p>
-                    <h3 className="mt-2 font-bold">{program.title}</h3>
-                    <p className="mt-2 text-sm leading-6 text-slate-600">
-                      {program.description}
-                    </p>
-                    {member.membershipTier === "network" ? (
-                      <div className="mt-4 rounded border border-[#d7a84d]/30 bg-[#fdf6ec] px-3 py-2 text-xs text-[#9b6b1f]">
-                        🔒 Upgrade to access programs
-                      </div>
-                    ) : (
-                      <div className="mt-4">
-                        <ActionButtonForm
-                          action={enrollInProgramAction}
-                          fieldName="programTitle"
-                          fieldValue={program.title}
-                          disabled={isEnrolled}
-                          idleLabel="Enroll"
-                          disabledLabel="Enrolled"
-                          pendingLabel="Enrolling…"
-                          className="rounded-full bg-[#0f2d4a] px-4 py-2 text-sm font-bold text-white transition hover:bg-[#13345f] disabled:bg-slate-300 disabled:text-slate-600"
-                        />
-                      </div>
-                    )}
-                  </article>
-                );
-              })}
-            </div>
-          </div>
+            Keeps the light cream card the tab wrapper used to supply, since
+            ComplianceCalendar is styled for a light background. */}
+        <section id="deadlines" className="mt-6 rounded-[8px] bg-[#f8f1e7] p-4 text-[#0f2d4a] sm:p-5">
+          <h2 className="mb-5 border-b border-[#0f2d4a]/10 pb-3 font-serif text-3xl font-bold">
+            Deadlines
+          </h2>
+          <ComplianceCalendar facts={facts} />
         </section>
-
-        {/* Staff tool: a QR code per event that, when scanned by an attendee
-            who's signed in on their phone, checks them in automatically —
-            no form, no extra tap. Print/display these at the venue.
-            Only visible to staff (see STAFF_EMAILS above) — regular members
-            don't need or want to see every event's check-in link. */}
-        {CHECKIN_ENABLED && isStaff && (
-          <section className="mt-6 rounded-[8px] border border-white/10 bg-[#132f52] p-5">
-            <h2 className="font-serif text-2xl font-bold">Event check-in codes</h2>
-            <p className="mt-1 text-sm text-white/60">
-              Display the QR code for an event at the venue. Attendees scan it with their
-              phone (while signed in) to check themselves in — the count updates instantly.
-            </p>
-            <div className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {events.map((event) => {
-                const checkinUrl = `${siteOrigin}/api/checkin/${slugifyEventTitle(event.title)}`;
-                const qrImageUrl = `https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=${encodeURIComponent(checkinUrl)}`;
-                return (
-                  <div
-                    key={event.title}
-                    className="rounded-[8px] border border-white/10 bg-white/5 p-4 text-center"
-                  >
-                    <p className="text-sm font-bold">{event.title}</p>
-                    <img
-                      src={qrImageUrl}
-                      alt={`Check-in QR code for ${event.title}`}
-                      width={160}
-                      height={160}
-                      className="mx-auto mt-3 rounded bg-white p-2"
-                    />
-                    <p className="mt-2 break-all text-xs text-white/45">{checkinUrl}</p>
-                  </div>
-                );
-              })}
-            </div>
-          </section>
-        )}
 
         {/* Upgrade banner for network (free) members */}
         {member.membershipTier === "network" && (
@@ -599,7 +406,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
               <div>
                 <p className="text-xs font-bold uppercase tracking-[0.25em] text-[#d7a84d] mb-1">Unlock Full Membership</p>
                 <h3 className="font-serif text-xl font-bold text-white">You&apos;re on the free network tier</h3>
-                <p className="mt-1 text-sm text-white/60">Upgrade to access programs, Office Hours, mentorship, and member-only events.</p>
+                <p className="mt-1 text-sm text-white/60">Upgrade to unlock every stage of your roadmap instead of just the first.</p>
               </div>
               <div className="flex flex-wrap gap-3 shrink-0">
                 {[

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
+import { enforceAiRateLimit } from "@/lib/aiRateLimit";
 import { getMemberById } from "@/lib/appStore";
 import { findStep } from "@/data/modules";
 import { callClaude, parseClaudeJson } from "@/lib/ai";
@@ -20,6 +21,11 @@ export async function POST(request: NextRequest) {
   if (!userId) {
     return NextResponse.json({ ok: false, error: "Please sign in again." }, { status: 401 });
   }
+
+  // Per-member daily cap. See lib/aiRateLimit.ts — every request past
+  // this point spends money.
+  const limited = await enforceAiRateLimit(userId, "review-step");
+  if (limited) return limited;
 
   const member = await getMemberById(userId);
   if (!member) {

@@ -4,9 +4,15 @@ import MobileNav, { type NavItem } from "@/components/MobileNav";
 
 // Shared by the desktop link row and the mobile disclosure panel, so the two
 // can't drift apart.
+// "Events" and "Programs" entries used to head this list. Both pointed at
+// homepage sections built from placeholder content that has since been
+// removed, which would leave the links scrolling to nothing — so they're
+// replaced with the sections that do exist. Real events live on the Hub,
+// which "Community" reaches.
 const navItems: NavItem[] = [
-  { label: "Events", href: "#events" },
-  { label: "Programs", href: "#programs" },
+  { label: "Pathways", href: "#journeys" },
+  { label: "Community", href: "#community" },
+  { label: "Membership", href: "#membership" },
   { label: "Partners", href: "#partners" },
   { label: "Dashboard", href: "/dashboard" },
 ];
