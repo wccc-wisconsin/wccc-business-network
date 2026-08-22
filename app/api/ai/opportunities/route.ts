@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
+import { enforceAiRateLimit } from "@/lib/aiRateLimit";
 import { getMemberById, saveMemberOpportunities, type Opportunity } from "@/lib/appStore";
 import { callClaude, parseClaudeJson } from "@/lib/ai";
 
@@ -15,6 +16,11 @@ export async function POST() {
   if (!userId) {
     return NextResponse.json({ ok: false, error: "Please sign in again." }, { status: 401 });
   }
+
+  // Per-member daily cap. See lib/aiRateLimit.ts — every request past
+  // this point spends money.
+  const limited = await enforceAiRateLimit(userId, "opportunities");
+  if (limited) return limited;
 
   const member = await getMemberById(userId);
   if (!member) {
@@ -35,7 +41,7 @@ export async function POST() {
     corporate: "Corporate",
   };
 
-  const systemPrompt = `You help small-business owners find concrete funding and support opportunities, for the Wisconsin Chinese Chamber of Commerce (WCCC) member portal. Given one member's profile, return exactly 5 realistic, specific opportunities they could actually pursue right now — a mix of grants, loans/capital access, certifications (e.g. minority/women-owned business certification), and relevant support programs. Do NOT include government or corporate contracts/RFPs — contract-readiness is covered elsewhere in this portal (the roadmap's "Opportunity" stage), so stay focused on funding and support instead. Prefer real, named Wisconsin/federal resources where you are confident they exist and are current (e.g. WEDC, U.S. SBA, Wisconsin DFI, WWBIC, WCCC's own programs like Ignite Academy, Access to Capital, Office Hours) — but if you are not confident a specific named program is currently active, describe the general type of opportunity and where to look rather than inventing a fake name. Do not repeat the same opportunity twice. Do not add generic encouragement.
+  const systemPrompt = `You help small-business owners find concrete funding and support opportunities, for the Wisconsin Chinese Chamber of Commerce (WCCC) member portal. Given one member's profile, return exactly 5 realistic, specific opportunities they could actually pursue right now — a mix of grants, loans/capital access, certifications (e.g. minority/women-owned business certification), and relevant support programs. Do NOT include government or corporate contracts/RFPs — contract-readiness is covered elsewhere in this portal (the roadmap's "Opportunity" stage), so stay focused on funding and support instead. Prefer real, named Wisconsin/federal resources where you are confident they exist and are current (e.g. WEDC, U.S. SBA, Wisconsin DFI, WWBIC) — but if you are not confident a specific named program is currently active, describe the general type of opportunity and where to look rather than inventing a fake name. Do NOT name any WCCC-run program: this portal does not have a verified list of them, so anything you name would be a guess presented to a member as fact. Point members at WCCC generally (info@wisccc.org) if WCCC is the right route. Do not repeat the same opportunity twice. Do not add generic encouragement.
 
 Return ONLY a strict JSON array of exactly 5 objects, each with exactly these keys (all strings): "title" (short name of the opportunity), "type" (one of: Grant, Loan, Certification, Program, Advising), "description" (1-2 sentences on what it is), "whyItFits" (1 sentence on why it fits this specific member's industry/city/stage), "nextStep" (1 concrete, actionable next step, e.g. where to apply or who to contact). No text outside the JSON array.`;
 
@@ -45,7 +51,7 @@ City: ${member.city || "(not provided)"}, WI
 Membership tier: ${tierLabel[member.membershipTier] ?? member.membershipTier}
 Journey: ${member.journey === "personal" ? "Personal growth" : member.journey === "both" ? "Business + personal growth" : "Business growth"}`;
 
-  const result = await callClaude(systemPrompt, [{ role: "user", content: userPrompt }], 900);
+  const result = await callClaude(systemPrompt, [{ role: "user", content: userPrompt }], 900, "opportunities");
   if (!result.ok) {
     return NextResponse.json({ ok: false, error: result.error }, { status: 502 });
   }

@@ -2,19 +2,31 @@
 // "About WCCC" used to sit at the top of this list pointing at href="#",
 // which silently jumped to the top of the page instead of going anywhere.
 // It's out until there's an /about page to point it at.
+// "Programs" (#programs) and "Events" (#events) were removed for the same
+// reason: both sections were built from placeholder content and no longer
+// exist, so the links would have jumped nowhere. Real WCCC events are on the
+// Wisconsin Asian Hub, which "Events" now points at directly.
 const quickLinks = [
   { label: "Membership", href: "/login" },
-  { label: "Programs", href: "#programs" },
-  { label: "Events", href: "#events" },
+  { label: "Pathways", href: "#journeys" },
+  { label: "Events", href: "https://hub.wcccbusinessnetwork.org/events" },
   { label: "Partners", href: "#partners" },
   { label: "Dashboard", href: "/dashboard" },
 ];
 
+// Taken from WCCC Connect's footer (wccc-platform), the organisation's public
+// site, so both properties point at the same accounts.
+//
+// The YouTube URL here used to be youtube.com/@wisccc, which was a guess at the
+// handle rather than the real channel — WCCC's actual channel is
+// @wisconsinchinesechamberofc914. A dead social link in a footer costs nothing
+// to fix and looks careless left in.
 const socialLinks = [
   { label: "Facebook", href: "https://facebook.com/wisccc", icon: "f" },
   { label: "LinkedIn", href: "https://linkedin.com/company/wisccc", icon: "in" },
   { label: "Instagram", href: "https://instagram.com/wisccc", icon: "ig" },
-  { label: "YouTube", href: "https://youtube.com/@wisccc", icon: "yt" },
+  { label: "X", href: "https://twitter.com/wisccc", icon: "x" },
+  { label: "YouTube", href: "https://www.youtube.com/@wisconsinchinesechamberofc914", icon: "yt" },
 ];
 
 export default function Footer() {
@@ -54,11 +66,25 @@ export default function Footer() {
           <div>
             <h3 className="text-[10px] font-bold uppercase tracking-[0.3em] text-[#94a3b8] mb-4">Quick Links</h3>
             <ul className="space-y-2">
-              {quickLinks.map((l) => (
-                <li key={l.label}>
-                  <a href={l.href} className="text-sm text-[#64748b] transition hover:text-[#0c1e3a]">{l.label}</a>
-                </li>
-              ))}
+              {quickLinks.map((l) => {
+                // One of these now leaves the site (the Hub events calendar),
+                // so off-site links get the new tab and the rel that stops the
+                // opened page reaching back through window.opener.
+                const isExternal = l.href.startsWith("http");
+                return (
+                  <li key={l.label}>
+                    <a
+                      href={l.href}
+                      target={isExternal ? "_blank" : undefined}
+                      rel={isExternal ? "noopener noreferrer" : undefined}
+                      className="text-sm text-[#64748b] transition hover:text-[#0c1e3a]"
+                    >
+                      {l.label}
+                      {isExternal && " ↗"}
+                    </a>
+                  </li>
+                );
+              })}
             </ul>
           </div>
 

@@ -26,15 +26,53 @@ Auth is handled by Clerk; member data lives in Supabase. To set up (or update) t
 
 The script is additive and safe to re-run — every statement uses `if not exists` guards, so running it against an already-set-up database just applies any new columns/tables without touching existing data. When you add a field that `lib/appStore.ts` reads or writes, add a matching `alter table ... add column if not exists` migration here in the same PR, or the app will silently fail to persist it (this happened with `membership_tier` and `membership_expires_at` — see PR #1).
 
-**Pending migration:** this file now includes `member_opportunities` (backs the dashboard's Funding & Programs panel — AI-generated grants/loans/certifications/programs matched to each member; deliberately excludes contracts/RFPs, which are the roadmap's own "Opportunity" stage). Re-run the script in the Supabase SQL Editor to add it; until then the feature degrades gracefully (members can generate matches, they just won't be saved between visits).
+### Applying it
 
-**Included in the same re-run — index cleanup:** three indexes in this script were redundant with the index Postgres already creates for a `unique(...)` constraint (`event_attendance_member_idx`, `module_step_progress_member_module_idx`, `business_assessments_member_idx`). A btree on `(a, b)` already serves lookups on `a`, so each duplicate cost a write on every insert/update and bought no read speed. They're now `drop index if exists` instead of `create index`, verified against a real Postgres: the affected queries still plan as index scans on the unique-constraint index. Re-running the script removes them; it's safe either way.
+1. Supabase dashboard → SQL Editor → New query → paste all of `supabase-schema.sql` → Run.
+2. Paste all of `supabase-verify.sql` → Run.
 
-**Pending migration:** this file now also includes `business_assessments` (backs the dashboard's Business Snapshot card — a 7-question form that scores a member's business stage and unlocks one roadmap module for free based on their stated top priority, regardless of membership tier; see `data/assessment.ts`). Re-run the script to add it; until then the card still renders and members can submit the form, but `saveBusinessAssessment` degrades to a no-op (see `lib/appStore.ts`), so nothing is saved and no module gets unlocked until the migration runs.
+Step 2 runs two checks: that every one of the 87 columns the app reads or
+writes exists, and that Row Level Security is on for every table. Every row should read `ok`. It is
+generated from `supabase-schema.sql`, so regenerate it when you add a table or
+column there.
 
-**Pending migration:** this file now also includes `member_decisions` (backs the dashboard's Decision Grill — a member names a business decision they're weighing, the AI interrogates it one question at a time, then writes a decision brief; see `components/DecisionGrillPanel.tsx` and `app/api/ai/grill/route.ts`). Unlike the other AI features this keeps a history rather than one row per member, so it's the one new table here with an index of its own — justified inline in the script. Re-run the script to add it; until then the grilling and the brief both still work, the brief just isn't kept after the member leaves the page (the panel says so on screen).
+Do step 2 even when step 1 reports success. Several tables are newer than the
+last deploy, and the features behind them **fail silently** when their table is
+absent — the member fills in the form, sees a result, and nothing is saved:
 
-The question count and length caps live in `data/decisions.ts` and are imported by both the panel and the API route, so the client's UX limits and the server's enforced limits can't drift apart. The feature is open to every signed-in member; gating it by tier would be a check against `member.membershipTier` at the top of the route plus a locked state in the panel, in the style of the Programs card.
+| Table | Feature that silently no-ops without it |
+| --- | --- |
+| `member_opportunities` | Funding & Programs matches aren't kept between visits |
+| `business_assessments` | Business Snapshot doesn't save, and grants no free module |
+| `member_decisions` | Decision Grill briefs are lost when the member leaves the page |
+| `member_documents` | Module toolkit documents aren't kept |
+| `member_facts` | Facts gathered from guided steps don't carry over, and the compliance calendar can't personalise |
+| `ai_usage` | The per-member daily caps on the AI features stop applying — see `lib/aiRateLimit.ts`. Fails open, so AI keeps working, uncapped |
+
+A note on re-running: `create table if not exists` is a **no-op on a table that
+already exists**, so it will not add a column to a table created by an earlier
+version of this script. Existing tables get explicit `alter table ... add column
+if not exists` migrations instead — that mismatch is what bit `membership_tier`
+and `membership_expires_at` in PR #1. When you add a field that `lib/appStore.ts`
+reads or writes, add the matching `alter table` here in the same PR.
+
+**Row Level Security is enabled on every table, with no policies.** That is
+deliberate and does not lock the app out: the only Supabase client is
+`lib/appStore.ts`, which is `server-only` and connects with
+`SUPABASE_SERVICE_ROLE_KEY` — the service role bypasses RLS. Supabase serves
+every `public` table over PostgREST, and the anon key is meant to be
+publishable *because* RLS constrains it; with RLS off, that key would grant
+read/write on member emails, assessments and decision briefs. If you ever add
+a browser-side Supabase client it will get zero rows until you write explicit
+policies, which is the intended behaviour.
+
+**Index cleanup, applied by the same run:** three indexes were redundant with
+the index Postgres already creates for a `unique(...)` constraint
+(`event_attendance_member_idx`, `module_step_progress_member_module_idx`,
+`business_assessments_member_idx`). A btree on `(a, b)` already serves lookups
+on `a`, so each duplicate cost a write on every insert/update and bought no read
+speed. They're now `drop index if exists`, verified against a real Postgres: the
+affected queries still plan as index scans on the unique-constraint index.
 
 ## Learn More
 

@@ -272,17 +272,63 @@ create table if not exists member_facts (
 -- column. This table takes a write on every guided-step save, so a duplicate
 -- index would cost on the hot path and buy nothing.
 
--- Disable RLS (service role key bypasses it anyway, but keeps it simple)
-alter table members disable row level security;
-alter table login_events disable row level security;
-alter table event_registrations disable row level security;
-alter table program_enrollments disable row level security;
-alter table activities disable row level security;
-alter table event_attendance disable row level security;
-alter table module_step_progress disable row level security;
-alter table module_summaries disable row level security;
-alter table member_opportunities disable row level security;
-alter table business_assessments disable row level security;
-alter table member_decisions disable row level security;
-alter table member_documents disable row level security;
-alter table member_facts disable row level security;
+-- Every AI generation a member fires, one row per attempt. Backs the per-member
+-- daily caps in lib/aiRateLimit.ts.
+--
+-- Attempts, not successes: the row is written before the model is called, so a
+-- request that fails or times out still counts. The provider bills for tokens
+-- it produced regardless of whether this app could use them, and a failing
+-- endpoint being retried in a loop is exactly the case a cap exists to stop.
+--
+-- This replaces counting rows in member_documents, which was the previous
+-- limiter for the document generator. That count was bypassable — deleting a
+-- document freed up quota — and blind to generations that never saved.
+--
+-- `route` is the API route key ("coach", "grill", "document", ...), so limits
+-- can differ per feature and usage is auditable per feature.
+create table if not exists ai_usage (
+  id uuid primary key default gen_random_uuid(),
+  member_id text not null references members(id) on delete cascade,
+  route text not null,
+  created_at timestamptz not null default now()
+);
+
+-- Serves both reads: "this member's calls in the last 24h" and the same
+-- narrowed to one route. member_id leads because every query filters on it;
+-- created_at descending lets the window scan stop early instead of reading a
+-- member's whole history.
+create index if not exists ai_usage_member_created_idx
+  on ai_usage (member_id, created_at desc);
+
+-- Row Level Security: ENABLED on every table, with no policies attached.
+--
+-- This looks like it would lock the app out. It doesn't: the only Supabase
+-- client in the codebase is lib/appStore.ts, which is `import "server-only"`
+-- and authenticates with SUPABASE_SERVICE_ROLE_KEY. The service role carries
+-- the `bypassrls` attribute, so it reads and writes normally regardless of
+-- what is set here. No browser ever talks to Supabase directly.
+--
+-- These lines used to read `disable row level security`. That is the riskier
+-- setting, because Supabase serves every table in the `public` schema over
+-- PostgREST, and the project's anon key is designed to be publishable — it is
+-- safe to expose precisely BECAUSE RLS constrains it. With RLS off, anyone
+-- holding that key can read and write every row here: member emails, business
+-- names, assessments, decision briefs. Enabled with no policies is deny-by-
+-- default for the anon and authenticated roles, and costs this app nothing.
+--
+-- If you ever add a browser-side Supabase client, it will correctly get zero
+-- rows until you write explicit policies for it. That is the point.
+alter table members enable row level security;
+alter table login_events enable row level security;
+alter table event_registrations enable row level security;
+alter table program_enrollments enable row level security;
+alter table activities enable row level security;
+alter table event_attendance enable row level security;
+alter table module_step_progress enable row level security;
+alter table module_summaries enable row level security;
+alter table member_opportunities enable row level security;
+alter table business_assessments enable row level security;
+alter table member_decisions enable row level security;
+alter table member_documents enable row level security;
+alter table member_facts enable row level security;
+alter table ai_usage enable row level security;

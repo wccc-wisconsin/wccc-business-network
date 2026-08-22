@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
+import { enforceAiRateLimit } from "@/lib/aiRateLimit";
 import { findModule } from "@/data/modules";
 import { buildMemberContext } from "@/lib/memberContext";
 import { callClaude, type ChatMessage } from "@/lib/ai";
@@ -14,6 +15,11 @@ export async function POST(request: NextRequest) {
   if (!userId) {
     return NextResponse.json({ ok: false, error: "Please sign in again." }, { status: 401 });
   }
+
+  // Per-member daily cap. See lib/aiRateLimit.ts — every request past
+  // this point spends money.
+  const limited = await enforceAiRateLimit(userId, "coach");
+  if (limited) return limited;
 
   const body = await request.json().catch(() => null);
   const moduleKey = typeof body?.moduleKey === "string" ? body.moduleKey : null;
@@ -54,7 +60,11 @@ ${context.summary}
 
 Be concise, practical, and specific to their situation — no generic encouragement or filler. Where relevant, reference real Wisconsin resources (WI DFI, Wisconsin SBDC, WEDC, SCORE, WCCC programs) instead of vague suggestions. If you are not confident a named program is currently active, describe the type of resource and where to look rather than inventing a name. You are not their attorney, accountant, or financial adviser — if something genuinely needs one, say so rather than advising it yourself. Keep replies to a few short paragraphs at most.`;
 
-  const result = await callClaude(systemPrompt, safeMessages, 500);
+  // Marked cacheable: every turn of one chat re-sends this exact prompt, and
+  // for a member with a filled-in profile it runs to a couple of thousand
+  // tokens. `stable` with no `volatile` because nothing in it varies turn to
+  // turn — the conversation itself travels in `messages`, after the prompt.
+  const result = await callClaude({ stable: systemPrompt }, safeMessages, 500, "coach");
   if (!result.ok) {
     return NextResponse.json({ ok: false, error: result.error }, { status: 502 });
   }

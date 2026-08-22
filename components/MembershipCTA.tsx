@@ -1,9 +1,17 @@
+// NOTE: these perk lines describe what WCCC offers at each tier. The
+// "All programs & Office Hours" and "Member-only events" lines named the
+// placeholder programs and events that have been removed from the site, so
+// they're replaced here with what this portal verifiably delivers. If WCCC
+// does run real programs, events or mentorship, this is the list to put them
+// back into — and it is duplicated in the other file noted below, so update
+// both together.
+// (Mirrored in app/onboarding/page.tsx — keep the two in sync.)
 const tiers = [
   {
     label: "Network",
     price: "Free",
     description: "Join the community",
-    perks: ["Community directory", "Public events", "Newsletter", "One-time help requests"],
+    perks: ["Community directory", "Compliance deadline tracker", "Newsletter", "One roadmap stage free"],
     cta: "Join Free",
     href: "/login",
     highlight: false,
@@ -13,7 +21,7 @@ const tiers = [
     price: "$150",
     period: "/year",
     description: "For professionals",
-    perks: ["Everything in Network", "All programs & Office Hours", "Mentorship matching", "Member-only events"],
+    perks: ["Everything in Network", "Full business roadmap", "AI coach & decision tools", "Funding match reports"],
     cta: "Get Started",
     href: "/login",
     highlight: false,

@@ -2,8 +2,22 @@ import { auth, currentUser } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
 import { completeProfileAction } from "@/app/actions";
 import { getMemberById } from "@/lib/appStore";
+import { PERSONAL_TRACK_ENABLED } from "@/data/modules";
 
 export const dynamic = "force-dynamic";
+
+// Journeys a new member may pick. Derived from the same flag the roadmap reads
+// so this form can't offer a track the dashboard won't render — see
+// PERSONAL_TRACK_ENABLED in data/modules.ts for why the personal track is off.
+const journeyOptions = [
+  { value: "business", label: "Know Your Business", sub: "Grow and scale your enterprise" },
+  ...(PERSONAL_TRACK_ENABLED
+    ? [
+        { value: "personal", label: "Know Yourself", sub: "Leadership and personal growth" },
+        { value: "both", label: "Both", sub: "All of the above" },
+      ]
+    : []),
+];
 
 const industries = [
   "Technology",
@@ -26,7 +40,7 @@ const tiers = [
     label: "Network",
     price: "Free",
     description: "Join the community",
-    perks: ["Community directory", "Public events", "Newsletter", "One-time help requests"],
+    perks: ["Community directory", "Compliance deadline tracker", "Newsletter", "One roadmap stage free"],
     highlight: false,
   },
   {
@@ -35,7 +49,7 @@ const tiers = [
     price: "$150",
     period: "/year",
     description: "For professionals",
-    perks: ["Everything in Network", "All programs & Office Hours", "Mentorship matching", "Member-only events"],
+    perks: ["Everything in Network", "Full business roadmap", "AI coach & decision tools", "Funding match reports"],
     highlight: false,
   },
   {
@@ -153,27 +167,42 @@ export default async function OnboardingPage() {
               </div>
             </div>
 
-            {/* Journey */}
-            <div>
-              <label className="block text-[11px] font-bold uppercase tracking-[0.18em] text-[#94a3b8] mb-3">
-                Which journey interests you most? <span className="text-[#c9993a]">*</span>
-              </label>
-              <div className="grid gap-3 sm:grid-cols-3">
-                {[
-                  { value: "business", label: "Know Your Business", sub: "Grow and scale your enterprise" },
-                  { value: "personal", label: "Know Yourself", sub: "Leadership and personal growth" },
-                  { value: "both", label: "Both", sub: "All of the above" },
-                ].map((j, i) => (
-                  <label key={j.value} className="flex cursor-pointer items-start gap-3 rounded border border-[#e8e3db] bg-[#faf8f5] px-4 py-4 transition hover:border-[#a07830] has-[:checked]:border-[#a07830] has-[:checked]:bg-[#fdf6ec]">
-                    <input defaultChecked={i === 0} name="journey" type="radio" value={j.value} className="mt-0.5 h-4 w-4 accent-[#a07830]" />
-                    <span>
-                      <span className="block text-sm font-bold text-[#0c1e3a]">{j.label}</span>
-                      <span className="block text-xs text-[#64748b] mt-0.5">{j.sub}</span>
-                    </span>
-                  </label>
-                ))}
+            {/* Journey.
+                "Know Yourself" and "Both" are only offered while the personal
+                track is switched on (PERSONAL_TRACK_ENABLED in data/modules.ts).
+                It's off, because those four modules have no guided steps —
+                letting someone choose that path here would sign them up for a
+                roadmap that reads "Not started" and stays that way. The whole
+                question hides rather than showing a single option, since a
+                required choice with one answer isn't a choice.
+
+                Members who picked those values before it was switched off keep
+                them: the dashboard falls back to the business roadmap, so
+                nothing needs migrating and their choice comes back intact when
+                the track returns. */}
+            {journeyOptions.length > 1 && (
+              <div>
+                <label className="block text-[11px] font-bold uppercase tracking-[0.18em] text-[#94a3b8] mb-3">
+                  Which journey interests you most? <span className="text-[#c9993a]">*</span>
+                </label>
+                <div className="grid gap-3 sm:grid-cols-3">
+                  {journeyOptions.map((j, i) => (
+                    <label key={j.value} className="flex cursor-pointer items-start gap-3 rounded border border-[#e8e3db] bg-[#faf8f5] px-4 py-4 transition hover:border-[#a07830] has-[:checked]:border-[#a07830] has-[:checked]:bg-[#fdf6ec]">
+                      <input defaultChecked={i === 0} name="journey" type="radio" value={j.value} className="mt-0.5 h-4 w-4 accent-[#a07830]" />
+                      <span>
+                        <span className="block text-sm font-bold text-[#0c1e3a]">{j.label}</span>
+                        <span className="block text-xs text-[#64748b] mt-0.5">{j.sub}</span>
+                      </span>
+                    </label>
+                  ))}
+                </div>
               </div>
-            </div>
+            )}
+            {/* With the question hidden there's no radio to submit, so the
+                journey still has to reach the server. */}
+            {journeyOptions.length === 1 && (
+              <input type="hidden" name="journey" value={journeyOptions[0].value} />
+            )}
           </div>
 
           {/* Membership tier */}

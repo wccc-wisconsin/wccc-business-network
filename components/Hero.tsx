@@ -1,3 +1,8 @@
+import { heroStats } from "@/data/stats";
+
+// Stat strip numbers come from data/stats.ts, shared with <Stats />. They used
+// to be hardcoded here as a second copy, which let this strip and the section
+// below it disagree — and both disagree with WCCC's own public site.
 export default function Hero() {
   return (
     <section id="top" aria-labelledby="home-heading" className="relative overflow-hidden">
@@ -13,9 +18,13 @@ export default function Hero() {
           photo crops a little at the top and bottom on narrow screens, which
           is the trade for the words being readable. */}
       <div className="relative w-full min-h-[540px] sm:min-h-[460px]">
+        {/* WebP rather than the original PNG: the source is a photo collage, and
+            PNG stored it at 857 KB where WebP holds the same image in 89 KB.
+            This is the first thing painted on the site's busiest page, so that
+            difference is most of the hero's load time on a slow connection. */}
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
-          src="/wccc-hero.png"
+          src="/wccc-hero.webp"
           alt="WCCC community events"
           className="absolute inset-0 h-full w-full object-cover brightness-110 saturate-[1.3]"
         />
@@ -55,8 +64,12 @@ export default function Hero() {
               </p>
 
               <div className="fade-up fade-up-delay-3 mt-6 flex flex-wrap gap-3">
-                <a href="#programs" className="rounded border border-[#c9993a] bg-[#c9993a] px-7 py-3 text-[11px] font-bold uppercase tracking-[0.14em] text-[#0c1e3a] transition hover:bg-[#a07830] hover:border-[#a07830]">
-                  Explore Programs →
+                {/* Was "Explore Programs → #programs". That section was built
+                    from placeholder data and has been removed, so the button
+                    now points at the two pathways, which are real and are what
+                    the member roadmap is actually built around. */}
+                <a href="#journeys" className="rounded border border-[#c9993a] bg-[#c9993a] px-7 py-3 text-[11px] font-bold uppercase tracking-[0.14em] text-[#0c1e3a] transition hover:bg-[#a07830] hover:border-[#a07830]">
+                  Explore Pathways →
                 </a>
                 <a href="/login" className="rounded border border-white/50 px-7 py-3 text-[11px] font-bold uppercase tracking-[0.14em] text-white transition hover:bg-white hover:text-[#0c1e3a]">
                   Become a Member
@@ -71,12 +84,7 @@ export default function Hero() {
       <div className="bg-[#0c1e3a]">
         <div className="mx-auto max-w-7xl">
           <div className="grid grid-cols-2 sm:grid-cols-4 divide-x divide-white/10">
-            {[
-              { val: "240+",     label: "Member Businesses" },
-              { val: "60+",      label: "Community Partners" },
-              { val: "1,500+",   label: "Event Participants" },
-              { val: "Est. 2017",label: "Serving Wisconsin" },
-            ].map((s) => (
+            {heroStats.map((s) => (
               <div key={s.label} className="px-6 py-5">
                 <div className="font-serif text-2xl font-bold text-[#c9993a]">{s.val}</div>
                 <div className="mt-0.5 text-[10px] font-bold uppercase tracking-[0.18em] text-white/45">{s.label}</div>

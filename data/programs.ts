@@ -1,3 +1,13 @@
+// Journey pathways and partner list for the public homepage.
+//
+// This file used to also hold a `programs` array (Ignite Academy, Business
+// Accelerator, AI Business Builder, Access to Capital, Office Hours, Contract
+// Ready) and a `recommendations` array. Both were placeholder content that
+// didn't describe anything WCCC actually runs, so they've been removed rather
+// than left on the site telling members about programs they can't enrol in.
+// A `data/events.ts` file went the same way — real WCCC events are published
+// on the Wisconsin Asian Hub, which the site now links to instead (see
+// data/hub.ts).
 export type JourneyCard = {
   eyebrow: string;
   title: string;
@@ -6,19 +16,6 @@ export type JourneyCard = {
   items: string[];
   cta: string;
   accent: "teal" | "plum";
-};
-
-export type ProgramItem = {
-  title: string;
-  subtitle: string;
-  description: string;
-  track: string;
-};
-
-export type RecommendationItem = {
-  label: string;
-  title: string;
-  subtitle: string;
 };
 
 export const journeyCards: JourneyCard[] = [
@@ -55,63 +52,6 @@ export const journeyCards: JourneyCard[] = [
     ],
     cta: "Build Your Business",
     accent: "plum",
-  },
-];
-
-export const programs: ProgramItem[] = [
-  {
-    title: "Ignite Academy",
-    subtitle: "Start and grow",
-    description: "Foundational support for new and emerging entrepreneurs.",
-    track: "Launch",
-  },
-  {
-    title: "Business Accelerator",
-    subtitle: "Scale and expand",
-    description: "Cohort-based planning for owners ready for the next stage.",
-    track: "Scale",
-  },
-  {
-    title: "AI Business Builder",
-    subtitle: "Learn and implement",
-    description: "Hands-on guidance for putting practical AI tools to work.",
-    track: "Modernize",
-  },
-  {
-    title: "Access to Capital",
-    subtitle: "Fund and grow",
-    description: "Connections to lenders, grants, and capital readiness help.",
-    track: "Finance",
-  },
-  {
-    title: "Office Hours",
-    subtitle: "Get expert help",
-    description: "Short advising sessions with business and banking partners.",
-    track: "Advising",
-  },
-  {
-    title: "Contract Ready",
-    subtitle: "Win and grow",
-    description: "Preparation for public-sector and corporate opportunities.",
-    track: "Opportunity",
-  },
-];
-
-export const recommendations: RecommendationItem[] = [
-  {
-    label: "Event",
-    title: "Government Contracting 101",
-    subtitle: "Workshop - July 16, 2026 - Milwaukee, WI",
-  },
-  {
-    label: "Program",
-    title: "Business Accelerator Program",
-    subtitle: "Next cohort starts August 20, 2026",
-  },
-  {
-    label: "Advising",
-    title: "Office Hours with Bank Partner",
-    subtitle: "July 23, 2026 - 2:00 PM - Virtual",
   },
 ];
 

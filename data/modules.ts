@@ -1115,6 +1115,26 @@ export type RoadmapTrackMeta = {
   modules: BusinessModule[];
 };
 
+/**
+ * Whether the "Know Yourself" personal track is offered to members.
+ *
+ * Off, deliberately. The four personal modules have no `phases`, so they have
+ * no guided steps, no AI review and no document tools — a member who picked
+ * that track landed on a dashboard reading "Not started" beside a note saying
+ * the steps were still being built, which is not a thing to hand someone on
+ * their first visit. Their `resources` also name specific offerings
+ * (financial wellness workshop, resume review, 360 feedback, peer masterminds)
+ * that nobody has confirmed WCCC actually runs.
+ *
+ * Everything for the track is still here and intact. Flip this to `true` once
+ * the modules have real, verified content and guided steps — nothing else
+ * needs to change, because both the dashboard and the module detail page read
+ * their track list through the helpers below rather than reaching for
+ * `roadmapTracks` directly.
+ */
+export const PERSONAL_TRACK_ENABLED = false;
+
+/** Every track that exists, enabled or not. Prefer `availableTracks()`. */
 export const roadmapTracks: RoadmapTrackMeta[] = [
   {
     key: "business",
@@ -1129,6 +1149,32 @@ export const roadmapTracks: RoadmapTrackMeta[] = [
     modules: personalModules,
   },
 ];
+
+/** The tracks members can currently be shown. */
+export function availableTracks(): RoadmapTrackMeta[] {
+  return PERSONAL_TRACK_ENABLED
+    ? roadmapTracks
+    : roadmapTracks.filter((track) => track.key !== "personal");
+}
+
+/**
+ * The track(s) to show a member, given the journey they picked at onboarding.
+ *
+ * Existing members matter here: accounts created before the personal track was
+ * switched off still carry `journey` values of "personal" or "both". Filtering
+ * on journey alone would leave those members with an empty roadmap and a
+ * dashboard that says nothing at all. Falling back to whatever is available
+ * means they see the business roadmap instead — which is the one that's
+ * actually finished — and they'll get their own track back, without any data
+ * migration, the moment the flag flips.
+ */
+export function tracksForJourney(journey: RoadmapTrackKey | "both"): RoadmapTrackMeta[] {
+  const available = availableTracks();
+  const matching = available.filter(
+    (track) => track.key === journey || journey === "both",
+  );
+  return matching.length > 0 ? matching : available;
+}
 
 /**
  * Looks up a single module by its `key` (used as the URL slug for
@@ -1150,7 +1196,12 @@ export function findTool(moduleKey: string, toolKey: string) {
 }
 
 export function findModule(moduleKey: string) {
-  for (const track of roadmapTracks) {
+  // Searches available tracks only, so a module belonging to a switched-off
+  // track (see PERSONAL_TRACK_ENABLED) resolves to null and its detail page
+  // 404s. Without this, /dashboard/roadmap/foundation would still render a
+  // stage that the roadmap no longer offers, reachable by anyone who had
+  // bookmarked it.
+  for (const track of availableTracks()) {
     const index = track.modules.findIndex((m) => m.key === moduleKey);
     if (index !== -1) {
       return {

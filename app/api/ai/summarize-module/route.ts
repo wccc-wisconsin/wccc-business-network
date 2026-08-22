@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
+import { enforceAiRateLimit } from "@/lib/aiRateLimit";
 import { getMemberById, getModuleProgress, saveModuleSummary } from "@/lib/appStore";
 import { findModule, stepsForModule } from "@/data/modules";
 import { callClaude } from "@/lib/ai";
@@ -13,6 +14,11 @@ export async function POST(request: NextRequest) {
   if (!userId) {
     return NextResponse.json({ ok: false, error: "Please sign in again." }, { status: 401 });
   }
+
+  // Per-member daily cap. See lib/aiRateLimit.ts — every request past
+  // this point spends money.
+  const limited = await enforceAiRateLimit(userId, "summarize-module");
+  if (limited) return limited;
 
   const member = await getMemberById(userId);
   if (!member) {
@@ -60,7 +66,7 @@ export async function POST(request: NextRequest) {
 
   const systemPrompt = `You write short, concrete summary documents for Wisconsin small-business owners working through the WCCC AI Business Builder. Given a member's guided-question answers for the "${found.module.label}" engine, write a "${summaryTitle}" of 150-250 words in plain prose (no headers, no bullet lists) that synthesizes what they've told you into a clear, useful snapshot of their business at this stage. Be concrete and specific to what they actually wrote — do not invent details, and do not add generic encouragement or marketing language. If key information is missing, note it plainly in one sentence at the end.`;
 
-  const result = await callClaude(systemPrompt, [{ role: "user", content: stepsText }], 500);
+  const result = await callClaude(systemPrompt, [{ role: "user", content: stepsText }], 500, "summarize-module");
   if (!result.ok) {
     return NextResponse.json({ ok: false, error: result.error }, { status: 502 });
   }
