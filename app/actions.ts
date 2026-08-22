@@ -5,8 +5,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import {
   saveBusinessAssessment,
-  saveStepAnswers,
-  setStepCompleted,
+  saveStepProgress,
   upsertMember,
   upsertMemberFacts,
   type FactWrite,
@@ -72,9 +71,13 @@ export async function completeProfileAction(formData: FormData) {
 }
 
 // Saves one guided-step's checkbox + question answers together (see
-// components/StepCard.tsx). Both writes go through even if one fails, since
-// they're independent columns on the same row — the error message just
-// reflects whether either one didn't make it.
+// components/StepCard.tsx).
+//
+// The checkbox and the answers are one row and are written in one upsert. They
+// used to be two concurrent read-modify-write calls, which raced each other and
+// could silently drop whichever change landed first — see saveStepProgress in
+// lib/appStore.ts. The fact writes below are a genuinely separate row, so those
+// still run alongside.
 export async function saveStepProgressAction(
   _prevState: FormState,
   formData: FormData,
@@ -104,9 +107,8 @@ export async function saveStepProgressAction(
     stepProvenanceLabel(found.module, found.step),
   );
 
-  const [answersResult, completedResult, factsResult] = await Promise.all([
-    saveStepAnswers(userId, moduleKey, stepKey, answers),
-    setStepCompleted(userId, moduleKey, stepKey, completed),
+  const [progressResult, factsResult] = await Promise.all([
+    saveStepProgress(userId, moduleKey, stepKey, answers, completed),
     upsertMemberFacts(userId, factWrites),
   ]);
 
@@ -115,7 +117,7 @@ export async function saveStepProgressAction(
   // save here can change what renders there.
   if (factWrites.length > 0) revalidatePath("/dashboard");
 
-  if (!answersResult.ok || !completedResult.ok) {
+  if (!progressResult.ok) {
     return { ok: false, error: "Couldn't save — please try again in a moment." };
   }
 

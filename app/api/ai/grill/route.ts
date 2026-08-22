@@ -124,7 +124,16 @@ async function askNextQuestion(
 ) {
   const remaining = MAX_GRILL_QUESTIONS - questionsAsked;
 
-  const systemPrompt = `You are the WCCC Decision Grill, part of the Wisconsin Chinese Chamber of Commerce member portal. Your job is NOT to be supportive. Your job is to interrogate a business decision until its weak points are visible, the way a sharp mentor would — so the member decides with their eyes open.
+  // Split in two so the grill can be cached across the turns of one interview.
+  //
+  // Everything down to the last rule is identical on every question, so it goes
+  // in `stable` and carries the cache breakpoint. The remaining-question count
+  // changes each turn, so it goes in `volatile`, after the breakpoint — left
+  // where it was, in the middle of the prompt, it would invalidate the cache on
+  // every single call and the caching would be worse than useless.
+  //
+  // The model still receives the same text in the same order.
+  const stablePrompt = `You are the WCCC Decision Grill, part of the Wisconsin Chinese Chamber of Commerce member portal. Your job is NOT to be supportive. Your job is to interrogate a business decision until its weak points are visible, the way a sharp mentor would — so the member decides with their eyes open.
 
 ${context}
 
@@ -135,10 +144,16 @@ Rules, all of them strict:
 - Never re-ask something already answered in this conversation. Build on their last answer.
 - Plain language a busy owner understands. No consultant jargon. Under 80 words total.
 - After the question, add a line beginning exactly with "Suggested answer:" giving your best guess at their answer, so they can confirm or correct it instead of writing an essay.
-- If an answer reveals something that genuinely needs a lawyer, accountant, or lender, name that in your next question rather than giving legal, tax, or financial advice yourself. You are not their attorney, accountant, or financial adviser.
-- You have ${remaining} question${remaining === 1 ? "" : "s"} left. Spend them on what matters most.`;
+- If an answer reveals something that genuinely needs a lawyer, accountant, or lender, name that in your next question rather than giving legal, tax, or financial advice yourself. You are not their attorney, accountant, or financial adviser.`;
 
-  const result = await callClaude(systemPrompt, messages, 350);
+  const volatilePrompt = `\n- You have ${remaining} question${remaining === 1 ? "" : "s"} left. Spend them on what matters most.`;
+
+  const result = await callClaude(
+    { stable: stablePrompt, volatile: volatilePrompt },
+    messages,
+    350,
+    "grill",
+  );
   if (!result.ok) {
     return NextResponse.json({ ok: false, error: result.error }, { status: 502 });
   }
@@ -174,10 +189,14 @@ Return ONLY strict JSON, no text around it, matching exactly this shape:
 }
 Use 2-4 risks and 3-5 nextSteps. Every string is plain prose with no markdown.`;
 
+  // Not cached: the brief is written once at the end of an interview, and its
+  // prompt differs from askNextQuestion's from the first line, so there is no
+  // shared prefix to hit anyway.
   const result = await callClaude(
     systemPrompt,
     appendUserTurn(messages, "That's everything. Write my decision brief now."),
     1100,
+    "grill-brief",
   );
   if (!result.ok) {
     return NextResponse.json({ ok: false, error: result.error }, { status: 502 });

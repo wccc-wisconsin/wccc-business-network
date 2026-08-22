@@ -9,6 +9,7 @@ import {
   getMemberFacts,
   getModuleProgress,
   getModuleSummary,
+  type MemberDocument,
   type MemberFact,
   type ModuleSummary,
   type StepProgress,
@@ -42,7 +43,13 @@ export default async function ModulePage({ params }: ModulePageProps) {
   const { userId } = await auth();
   if (!userId) redirect("/login");
 
-  const member = await getMemberById(userId);
+  // Fetched together: the assessment lookup doesn't depend on the member row,
+  // and awaiting them in sequence cost a round trip before the page could even
+  // decide what to render.
+  const [member, assessment] = await Promise.all([
+    getMemberById(userId),
+    getBusinessAssessment(userId),
+  ]);
   if (!member || !member.industry) redirect("/onboarding");
 
   const { module: moduleSlug } = await params;
@@ -50,7 +57,6 @@ export default async function ModulePage({ params }: ModulePageProps) {
   if (!found) notFound();
 
   const { track, module: mod, prev, next } = found;
-  const assessment = await getBusinessAssessment(userId);
   const unlockedByTier = tierMeetsMinimum(member.membershipTier, mod.minTier);
   const unlocked = isModuleUnlocked(member.membershipTier, mod, assessment?.freeModuleKey);
   const unlockedByFreeGrant = unlocked && !unlockedByTier;
@@ -62,18 +68,21 @@ export default async function ModulePage({ params }: ModulePageProps) {
   const moduleTools = mod.tools ?? [];
   const hasToolkit = unlocked && hasGuidedSteps && moduleTools.length > 0;
 
-  const [progress, summary, facts]: [
+  // Documents join this wave rather than trailing it: they depend only on
+  // hasToolkit, which is already known here, so fetching them afterwards added
+  // a fourth serial round trip for no reason. Filtering by module happens in
+  // the query now instead of over the full result set.
+  const [progress, summary, facts, moduleDocuments]: [
     Record<string, StepProgress>,
     ModuleSummary | null,
     Record<string, MemberFact>,
-  ] =
-    unlocked && hasGuidedSteps
-      ? await Promise.all([
-          getModuleProgress(userId, mod.key),
-          getModuleSummary(userId, mod.key),
-          getMemberFacts(userId),
-        ])
-      : [{}, null, {}];
+    MemberDocument[],
+  ] = await Promise.all([
+    unlocked && hasGuidedSteps ? getModuleProgress(userId, mod.key) : Promise.resolve({}),
+    unlocked && hasGuidedSteps ? getModuleSummary(userId, mod.key) : Promise.resolve(null),
+    unlocked && hasGuidedSteps ? getMemberFacts(userId) : Promise.resolve({}),
+    hasToolkit ? getMemberDocuments(userId, 20, mod.key) : Promise.resolve([]),
+  ]);
 
   // Carry-over is resolved server-side, once per render, against a single
   // `now`. Doing it per-StepCard on the client would mean shipping every fact
@@ -93,10 +102,6 @@ export default async function ModulePage({ params }: ModulePageProps) {
     }
     carryOverByStep[step.key] = perQuestion;
   }
-
-  const moduleDocuments = hasToolkit
-    ? (await getMemberDocuments(userId)).filter((d) => d.moduleKey === mod.key)
-    : [];
 
   const completedCount = steps.filter((s) => progress[s.key]?.completed).length;
   const percentComplete = hasGuidedSteps ? Math.round((completedCount / steps.length) * 100) : 0;

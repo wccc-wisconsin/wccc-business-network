@@ -57,7 +57,7 @@ Member's business: ${member.businessName || "(not provided)"} — industry: ${me
 
 ${answerLines}`;
 
-  const result = await callClaude(systemPrompt, [{ role: "user", content: userPrompt }], 400);
+  const result = await callClaude(systemPrompt, [{ role: "user", content: userPrompt }], 400, "review-step");
   if (!result.ok) {
     return NextResponse.json({ ok: false, error: result.error }, { status: 502 });
   }

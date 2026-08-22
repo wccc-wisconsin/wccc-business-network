@@ -18,9 +18,13 @@ export default function Hero() {
           photo crops a little at the top and bottom on narrow screens, which
           is the trade for the words being readable. */}
       <div className="relative w-full min-h-[540px] sm:min-h-[460px]">
+        {/* WebP rather than the original PNG: the source is a photo collage, and
+            PNG stored it at 857 KB where WebP holds the same image in 89 KB.
+            This is the first thing painted on the site's busiest page, so that
+            difference is most of the hero's load time on a slow connection. */}
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
-          src="/wccc-hero.png"
+          src="/wccc-hero.webp"
           alt="WCCC community events"
           className="absolute inset-0 h-full w-full object-cover brightness-110 saturate-[1.3]"
         />

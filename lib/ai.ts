@@ -19,10 +19,72 @@ export type ChatMessage = { role: "user" | "assistant"; content: string };
 
 export type ClaudeResult = { ok: true; text: string } | { ok: false; error: string };
 
+/**
+ * How a caller describes its system prompt.
+ *
+ * A plain string behaves exactly as it always has: sent as-is, nothing cached.
+ * That's the right choice for one-shot calls (document generation, the module
+ * summary, the opportunity list), where nothing is sent twice inside the cache
+ * window and marking it for caching would only add the 1.25x write surcharge.
+ *
+ * The object form is for the repeated calls — the Coach chat and the Decision
+ * Grill, which re-send the same member context on every turn of a conversation.
+ * `stable` is the part that is byte-identical across those turns and is marked
+ * for caching; `volatile` is the tail that changes per turn (the Grill's
+ * remaining-question count) and must sit after the cache breakpoint, because a
+ * cache entry is matched on an exact prefix — a counter embedded in the middle
+ * of the prompt would invalidate it every single turn.
+ *
+ * The two forms produce the same text for the model. Only billing and latency
+ * differ.
+ */
+export type SystemPrompt = string | { stable: string; volatile?: string };
+
+/**
+ * Anthropic will not cache a prefix shorter than this, and returns no error
+ * when it declines — it just silently doesn't cache. Documented per model
+ * (1,024 for Sonnet); kept here as a named constant so the logging below can
+ * explain a miss rather than leaving it looking like a bug.
+ */
+const MIN_CACHEABLE_TOKENS = 1024;
+
+type SystemBlock = {
+  type: "text";
+  text: string;
+  cache_control?: { type: "ephemeral" };
+};
+
+/**
+ * Builds the `system` field for the request.
+ *
+ * Returns a bare string for the string form so those requests go out byte-for-
+ * byte as they did before this change — no behavioural risk on the routes that
+ * don't opt in.
+ */
+function buildSystem(prompt: SystemPrompt): string | SystemBlock[] {
+  if (typeof prompt === "string") return prompt;
+
+  const blocks: SystemBlock[] = [
+    { type: "text", text: prompt.stable, cache_control: { type: "ephemeral" } },
+  ];
+  // An empty or whitespace-only tail is dropped rather than sent: the API
+  // rejects empty text blocks, and a caller computing the tail conditionally
+  // shouldn't have to guard for it.
+  if (prompt.volatile && prompt.volatile.trim() !== "") {
+    blocks.push({ type: "text", text: prompt.volatile });
+  }
+  return blocks;
+}
+
 export async function callClaude(
-  systemPrompt: string,
+  systemPrompt: SystemPrompt,
   messages: ChatMessage[],
   maxTokens = 700,
+  /**
+   * Route name, used only to label the usage log line. Optional so existing
+   * callers keep working unchanged.
+   */
+  label = "unlabelled",
 ): Promise<ClaudeResult> {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) {
@@ -46,7 +108,7 @@ export async function callClaude(
       body: JSON.stringify({
         model: MODEL,
         max_tokens: maxTokens,
-        system: systemPrompt,
+        system: buildSystem(systemPrompt),
         messages,
       }),
     });
@@ -58,6 +120,8 @@ export async function callClaude(
     }
 
     const data = await res.json();
+
+    logUsage(label, typeof systemPrompt !== "string", data?.usage);
 
     // `content` is an array of blocks, and a text block is not guaranteed to
     // be at index 0 — the model can emit other block types ahead of it. This
@@ -104,6 +168,55 @@ export async function callClaude(
   } catch (error) {
     console.error("callClaude: request failed", error);
     return { ok: false, error: "Couldn't reach the AI assistant. Please try again shortly." };
+  }
+}
+
+/**
+ * One line per call in the Vercel function logs, recording what the request
+ * actually cost.
+ *
+ * This exists because the caching above is otherwise invisible: Anthropic
+ * declines to cache a prefix under MIN_CACHEABLE_TOKENS and returns no error
+ * when it does, so without this there is no way to tell a working cache from a
+ * silently skipped one. `cacheRead` climbing on the second and later turns of a
+ * conversation is the signal that it works.
+ *
+ * Deliberately console-only for now — no database write, so this adds no
+ * latency to the request and no schema change. If per-member spend reporting
+ * is wanted later, these are the numbers to persist.
+ *
+ * Wrapped in try/catch because a logging failure must never turn a successful
+ * AI response into an error for the member.
+ */
+function logUsage(label: string, cacheRequested: boolean, usage: unknown): void {
+  try {
+    const u = (usage ?? {}) as Record<string, unknown>;
+    const num = (v: unknown) => (typeof v === "number" ? v : 0);
+
+    const cacheWrite = num(u.cache_creation_input_tokens);
+    const cacheRead = num(u.cache_read_input_tokens);
+    const uncachedInput = num(u.input_tokens);
+
+    console.log("callClaude usage", {
+      route: label,
+      model: MODEL,
+      inputTokens: uncachedInput + cacheWrite + cacheRead,
+      outputTokens: num(u.output_tokens),
+      cacheWrite,
+      cacheRead,
+      // Distinguishes "we didn't ask for caching" from "we asked and the
+      // prompt was too short to qualify" — the second is the one worth acting
+      // on, and it looks identical in the numbers alone.
+      cacheStatus: !cacheRequested
+        ? "not-requested"
+        : cacheRead > 0
+          ? "hit"
+          : cacheWrite > 0
+            ? "written"
+            : `skipped (prefix under ${MIN_CACHEABLE_TOKENS} tokens)`,
+    });
+  } catch {
+    // Ignore — logging is never worth failing a request over.
   }
 }
 

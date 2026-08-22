@@ -51,7 +51,7 @@ City: ${member.city || "(not provided)"}, WI
 Membership tier: ${tierLabel[member.membershipTier] ?? member.membershipTier}
 Journey: ${member.journey === "personal" ? "Personal growth" : member.journey === "both" ? "Business + personal growth" : "Business growth"}`;
 
-  const result = await callClaude(systemPrompt, [{ role: "user", content: userPrompt }], 900);
+  const result = await callClaude(systemPrompt, [{ role: "user", content: userPrompt }], 900, "opportunities");
   if (!result.ok) {
     return NextResponse.json({ ok: false, error: result.error }, { status: 502 });
   }

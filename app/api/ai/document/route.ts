@@ -106,10 +106,14 @@ Rules that override anything above:
 - You are not their attorney, accountant, or financial adviser. Where something genuinely needs one, name that instead of advising it yourself.
 - Output the document itself and nothing else.`;
 
+  // Left as a plain string: one document per request, nothing re-sent inside
+  // the five-minute cache window, so marking it cacheable would only add the
+  // write surcharge. The label is here for the usage log.
   const result = await callClaude(
     systemPrompt,
     [{ role: "user", content: answersText }],
     MAX_DOCUMENT_TOKENS,
+    "document",
   );
 
   if (!result.ok) {

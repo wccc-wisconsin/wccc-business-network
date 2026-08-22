@@ -100,11 +100,30 @@ type MemberActivityRow = {
   created_at: string;
 };
 
-function db() {
-  return createClient(
+// One client per server instance rather than one per query.
+//
+// Both arguments are process environment variables, so every call built an
+// identical client — and a Supabase client is not a thin object: it constructs
+// auth, realtime, postgrest, storage and functions sub-clients. A single
+// dashboard render called this eight times and threw eight of them away, which
+// also tripped supabase-js's "multiple GoTrueClient instances" path.
+//
+// Still lazy, not module-scope, so a missing environment variable throws at
+// call time where the existing try/catch blocks can handle it, exactly as
+// before. If createClient throws, nothing is cached and the next call retries.
+// The type is inferred from this factory rather than written out, so the
+// client keeps exactly the generic parameters it had when every call site
+// constructed its own — annotating it by hand collapses the table types.
+const createDbClient = () =>
+  createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.SUPABASE_SERVICE_ROLE_KEY!,
   );
+
+let cachedClient: ReturnType<typeof createDbClient> | null = null;
+
+function db() {
+  return (cachedClient ??= createDbClient());
 }
 
 type UpsertMemberInput = {
@@ -173,11 +192,17 @@ export async function recordMemberSignIn(input: RecordMemberSignInInput) {
 
   // Skip if there's already a login event in the last 30 minutes (prevents duplicate records on page refresh)
   const thirtyMinsAgo = new Date(Date.now() - 30 * 60 * 1000).toISOString();
+  // .limit(1) matters more than it looks: member_id + a time window is not
+  // unique, and maybeSingle() on a multi-row result returns null data with a
+  // discarded error rather than the first row. Without the limit, a member with
+  // two login events inside the window read as having none, so the dedupe
+  // stopped working and every dashboard load re-ran the three writes below.
   const { data: recent } = await supabase
     .from("login_events")
     .select("id")
     .eq("member_id", input.clerkId)
     .gte("created_at", thirtyMinsAgo)
+    .limit(1)
     .maybeSingle();
 
   if (recent) return;
@@ -341,16 +366,32 @@ type MemberDocumentRow = {
   created_at: string;
 };
 
-/** A member's generated documents, newest first. */
+/**
+ * A member's generated documents, newest first.
+ *
+ * `moduleKey` filters in the query rather than after it. The module page only
+ * ever renders one module's documents, and each row carries the full generated
+ * text — a 90-day plan or a set of outreach emails — so filtering in JS pulled
+ * every other module's documents across the wire to throw them away.
+ *
+ * It also fixes a real gap: the limit applies before any filter, so a member
+ * whose 20 newest documents all belonged to other modules saw an empty toolkit
+ * for the one they were looking at.
+ */
 export async function getMemberDocuments(
   memberId: string,
   limit = 20,
+  moduleKey?: string,
 ): Promise<MemberDocument[]> {
   try {
-    const { data, error } = await db()
+    let query = db()
       .from("member_documents")
       .select("id, module_key, tool_key, title, content, created_at")
-      .eq("member_id", memberId)
+      .eq("member_id", memberId);
+
+    if (moduleKey) query = query.eq("module_key", moduleKey);
+
+    const { data, error } = await query
       .order("created_at", { ascending: false })
       .limit(limit);
 
@@ -636,29 +677,36 @@ export async function getModuleProgress(
   }
 }
 
-/** Saves (upserts) a step's guided-question answers without touching `completed`. */
-export async function saveStepAnswers(
+/**
+ * Saves one guided step — the member's answers and the completed checkbox — in
+ * a single write.
+ *
+ * This replaces two functions, saveStepAnswers and setStepCompleted, that were
+ * called concurrently from saveStepProgressAction. Each read the column it
+ * wasn't changing and wrote it back alongside its own, so running them together
+ * meant both read the row before either had written it, and whichever upsert
+ * committed second silently reverted the other's column. A member who edited an
+ * answer and ticked the box in the same submit could lose either change, with
+ * no error shown and nothing in the logs.
+ *
+ * Neither read was ever necessary: the form submits both values together. One
+ * upsert writes both columns from the submitted data, which removes the race
+ * rather than narrowing it, and takes this path from four round trips to one.
+ */
+export async function saveStepProgress(
   memberId: string,
   moduleKey: string,
   stepKey: string,
   answers: Record<string, string>,
+  completed: boolean,
 ): Promise<{ ok: boolean }> {
   try {
-    const supabase = db();
-    const { data: existing } = await supabase
-      .from("module_step_progress")
-      .select("completed")
-      .eq("member_id", memberId)
-      .eq("module_key", moduleKey)
-      .eq("step_key", stepKey)
-      .maybeSingle();
-
-    const { error } = await supabase.from("module_step_progress").upsert(
+    const { error } = await db().from("module_step_progress").upsert(
       {
         member_id: memberId,
         module_key: moduleKey,
         step_key: stepKey,
-        completed: existing?.completed ?? false,
+        completed,
         answers,
         updated_at: new Date().toISOString(),
       },
@@ -666,52 +714,12 @@ export async function saveStepAnswers(
     );
 
     if (error) {
-      console.error("saveStepAnswers: failed to upsert", error);
+      console.error("saveStepProgress: failed to upsert", error);
       return { ok: false };
     }
     return { ok: true };
   } catch (error) {
-    console.error("saveStepAnswers: Supabase unavailable", error);
-    return { ok: false };
-  }
-}
-
-/** Sets (or clears) a step's completed checkbox. */
-export async function setStepCompleted(
-  memberId: string,
-  moduleKey: string,
-  stepKey: string,
-  completed: boolean,
-): Promise<{ ok: boolean }> {
-  try {
-    const supabase = db();
-    const { data: existing } = await supabase
-      .from("module_step_progress")
-      .select("answers")
-      .eq("member_id", memberId)
-      .eq("module_key", moduleKey)
-      .eq("step_key", stepKey)
-      .maybeSingle();
-
-    const { error } = await supabase.from("module_step_progress").upsert(
-      {
-        member_id: memberId,
-        module_key: moduleKey,
-        step_key: stepKey,
-        completed,
-        answers: existing?.answers ?? {},
-        updated_at: new Date().toISOString(),
-      },
-      { onConflict: "member_id,module_key,step_key" },
-    );
-
-    if (error) {
-      console.error("setStepCompleted: failed to upsert", error);
-      return { ok: false };
-    }
-    return { ok: true };
-  } catch (error) {
-    console.error("setStepCompleted: Supabase unavailable", error);
+    console.error("saveStepProgress: Supabase unavailable", error);
     return { ok: false };
   }
 }
