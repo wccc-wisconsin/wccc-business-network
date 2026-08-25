@@ -4,9 +4,15 @@ import {
   getBusinessAssessment,
   getCompletedStepsByModule,
   getMemberById,
+  getMemberDecisions,
+  getMemberDocumentTitles,
   getMemberFacts,
+  getModuleSummaryRefs,
   type Member,
+  type MemberArtifactRef,
   type MemberFact,
+  type ModuleSummaryRef,
+  type SavedDecision,
 } from "@/lib/appStore";
 import {
   displayFactValue,
@@ -15,6 +21,7 @@ import {
   type FactDefinition,
 } from "@/data/facts";
 import {
+  findModule,
   isModuleUnlocked,
   roadmapTracks,
   stepsForModule,
@@ -142,6 +149,93 @@ function roadmapLines(standings: ModuleStanding[]): string {
 }
 
 /**
+ * Bounds on the artifact section below, applied as query limits so the rows are
+ * never fetched in the first place.
+ *
+ * This text sits inside the *cached* half of the Coach and Decision Grill
+ * prompts, which puts two requirements on it. It has to stay small, or a member
+ * who has generated thirty documents carries thirty lines on every turn. And
+ * its ordering has to be deterministic, because a cache entry is matched on an
+ * exact prefix — a list that reshuffled between turns would miss the cache
+ * every time and make the caching worse than useless. Newest-first from the
+ * database gives both.
+ *
+ * Saving a new artifact does change the prompt, and so costs one cache write on
+ * the member's next turn. That is the right trade: it happens once per
+ * artifact, not once per turn.
+ */
+const MAX_CONTEXT_DECISIONS = 3;
+const MAX_CONTEXT_SUMMARIES = 6;
+const MAX_CONTEXT_DOCUMENTS = 6;
+
+/** "2026-08-25" from an ISO timestamp — the time of day is noise here. */
+function isoDate(value: string): string {
+  return typeof value === "string" && value.length >= 10 ? value.slice(0, 10) : "date unknown";
+}
+
+/** A module's display label, falling back to its key if it has since been removed. */
+function moduleLabel(moduleKey: string): string {
+  return findModule(moduleKey)?.module.label ?? moduleKey;
+}
+
+/**
+ * What the member has already produced in the portal.
+ *
+ * Before this existed the portal remembered a member's work and the assistant
+ * did not. Someone could spend twenty minutes in the Decision Grill on whether
+ * to lease a commercial kitchen, save the brief, then ask the Coach a cash-flow
+ * question and be answered by an assistant that had never heard of the lease.
+ * Every surface made them re-explain their own business, and the advice never
+ * compounded.
+ *
+ * Titles and one-line recommendations only. The full bodies stay in Supabase: a
+ * decision brief plus a 90-day plan runs to thousands of tokens on every
+ * request, and the assistant does not need to re-read a document to know it
+ * exists and point the member back at it. If it needs the contents, the right
+ * move is to ask — which is what the closing line tells it to do.
+ *
+ * Returns null rather than an empty section when the member has produced
+ * nothing, so a new member's prompt does not carry three empty headings.
+ */
+function artifactLines(
+  decisions: SavedDecision[],
+  summaries: ModuleSummaryRef[],
+  documents: MemberArtifactRef[],
+): string | null {
+  const sections: string[] = [];
+
+  if (decisions.length > 0) {
+    const lines = decisions
+      .slice(0, MAX_CONTEXT_DECISIONS)
+      .map(
+        (d) =>
+          `- "${d.topic}" (${isoDate(d.createdAt)}) — the brief advised, at ${d.brief.confidence.toLowerCase()} confidence: ${d.brief.recommendation}`,
+      );
+    sections.push(`Decisions they have already grilled:\n${lines.join("\n")}`);
+  }
+
+  if (summaries.length > 0) {
+    const lines = summaries
+      .slice(0, MAX_CONTEXT_SUMMARIES)
+      .map((s) => `- ${s.title} (${moduleLabel(s.moduleKey)}, updated ${isoDate(s.updatedAt)})`);
+    sections.push(`Module summaries they have saved:\n${lines.join("\n")}`);
+  }
+
+  if (documents.length > 0) {
+    const lines = documents
+      .slice(0, MAX_CONTEXT_DOCUMENTS)
+      .map((d) => `- ${d.title} (${moduleLabel(d.moduleKey)}, ${isoDate(d.createdAt)})`);
+    sections.push(`Documents the portal has generated for them:\n${lines.join("\n")}`);
+  }
+
+  if (sections.length === 0) return null;
+
+  return `Work they have already done in the portal:\n\n${sections.join(
+    "\n\n",
+  )}\n\nThese are what the portal advised or drafted, not proof of what they did. Build on them rather than asking the same questions again — but ask whether they acted on one before assuming they did.`;
+}
+
+/**
  * Assembles the shared context for one member. Returns null when there's no
  * member row (caller should 404) so every AI route handles that case the same
  * way.
@@ -155,12 +249,22 @@ export async function buildMemberContext(
   memberId: string,
   focusModuleKey?: string | null,
 ): Promise<MemberContext | null> {
-  const [member, assessment, completedByModule, facts] = await Promise.all([
-    getMemberById(memberId),
-    getBusinessAssessment(memberId),
-    getCompletedStepsByModule(memberId),
-    getMemberFacts(memberId),
-  ]);
+  // Seven reads rather than four. They are issued together and every one is a
+  // small, member_id-filtered, column-limited query, so the added latency is
+  // one query's worth at most — nothing next to the model call that follows.
+  // The three new ones deliberately fetch no document or summary bodies; see
+  // getMemberDocumentTitles in lib/appStore.ts for why that is a separate
+  // function rather than a flag.
+  const [member, assessment, completedByModule, facts, decisions, summaries, documents] =
+    await Promise.all([
+      getMemberById(memberId),
+      getBusinessAssessment(memberId),
+      getCompletedStepsByModule(memberId),
+      getMemberFacts(memberId),
+      getMemberDecisions(memberId, MAX_CONTEXT_DECISIONS),
+      getModuleSummaryRefs(memberId, MAX_CONTEXT_SUMMARIES),
+      getMemberDocumentTitles(memberId, MAX_CONTEXT_DOCUMENTS),
+    ]);
 
   if (!member) return null;
 
@@ -191,6 +295,9 @@ export async function buildMemberContext(
   parts.push(factLines(facts, new Date()));
 
   parts.push(roadmapLines(standings));
+
+  const artifacts = artifactLines(decisions, summaries, documents);
+  if (artifacts) parts.push(artifacts);
 
   if (focus) {
     parts.push(

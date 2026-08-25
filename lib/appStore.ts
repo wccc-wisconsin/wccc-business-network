@@ -442,6 +442,60 @@ export async function saveMemberDocument(
   }
 }
 
+/** One reference to a piece of work the member has produced, without its body. */
+export type MemberArtifactRef = {
+  moduleKey: string;
+  title: string;
+  createdAt: string;
+};
+
+type ArtifactRefRow = {
+  module_key: string;
+  title: string;
+  created_at: string;
+};
+
+/**
+ * Titles of a member's generated documents, newest first, *without* their
+ * bodies.
+ *
+ * Deliberately separate from getMemberDocuments rather than a flag on it,
+ * because the two have opposite cost profiles. That function renders documents,
+ * so it must fetch `content` — a 90-day marketing plan or a set of outreach
+ * emails, a few kilobytes each. This one exists to tell an AI prompt what the
+ * member has already produced, which needs the title and nothing else. Sharing
+ * one implementation would mean pulling every document body across the wire on
+ * every AI request in order to read its first line, which is the same waste the
+ * comment on getMemberDocuments warns about.
+ */
+export async function getMemberDocumentTitles(
+  memberId: string,
+  limit = 6,
+): Promise<MemberArtifactRef[]> {
+  try {
+    const { data, error } = await db()
+      .from("member_documents")
+      .select("module_key, title, created_at")
+      .eq("member_id", memberId)
+      .order("created_at", { ascending: false })
+      .limit(limit);
+
+    if (error) {
+      console.error("getMemberDocumentTitles: failed to load", error);
+      return [];
+    }
+
+    return ((data ?? []) as ArtifactRefRow[]).map((r) => ({
+      moduleKey: r.module_key,
+      title: r.title,
+      createdAt: r.created_at,
+    }));
+  } catch (error) {
+    console.error("getMemberDocumentTitles: Supabase unavailable", error);
+    return [];
+  }
+}
+
 export async function getCompletedStepsByModule(
   memberId: string,
 ): Promise<Record<string, string[]>> {
@@ -785,6 +839,55 @@ export async function saveModuleSummary(
 // degrades to empty/no-op like the module_summaries functions above, so the
 // dashboard keeps working (just without saving) until the migration runs.
 // ---------------------------------------------------------------------------
+
+/** A saved module summary, without its body. */
+export type ModuleSummaryRef = {
+  moduleKey: string;
+  title: string;
+  updatedAt: string;
+};
+
+type ModuleSummaryRefRow = {
+  module_key: string;
+  title: string;
+  updated_at: string;
+};
+
+/**
+ * Every module summary this member has saved, newest first, without the bodies.
+ *
+ * getModuleSummary above answers "what did they save for *this* module", which
+ * is what a module page needs. The shared AI context needs the opposite shape —
+ * every module at once — and assembling it by calling that function once per
+ * module would be one round trip per module on every AI request.
+ */
+export async function getModuleSummaryRefs(
+  memberId: string,
+  limit = 6,
+): Promise<ModuleSummaryRef[]> {
+  try {
+    const { data, error } = await db()
+      .from("module_summaries")
+      .select("module_key, title, updated_at")
+      .eq("member_id", memberId)
+      .order("updated_at", { ascending: false })
+      .limit(limit);
+
+    if (error) {
+      console.error("getModuleSummaryRefs: failed to load", error);
+      return [];
+    }
+
+    return ((data ?? []) as ModuleSummaryRefRow[]).map((r) => ({
+      moduleKey: r.module_key,
+      title: r.title,
+      updatedAt: r.updated_at,
+    }));
+  } catch (error) {
+    console.error("getModuleSummaryRefs: Supabase unavailable", error);
+    return [];
+  }
+}
 
 export type Opportunity = {
   title: string;
