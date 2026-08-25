@@ -16,6 +16,10 @@ type Sources = {
   wisconsinCount: number;
   federalError: string | null;
   wisconsinLastVerified: string | null;
+  /** When the federal half was last fetched from Grants.gov. */
+  federalFetchedAt: string | null;
+  /** True when Grants.gov was unreachable and these are older cached rows. */
+  federalStale: boolean;
 } | null;
 
 type Props = {
@@ -131,9 +135,13 @@ export default function OpportunitiesPanel({ initialOpportunities }: Props) {
               Selected from{" "}
               {[
                 sources.federalCount > 0 &&
-                  `${sources.federalCount} live federal ${
+                  `${sources.federalCount} federal ${
                     sources.federalCount === 1 ? "listing" : "listings"
-                  } on Grants.gov`,
+                  } from Grants.gov${
+                    sources.federalFetchedAt
+                      ? `, checked ${formatDate(sources.federalFetchedAt)}`
+                      : ""
+                  }`,
                 sources.wisconsinCount > 0 &&
                   `${sources.wisconsinCount} Wisconsin ${
                     sources.wisconsinCount === 1 ? "program" : "programs"
@@ -146,6 +154,14 @@ export default function OpportunitiesPanel({ initialOpportunities }: Props) {
                 .filter(Boolean)
                 .join(" and ")}
               .
+            </p>
+          )}
+          {sources.federalStale && (
+            <p className="font-semibold text-amber-300/80">
+              Grants.gov couldn&rsquo;t be reached just now, so the federal listings below are
+              the last set we retrieved
+              {sources.federalFetchedAt ? ` on ${formatDate(sources.federalFetchedAt)}` : ""}.
+              Check each one on Grants.gov before you rely on a deadline.
             </p>
           )}
           {sources.federalError && (

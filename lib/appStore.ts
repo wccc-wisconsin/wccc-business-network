@@ -1,6 +1,10 @@
 import "server-only";
 import { createClient } from "@supabase/supabase-js";
 
+// Type-only, so nothing is imported at runtime and there is no cycle:
+// lib/grantsGov.ts talks to Grants.gov and never touches this file.
+import type { FederalGrant } from "@/lib/grantsGov";
+
 export type JourneyType = "business" | "personal" | "both";
 export type MembershipTier = "network" | "individual" | "business" | "corporate";
 
@@ -492,6 +496,126 @@ export async function getMemberDocumentTitles(
     }));
   } catch (error) {
     console.error("getMemberDocumentTitles: Supabase unavailable", error);
+    return [];
+  }
+}
+
+/** One cached Grants.gov response, as stored. */
+export type CachedGrants = {
+  grants: FederalGrant[];
+  /** ISO timestamp of the fetch that produced these rows. */
+  fetchedAt: string;
+};
+
+/**
+ * The cached Grants.gov response for one keyword, or null when there is none.
+ *
+ * Freshness is decided by the caller (lib/grantsCache.ts), not here. This
+ * function's job is to return the row and the age; whether that age is
+ * acceptable depends on why it is being asked, and a stale row is still worth
+ * serving when the alternative is an empty panel.
+ */
+export async function getCachedGrants(keyword: string): Promise<CachedGrants | null> {
+  try {
+    const { data, error } = await db()
+      .from("grants_cache")
+      .select("grants, fetched_at")
+      .eq("keyword", keyword)
+      .maybeSingle();
+
+    if (error) {
+      console.error("getCachedGrants: failed to load", error);
+      return null;
+    }
+    if (!data || !Array.isArray(data.grants)) return null;
+
+    return { grants: data.grants as FederalGrant[], fetchedAt: data.fetched_at };
+  } catch (error) {
+    // A missing table lands here. Returning null degrades to "no cache", which
+    // makes the request path fall through to a live call — the behaviour this
+    // change replaced. Worse, not broken.
+    console.error("getCachedGrants: Supabase unavailable", error);
+    return null;
+  }
+}
+
+/**
+ * Writes one keyword's grants, replacing whatever was there.
+ *
+ * Upsert rather than insert-or-update: the refresh job and a cache-miss on the
+ * request path can both write the same keyword, and neither should fail because
+ * the other got there first. Last write wins, which is correct — both are
+ * fetching the same thing from the same source.
+ */
+export async function saveCachedGrants(
+  keyword: string,
+  grants: FederalGrant[],
+): Promise<{ ok: boolean }> {
+  try {
+    const { error } = await db()
+      .from("grants_cache")
+      .upsert(
+        { keyword, grants, fetched_at: new Date().toISOString() },
+        { onConflict: "keyword" },
+      );
+
+    if (error) {
+      console.error("saveCachedGrants: failed to write", error);
+      return { ok: false };
+    }
+    return { ok: true };
+  } catch (error) {
+    console.error("saveCachedGrants: Supabase unavailable", error);
+    return { ok: false };
+  }
+}
+
+/** What the cache currently holds and how old each entry is. */
+export async function listCachedGrantAges(): Promise<{ keyword: string; fetchedAt: string }[]> {
+  try {
+    const { data, error } = await db().from("grants_cache").select("keyword, fetched_at");
+
+    if (error) {
+      console.error("listCachedGrantAges: failed to load", error);
+      return [];
+    }
+
+    return ((data ?? []) as { keyword: string; fetched_at: string }[]).map((r) => ({
+      keyword: r.keyword,
+      fetchedAt: r.fetched_at,
+    }));
+  } catch (error) {
+    console.error("listCachedGrantAges: Supabase unavailable", error);
+    return [];
+  }
+}
+
+/**
+ * The distinct industries members have actually entered, lowercased.
+ *
+ * This is what the daily refresh job warms. Warming every keyword ever cached
+ * instead would keep paying for industries nobody has any more; warming a
+ * hand-written list would go stale the first time a member joins from a trade
+ * the list does not name. The members table is the only source that stays
+ * correct on its own.
+ */
+export async function listMemberIndustries(): Promise<string[]> {
+  try {
+    const { data, error } = await db().from("members").select("industry");
+
+    if (error) {
+      console.error("listMemberIndustries: failed to load", error);
+      return [];
+    }
+
+    const industries = new Set<string>();
+    for (const row of (data ?? []) as { industry: string | null }[]) {
+      const industry = (row.industry ?? "").trim().toLowerCase();
+      if (industry) industries.add(industry);
+    }
+    return [...industries].sort();
+  } catch (error) {
+    console.error("listMemberIndustries: Supabase unavailable", error);
     return [];
   }
 }

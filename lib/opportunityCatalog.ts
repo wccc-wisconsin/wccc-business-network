@@ -1,6 +1,6 @@
 import "server-only";
 
-import { findFederalGrants } from "@/lib/grantsGov";
+import { getFederalGrants } from "@/lib/grantsCache";
 import { activeWisconsinPrograms, wisconsinLastVerified } from "@/data/wisconsinPrograms";
 
 /**
@@ -58,6 +58,19 @@ export type Catalog = {
   federalError: string | null;
   /** Most recent human verification date among the Wisconsin entries shown. */
   wisconsinLastVerified: string | null;
+  /**
+   * When the federal half was last fetched from Grants.gov, or null when it
+   * could not be established. Shown to the member: a list of deadlines is only
+   * as trustworthy as the date it was checked.
+   */
+  federalFetchedAt: string | null;
+  /**
+   * True when Grants.gov was unreachable and these are older cached rows. The
+   * member still gets a usable list — see lib/grantsCache.ts — but a stale list
+   * presented as current is exactly the failure this whole feature exists to
+   * avoid, so it is reported rather than smoothed over.
+   */
+  federalStale: boolean;
 };
 
 /**
@@ -83,13 +96,17 @@ function trimTitle(title: string): string {
 }
 
 export async function buildCatalog(industry: string): Promise<Catalog> {
-  const federalResult = await findFederalGrants(industry);
+  const federalResult = await getFederalGrants(industry);
   const wisconsin = activeWisconsinPrograms();
 
   const entries: CatalogEntry[] = [];
   let federalError: string | null = null;
+  let federalFetchedAt: string | null = null;
+  let federalStale = false;
 
   if (federalResult.ok) {
+    federalFetchedAt = federalResult.fetchedAt;
+    federalStale = federalResult.stale;
     federalResult.grants.slice(0, MAX_FEDERAL_ENTRIES).forEach((grant, index) => {
       entries.push({
         ref: `F${index + 1}`,
@@ -132,6 +149,8 @@ export async function buildCatalog(industry: string): Promise<Catalog> {
     wisconsinCount: entries.filter((entry) => entry.source === "wisconsin").length,
     federalError,
     wisconsinLastVerified: wisconsinLastVerified(),
+    federalFetchedAt,
+    federalStale,
   };
 }
 

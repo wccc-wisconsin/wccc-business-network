@@ -252,6 +252,8 @@ ${formatCatalogForPrompt(catalog)}`;
       wisconsinCount: catalog.wisconsinCount,
       federalError: catalog.federalError,
       wisconsinLastVerified: catalog.wisconsinLastVerified,
+      federalFetchedAt: catalog.federalFetchedAt,
+      federalStale: catalog.federalStale,
     },
   });
 }

@@ -149,19 +149,18 @@ export type GrantsResult =
   | { ok: false; reason: string };
 
 /**
- * Response cache, keyed by keyword.
+ * Caching deliberately does not live in this file.
  *
- * A serverless instance is ephemeral, so this is not a real cache — a cold
- * start starts empty and nothing is shared between instances. It exists for the
- * warm case: a member clicking "Refresh matches" twice, or several members in
- * the same industry landing on the same instance. Grants.gov publishes no rate
- * limit but documents a 429, and being a considerate client of a free
- * no-signup public API is worth ten lines.
+ * It used to: an in-memory Map keyed by keyword, with an hour's TTL. The
+ * comment on it conceded the problem — a serverless instance is ephemeral, so a
+ * cold start began empty and nothing was shared between instances. At this
+ * portal's traffic almost every request is a cold start, so it rarely hit.
  *
- * Not Next's fetch cache: that only caches GET, and Search2 is POST.
+ * lib/grantsCache.ts now holds the policy, backed by the grants_cache table, and
+ * this file is left as what it always should have been: a client that talks to
+ * Search2 and parses the answer. That separation is why the tests here can mock
+ * `fetch` alone and never touch Supabase.
  */
-const CACHE_TTL_MS = 60 * 60 * 1000;
-const cache = new Map<string, { at: number; grants: FederalGrant[] }>();
 
 /**
  * Grants.gov returns dates as MM/DD/YYYY. `new Date(string)` would parse that
@@ -333,7 +332,10 @@ async function search(keyword: string, timeoutMs: number): Promise<GrantsResult>
 }
 
 /**
- * Federal grants a small business in this industry could apply for.
+ * Federal grants a small business in this industry could apply for, fetched
+ * live. Callers should go through lib/grantsCache.ts rather than calling this
+ * directly — the only caller that should reach it uncached is the daily refresh
+ * job.
  *
  * Two calls at most, and the second only when it will change the answer. An
  * industry keyword is precise but can legitimately return nothing — "florist"
@@ -346,14 +348,11 @@ async function search(keyword: string, timeoutMs: number): Promise<GrantsResult>
  * worst-case latency but doubles the load on a free public API for the common
  * case where the first call was enough.
  */
-export async function findFederalGrants(industry: string): Promise<GrantsResult> {
+export async function fetchFederalGrants(industry: string): Promise<GrantsResult> {
   const keyword = industry.trim() || "small business";
-  const cacheKey = keyword.toLowerCase();
-
-  const cached = cache.get(cacheKey);
-  if (cached && Date.now() - cached.at < CACHE_TTL_MS) {
-    return { ok: true, grants: cached.grants };
-  }
+  // Only used to decide whether the broad fallback would just repeat the
+  // primary query. It was the cache key before caching moved out of this file.
+  const normalized = keyword.toLowerCase();
 
   const today = new Date().toISOString().slice(0, 10);
   const MIN_USEFUL_RESULTS = 3;
@@ -369,7 +368,7 @@ export async function findFederalGrants(industry: string): Promise<GrantsResult>
 
   if (
     grants.length < MIN_USEFUL_RESULTS &&
-    cacheKey !== "small business" &&
+    normalized !== "small business" &&
     remainingBudget() >= MIN_FALLBACK_BUDGET_MS
   ) {
     const fallback = await search("small business", Math.min(REQUEST_TIMEOUT_MS, remainingBudget()));
@@ -397,6 +396,5 @@ export async function findFederalGrants(industry: string): Promise<GrantsResult>
     return 0;
   });
 
-  cache.set(cacheKey, { at: Date.now(), grants });
   return { ok: true, grants };
 }

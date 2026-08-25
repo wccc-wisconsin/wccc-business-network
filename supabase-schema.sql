@@ -300,6 +300,37 @@ create table if not exists ai_usage (
 create index if not exists ai_usage_member_created_idx
   on ai_usage (member_id, created_at desc);
 
+-- Grants.gov response cache — one row per search keyword.
+--
+-- This replaces an in-memory Map that lived inside a serverless instance. That
+-- Map was honest about its own limits in a comment: a cold start began empty
+-- and nothing was shared between instances. At this portal's traffic almost
+-- every request *is* a cold start, so in practice it rarely hit, and nearly
+-- every member clicking "Find matches" paid for a live call to a free public
+-- API — inside the same function invocation that then had to call Claude.
+--
+-- `grants` holds the parsed, eligibility-filtered, deadline-sorted array
+-- exactly as lib/grantsGov.ts produced it, so the request path does no work
+-- beyond the read. `keyword` is stored lowercased and is the primary key, so
+-- no separate index is needed.
+--
+-- `fetched_at` is load-bearing twice over. It decides whether a row is fresh
+-- enough to serve, and it is shown to the member — because "checked this
+-- morning" and "last checked nine days ago, because the refresh job has been
+-- failing" are very different statements about the same list, and only the
+-- second one should make someone go and look at Grants.gov themselves.
+create table if not exists grants_cache (
+  keyword text primary key,
+  grants jsonb not null default '[]'::jsonb,
+  fetched_at timestamptz not null default now()
+);
+
+-- Added after the table shipped, so `create table if not exists` above would
+-- be a no-op on an existing database and would not add it. See the note in
+-- README.md about why every new column needs one of these.
+alter table grants_cache add column if not exists grants jsonb not null default '[]'::jsonb;
+alter table grants_cache add column if not exists fetched_at timestamptz not null default now();
+
 -- Row Level Security: ENABLED on every table, with no policies attached.
 --
 -- This looks like it would lock the app out. It doesn't: the only Supabase
@@ -332,3 +363,4 @@ alter table member_decisions enable row level security;
 alter table member_documents enable row level security;
 alter table member_facts enable row level security;
 alter table ai_usage enable row level security;
+alter table grants_cache enable row level security;

@@ -100,7 +100,10 @@ with expected(table_name, column_name) as (
     ('ai_usage', 'id'),
     ('ai_usage', 'member_id'),
     ('ai_usage', 'route'),
-    ('ai_usage', 'created_at')
+    ('ai_usage', 'created_at'),
+    ('grants_cache', 'keyword'),
+    ('grants_cache', 'grants'),
+    ('grants_cache', 'fetched_at')
 )
 select
   e.table_name,
