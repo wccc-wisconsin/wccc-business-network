@@ -2,6 +2,7 @@ import { auth } from "@clerk/nextjs/server";
 import { UserButton } from "@clerk/nextjs";
 import Link from "next/link";
 import { headers } from "next/headers";
+import { after } from "next/server";
 import { redirect } from "next/navigation";
 import CommunityHubLinks from "@/components/CommunityHubLinks";
 import { isModuleUnlocked, stepsForModule, tracksForJourney } from "@/data/modules";
@@ -52,13 +53,36 @@ export default async function DashboardPage() {
   // No member record or incomplete intake form — send to onboarding
   if (!member || !member.industry) redirect("/onboarding");
 
-  const headerStore = await headers();
-  await recordMemberSignIn({
-    clerkId: userId,
-    email: member.email,
-    sessionId,
-    userAgent: headerStore.get("user-agent") ?? "Unknown browser",
-  });
+  // Sign-in recording is analytics, and the member never sees it. It used to be
+  // awaited right here, which meant every dashboard load blocked on a
+  // login_events read before any dashboard data started loading — and on a
+  // genuinely new session, on three sequential writes as well. That is four
+  // round trips of latency spent on something outside the page.
+  //
+  // `after()` runs it once the response has been sent, so the ordering the
+  // member experiences is: data queries start immediately, page renders,
+  // analytics write happens on the way out.
+  //
+  // The user-agent has to be read out here, not inside the callback: by the
+  // time `after` runs the response is finished and the request context is gone,
+  // so calling headers() in there would throw.
+  const userAgent = (await headers()).get("user-agent") ?? "Unknown browser";
+
+  after(() =>
+    // Caught rather than left to reject. Previously a Supabase outage during
+    // this call would fail the whole dashboard render, because it was awaited
+    // in the render path with no guard. Now the page has already been sent, and
+    // a failed analytics write should be a log line rather than an unhandled
+    // rejection in the function logs.
+    recordMemberSignIn({
+      clerkId: userId,
+      email: member.email,
+      sessionId,
+      userAgent,
+    }).catch((error) => {
+      console.error("dashboard: recordMemberSignIn failed after response", error);
+    }),
+  );
 
   const [dashboard, memberOpportunities, businessAssessment, decisions, completedByModule, facts] =
     await Promise.all([

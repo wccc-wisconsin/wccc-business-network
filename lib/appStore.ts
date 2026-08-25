@@ -792,6 +792,24 @@ export type Opportunity = {
   description: string;
   whyItFits: string;
   nextStep: string;
+
+  // The three fields below arrived with the retrieval rewrite: opportunities
+  // are now selected from a live Grants.gov result or a human-verified
+  // Wisconsin entry (see lib/opportunityCatalog.ts) rather than recalled by
+  // the model, so each one has a real source that can be linked to.
+  //
+  // All three are optional, and must stay optional. member_opportunities.content
+  // is a jsonb blob of whatever shape was current when it was written, and rows
+  // saved before this change have none of them. Making any of these required
+  // would not fail a build — it would fail at runtime, on the dashboard, for
+  // exactly those members who had used the feature before.
+
+  /** Official page for the opportunity. Absent on pre-retrieval saved rows. */
+  sourceUrl?: string;
+  /** ISO application deadline, where the source publishes one. */
+  closeDate?: string;
+  /** "federal" (live from Grants.gov) or "wisconsin" (curated, human-verified). */
+  source?: "federal" | "wisconsin";
 };
 
 export type OpportunityMatches = {
