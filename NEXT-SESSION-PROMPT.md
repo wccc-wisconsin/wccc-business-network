@@ -208,6 +208,21 @@ moved to `ROADMAP.md` §4.
 
 ---
 
+## Setting up an account to look at this with
+
+`seed-demo-member.sql` turns one account into Golden Lotus Catering, the demo
+persona: profile, Business Snapshot, fourteen facts, eight completed guided
+steps. Edit the email at the top, run it in the Supabase SQL editor after the
+account has been through onboarding. It seeds no conversations, briefs or
+documents — those are what a reviewer is there to judge, and seeding them would
+mean reviewing text that never came from the deployment.
+
+`test/demoSeed.test.ts` checks every key in that file against the real catalogs,
+because Postgres will happily store a fact key or step key that no longer
+exists, and the only symptom is a dashboard that shows nothing.
+
+---
+
 ## Still needs a person, not a session
 
 **The nine Wisconsin entries.** `WISCONSIN-PROGRAMS-REVIEW.md`, ~15 minutes.
