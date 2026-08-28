@@ -72,6 +72,31 @@ const DOCUMENT_ROW = {
   created_at: "2026-08-22T12:00:00.000Z",
 };
 
+/**
+ * Stored Coach conversations, newest first — the shape listConversations reads.
+ * `transcript` is what the opening line and the message count are derived from.
+ */
+const CONVERSATION_ROWS = [
+  {
+    id: "conv_1",
+    module_key: "launch",
+    updated_at: "2026-08-24T09:00:00.000Z",
+    transcript: [
+      { role: "user", content: "How do I get DBE certified?" },
+      { role: "assistant", content: "Start with the WisDOT application." },
+    ],
+  },
+  {
+    id: "conv_2",
+    module_key: null,
+    updated_at: "2026-08-18T09:00:00.000Z",
+    transcript: [
+      { role: "user", content: "Can I afford a second van?" },
+      { role: "assistant", content: "What does the first one bring in?" },
+    ],
+  },
+];
+
 /** Rows per table. Anything not listed resolves to an empty read. */
 function rowsFrom(tables: Record<string, unknown>) {
   return (call: RecordedCall) => {
@@ -86,6 +111,7 @@ const FULL_MEMBER = {
   member_decisions: [DECISION_ROW],
   module_summaries: [SUMMARY_ROW],
   member_documents: [DOCUMENT_ROW],
+  conversations: CONVERSATION_ROWS,
 };
 
 beforeEach(() => {
@@ -243,5 +269,147 @@ describe("degradation", () => {
     mock.reset(rowsFrom({}));
 
     expect(await buildMemberContext("user_1")).toBeNull();
+  });
+});
+
+
+/**
+ * The conversation-recall section.
+ *
+ * This is the one part of the context built from something the member said
+ * rather than something they saved, which makes two properties load-bearing:
+ *
+ *   - the assistant is given opening lines and told plainly that is all it has,
+ *     so it can pick a thread back up without inventing how the exchange went,
+ *     and
+ *   - the chat in progress is never among them. From its second turn onward it
+ *     is the newest stored conversation, and a coach that opens by reminding
+ *     you of the sentence you just typed reads as broken — and would also
+ *     change the cached prompt prefix on every single turn.
+ */
+describe("conversation recall", () => {
+  it("tells the assistant what the member came about before", async () => {
+    const context = await buildMemberContext("user_1");
+
+    expect(context!.summary).toContain("Earlier conversations they have had with you");
+    expect(context!.summary).toContain("How do I get DBE certified?");
+    expect(context!.summary).toContain("2026-08-24");
+    // Labelled by module the way the artifact lines are.
+    expect(context!.summary).toContain("(Launch)");
+  });
+
+  it("says it does not have the transcripts", async () => {
+    const context = await buildMemberContext("user_1");
+
+    expect(context!.summary).toContain("opening lines, not transcripts");
+    expect(context!.summary).toContain("never claim to remember");
+    // The reply half of a stored exchange is not in the prompt, only the
+    // opening — the guarantee the sentence above is making.
+    expect(context!.summary).not.toContain("Start with the WisDOT application.");
+  });
+
+  it("leaves out the chat that is currently in progress", async () => {
+    const context = await buildMemberContext("user_1", null, {
+      excludeConversationId: "conv_1",
+    });
+
+    expect(context!.summary).not.toContain("How do I get DBE certified?");
+    // The others are unaffected — this excludes one row, it does not switch
+    // the section off.
+    expect(context!.summary).toContain("Can I afford a second van?");
+  });
+
+  it("shows at most three however many come back", async () => {
+    mock.reset(
+      rowsFrom({
+        members: MEMBER_ROW,
+        conversations: [1, 2, 3, 4, 5].map((n) => ({
+          id: `conv_${n}`,
+          module_key: null,
+          updated_at: `2026-08-0${n}T09:00:00.000Z`,
+          transcript: [{ role: "user", content: `Question number ${n}` }],
+        })),
+      }),
+    );
+
+    const context = await buildMemberContext("user_1");
+
+    expect(context!.summary).toContain("Question number 1");
+    expect(context!.summary).toContain("Question number 3");
+    expect(context!.summary).not.toContain("Question number 4");
+  });
+
+  it("asks the database for one more than it shows, and no more", async () => {
+    await buildMemberContext("user_1");
+
+    const read = mock.forTable("conversations")[0];
+    expect(read.limit).toBe(4);
+    expect(read.filters).toContainEqual(["eq", "member_id", "user_1"]);
+    expect(
+      read.filters.some(
+        ([op, col, options]) =>
+          op === "order" &&
+          col === "updated_at" &&
+          (options as { ascending?: boolean })?.ascending === false,
+      ),
+    ).toBe(true);
+  });
+
+  it("flattens an opening that spans lines", async () => {
+    mock.reset(
+      rowsFrom({
+        members: MEMBER_ROW,
+        conversations: [
+          {
+            id: "conv_x",
+            module_key: null,
+            updated_at: "2026-08-24T09:00:00.000Z",
+            transcript: [{ role: "user", content: "Two things.\n\nOne: payroll." }],
+          },
+        ],
+      }),
+    );
+
+    const context = await buildMemberContext("user_1");
+
+    // A raw newline here would split one list entry into two and leave the
+    // second looking like an instruction of its own.
+    expect(context!.summary).toContain('"Two things. One: payroll."');
+  });
+
+  it("skips a stored chat with nothing the member said", async () => {
+    mock.reset(
+      rowsFrom({
+        members: MEMBER_ROW,
+        conversations: [
+          {
+            id: "conv_y",
+            module_key: null,
+            updated_at: "2026-08-24T09:00:00.000Z",
+            transcript: [{ role: "assistant", content: "Are you still there?" }],
+          },
+        ],
+      }),
+    );
+
+    const context = await buildMemberContext("user_1");
+
+    expect(context!.summary).not.toContain("Earlier conversations they have had with you");
+  });
+
+  it("omits the section for a member who has never chatted", async () => {
+    mock.reset(rowsFrom({ members: MEMBER_ROW }));
+
+    const context = await buildMemberContext("user_1");
+
+    expect(context!.summary).not.toContain("Earlier conversations they have had with you");
+    expect(context!.summary).toContain("Golden Lotus Catering");
+  });
+
+  it("never puts a transcript body on the wire twice over", async () => {
+    await buildMemberContext("user_1");
+
+    // One read, not one per turn or per module.
+    expect(mock.forTable("conversations")).toHaveLength(1);
   });
 });

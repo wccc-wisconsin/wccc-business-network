@@ -1,108 +1,108 @@
 # Next session — WCCC Business Network
 
-Written 2026-08-27, end of session. Replaces the memory-loop design brief that
-was here; that work is built (see below).
+Written 2026-08-28, end of session. The previous version of this file was about
+merging `feature/memory-loop`; that is done and its contents have moved into
+`ROADMAP.md` §0.4.
 
 `ROADMAP.md` is the standing plan. This file is what a fresh session needs to
 pick up tomorrow.
 
 ---
 
-## Read this first: three commits are unmerged
+## Read this first: the work is uncommitted, and master is clean
 
-`origin/master` is at `2b91008`. Three commits sit ahead of it on
-**`feature/memory-loop`**, stacked linearly:
-
-| Commit | What |
-| --- | --- |
-| `865d56e` | Token counts persisted on `ai_usage`; the rate limiter's three round trips cut to two. |
-| `156b0a3` | Coach replies stream as they are written. |
-| `5e3f019` | Conversations stored; a conversation can propose profile facts for the member to confirm. |
-
-They are a straight line, so one local merge moves master past all three:
+`master` and `origin/master` are both at `e39cdf1`. Nothing is unmerged and no
+branch is outstanding. What is outstanding is eight modified files in the
+working tree, all from this session, all verified (below) and none committed —
+**you run the git commands, so nothing was committed for you.**
 
 ```
-git checkout master
-git pull
-git merge feature/memory-loop     # expect "Fast-forward"
-git push
+M app/api/conversations/route.ts     GET: list, and one transcript to reopen
+M app/api/ai/coach/route.ts          accepts conversationId, passes it to the context
+M components/AICoach.tsx             the "Past chats" drawer
+M lib/memberContext.ts               earlier conversations in the shared context
+M test/memberContext.test.ts         +9 tests (151 total, was 142)
+M README.md  M ROADMAP.md  M VERIFY-DEPLOY.md  (and this file)
 ```
 
-If that merge does *not* say Fast-forward, stop — something diverged, and
-pushing would make it worse.
+It is one coherent change and reads well as one commit. Something like:
 
-**Then, and this matters more than usual:** re-run `supabase-schema.sql`
-followed by `supabase-verify.sql`. This release adds a whole table
-(`conversations`) and four columns on `ai_usage`. Until the schema is applied,
-saving a conversation and recording spend both **fail silently** — the member
-chats normally, the Coach works, and nothing is kept. `supabase-verify.sql`
-should report 101 columns and every row `ok`.
+```
+git checkout -b feature/conversation-history
+git add -A
+git commit -m "Let members see and delete their stored conversations"
+git push -u origin feature/conversation-history
+```
 
-The uncommitted doc changes (`README.md`, `ROADMAP.md`, `VERIFY-DEPLOY.md`,
-`DIRECTORY-DESIGN.md`, and this file) can go in their own commit whenever.
+**No schema change this time.** Nothing new to run in Supabase — but if
+`supabase-schema.sql` has not been re-run since the memory-loop merge, do that
+first, or none of this has anything to show. `supabase-verify.sql` should report
+101 columns and every row `ok`. Until then a member chats, the Coach answers,
+"Past chats" stays empty, and nothing anywhere says why.
 
 ---
 
-## What the AI layer looks like now
+## What was built
 
-Seven surfaces, one shared member context, 142 tests.
+Items 1 and 2 of the previous handoff, which were the two halves of the same
+thing: the portal had started keeping transcripts that members could not see,
+and was not reading them back either.
 
-Four properties hold across all of them, and each was built deliberately. A
-change that breaks one is the wrong change, however convenient:
+**1. A history drawer in the Coach.** "Past chats" beside the heading. Lists
+what is stored — opening line, module, message count, date — and reopens or
+deletes any of it. It lives inside `AICoach.tsx` rather than in its own panel or
+page because that component already owns the transcript, so reopening is a
+`setMessages`, and it comes along free on module pages as well as the dashboard.
 
-**1. Facts are retrieved, never recalled.** `lib/opportunityCatalog.ts` gives
-the model a catalog and takes back references; the server reads every fact back
-out, so an invented funding program cannot reach a member.
-`lib/adviceCatalog.ts` applies the same idea to Wisconsin filing dates and fees
-in the Coach and Grill — a weaker guarantee, and the file says why: chat is free
-prose, so what this removes is the *reason* to guess rather than the ability.
+Three details in there are load-bearing and are commented as such:
 
-**2. Every fact is self-reported, and the member knows it.** `confirmedAt` means
-a person confirmed it. `lib/factExtraction.ts` proposes; only a tap writes. Read
-its header before touching anything in that area.
+- **Deleting the open chat detaches its id.** `saveConversation` upserts on
+  whatever id it is handed, so a Coach still holding a deleted row's id would
+  recreate that row on the next message.
+- **A delete waits for any save in flight.** Same failure by a different route:
+  a save that started before the delete would land after it.
+- **The conversation id is read from a ref, not from state,** because `persist`
+  runs from a closure created before the reply streamed.
 
-**3. Nothing unverified reaches a member.** Wisconsin programs stay hidden until
-someone at WCCC ticks them off, and verification expires after 180 days.
+**2. The Coach opens warm.** `conversationLines` in `lib/memberContext.ts` puts
+the openings of up to three earlier conversations into the shared context, and
+tells the model plainly that openings are all it has — it may pick a thread back
+up, never claim to remember how the exchange went. The chat in progress is
+excluded by id (the client sends `conversationId`; the route passes it through),
+which stops the coach reminding a member of the sentence they just typed *and*
+keeps the cached prompt prefix identical across the turns of one chat.
 
-**4. Spend is capped, visible, and cheap.** Per-route and total daily caps that
-fail open; prompt caching on the multi-turn surfaces; token counts now persisted
-per call, split four ways because they are billed at three different rates.
+**Verified:** typecheck, lint, 151 tests and `next build`, all in a clean Linux
+container. Then mutation-tested — six rules broken one at a time, each caught by
+the one test written for it, named in the run. The drawer itself has no test:
+this repo has no browser harness, so it is `VERIFY-DEPLOY.md` check 5 instead.
 
 ---
 
 ## Still open, in the order I would take them
 
-**1. Conversation history has no screen.** The table exists, saves work, and
-`DELETE /api/conversations?id=` is built and tested — but there is nowhere for a
-member to browse or remove their own conversations. That was answered "yes,
-build it in now" and is the one piece of it that did not land. It is also the
-half that makes the storage defensible: the portal now keeps transcripts that
-members cannot see.
-
-`listConversations` already returns exactly what a list needs (opening line,
-message count, date, no transcript bodies).
-
-**2. The Coach does not yet use what it stored.** Conversations are saved but
-nothing reads them back, so the assistant still opens cold. The intended payoff —
-*"last time we were working on your DBE certification"* — is one read away and
-was never wired up. Do this after (1), since both touch the same data.
-
-**3. Bilingual advice.** `ROADMAP.md` §2.1. A `preferred_language` fact and one
+**1. Bilingual advice.** `ROADMAP.md` §2.1. A `preferred_language` fact and one
 line in each system prompt. Small in code; probably the widest-reaching thing
 left for this membership. Keep agency names, form numbers and URLs in English —
 that is what a member has to type into a government site.
 
-**4. Free-text fact extraction.** Deliberately excluded for now: a wrong
-`monthly_costs` looks exactly as plausible as a right one on a confirmation
-card. Worth revisiting only after watching the confirmation flow work on real
-conversations. One line per fact in `isExtractableFact`.
+**2. An `opening` column on `conversations`.** `ROADMAP.md` §3. Written at save
+time from the first member turn, with a `message_count` beside it. Both the
+drawer and the coach's recall currently read whole transcripts to derive two
+values from them, which is why the recall is capped at three conversations.
+Schema change, so: `alter table ... add column if not exists`, a backfill for
+rows already stored, and a regenerated `supabase-verify.sql`, in the one PR.
 
-**5. `npm audit` — 5 high severity.** Build-chain, not request-path. Its own PR:
+**3. `npm audit` — 5 high severity.** Build-chain, not request-path. Its own PR:
 `npm audit fix`, then test, lint and build, commit only if all three stay green.
 
-**6. `VERIFY-DEPLOY.md` — four checks, none run.** Two have been open since PR
-#16. The other two cover the Grants.gov cache and the cron. All four exist
-because the mechanism they test fails silently.
+**4. `VERIFY-DEPLOY.md` — five checks, none run.** Two have been open since PR
+#16. All five exist because the mechanism they test fails silently. Check 5 is
+the new drawer, and is the only part of this session's work with nothing
+automated behind it.
+
+**5. Free-text fact extraction.** Still deliberately excluded; the reasoning
+moved to `ROADMAP.md` §4.
 
 ---
 
@@ -119,16 +119,23 @@ three lights them up in both places. Row 9 needs a decision rather than a check.
 
 - **The user runs all git commands.** The sandbox with folder access cannot
   push and cannot delete; read-only git commands leave `.git/index.lock`
-  behind, so `mv` it aside afterwards.
+  behind. It cannot be deleted, but it *can* be renamed within the mount —
+  `mv .git/index.lock .git/_stale_locks/index.lock.<date>` is what this session
+  did, and that directory is where earlier ones went.
 - The user's `node_modules` is a Windows install, so a Linux sandbox cannot run
-  vitest against it (`@rollup/rollup-linux-x64-gnu` missing). Verification was
-  done by copying the source into a clean Linux container and installing there;
-  that works well and is worth repeating.
+  vitest against it. **The recipe that works, and worked again this session:**
+  copy `app/ components/ lib/ data/ test/` plus the root config files into a
+  clean Linux container, `npm ci`, then `npx tsc --noEmit`, `npm test`,
+  `npx eslint`, `npx next build`. About four minutes end to end.
 - Building in a container fails on Google Fonts. Stub the two
-  `next/font/google` calls in `app/layout.tsx`, build, restore. Never commit the
-  stub.
-- `.gitattributes` normalises line endings, but files on disk are CRLF — a
-  script that edits by exact string match must match `\r\n`.
+  `next/font/google` calls in `app/layout.tsx`, build, restore — in the
+  container's copy only. Never commit the stub.
+- `next build` also needs `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` and
+  `CLERK_SECRET_KEY` set to anything non-empty; `pk_test_stub` / `sk_test_stub`
+  are enough.
+- `.gitattributes` normalises line endings. The files this session touched are
+  all LF on disk — check before assuming CRLF, a script that edits by exact
+  string match has to match whichever it finds.
 
 ---
 
@@ -143,8 +150,8 @@ three lights them up in both places. Row 9 needs a decision rather than a check.
   migration and a regenerated `supabase-verify.sql`, in the same PR.
 - Verify before claiming: typecheck, lint, test and build. Then mutation-test —
   break each new rule one at a time and confirm the test meant to catch it
-  fails. It has caught two tests this session that were passing for the wrong
-  reason.
+  fails. It caught two tests last session that were passing for the wrong
+  reason, and confirmed all six new rules this one.
 - The site is standalone. `contacts`, `public_registrations` and `subscribers`
   in the shared Supabase project belong to the sibling `wccc-platform` site.
   Leave them alone.

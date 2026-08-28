@@ -8,6 +8,8 @@ import {
   getMemberDocumentTitles,
   getMemberFacts,
   getModuleSummaryRefs,
+  listConversations,
+  type ConversationSummary,
   type Member,
   type MemberArtifactRef,
   type MemberFact,
@@ -184,9 +186,37 @@ const MAX_CONTEXT_DECISIONS = 3;
 const MAX_CONTEXT_SUMMARIES = 6;
 const MAX_CONTEXT_DOCUMENTS = 6;
 
+/**
+ * How many earlier conversations the assistant is told about.
+ *
+ * One more than this is fetched, because from its second turn onward the chat
+ * in progress is itself the newest row — and being told "earlier you asked
+ * about X" about the message just sent reads as a malfunction. It is dropped by
+ * id below rather than by a filter in the query, which keeps the read shape in
+ * lib/appStore.ts untouched for the sake of one row.
+ *
+ * For the prompt cache this block behaves exactly like the artifact block
+ * above. It is fixed for the length of a chat — the only row that changes
+ * during one is that chat's own, which is excluded — and changes once when the
+ * member starts a new conversation.
+ *
+ * Kept to three, and not raised casually: listConversations reduces transcripts
+ * to an opening line but has to read them to do it, so each row here is a whole
+ * stored chat crossing the wire from Supabase to compose one line of prompt.
+ * Four rows of that is a fair price for the assistant knowing the member has
+ * been here before; twenty would not be. The way to make it cheap is an
+ * `opening` column written at save time — a schema change, and its own PR.
+ */
+const MAX_CONTEXT_CONVERSATIONS = 3;
+
 /** "2026-08-25" from an ISO timestamp — the time of day is noise here. */
 function isoDate(value: string): string {
   return typeof value === "string" && value.length >= 10 ? value.slice(0, 10) : "date unknown";
+}
+
+/** Collapses an opening line to a single line — a pasted paragraph would break the list. */
+function oneLine(value: string): string {
+  return value.replace(/\s+/g, " ").trim();
 }
 
 /** A module's display label, falling back to its key if it has since been removed. */
@@ -252,6 +282,37 @@ function artifactLines(
 }
 
 /**
+ * What the member has brought to the coach before.
+ *
+ * Opening lines only, and the prompt is told that is all it has. The
+ * transcripts are stored and this function could read them, but a coach that
+ * quotes a past exchange back would be recalling rather than retrieving — the
+ * one thing this codebase does not let an assistant do — and the bodies would
+ * swamp a prompt that is re-sent on every turn. What is bought here is the
+ * piece that was missing: an assistant that knows this member has been here
+ * before, and what they came about.
+ *
+ * Returns null rather than an empty heading for a member with no history.
+ */
+function conversationLines(conversations: ConversationSummary[]): string | null {
+  const lines = conversations
+    .map((conversation) => ({ conversation, opening: oneLine(conversation.opening) }))
+    // An opening can be empty if a stored transcript somehow has no member
+    // turn. "They opened with: """ is worse than saying nothing.
+    .filter(({ opening }) => opening.length > 0)
+    .map(({ conversation, opening }) => {
+      const where = conversation.moduleKey ? ` (${moduleLabel(conversation.moduleKey)})` : "";
+      return `- ${isoDate(conversation.updatedAt)}${where} — they opened with: "${opening}"`;
+    });
+
+  if (lines.length === 0) return null;
+
+  return `Earlier conversations they have had with you:\n${lines.join(
+    "\n",
+  )}\n\nThose are opening lines, not transcripts — you do not have what was said in them. You may pick up a thread they started ("last time you were looking at your DBE certification…"), but never claim to remember how the exchange went. If a detail from one matters, ask for it again.`;
+}
+
+/**
  * Assembles the shared context for one member. Returns null when there's no
  * member row (caller should 404) so every AI route handles that case the same
  * way.
@@ -264,23 +325,40 @@ function artifactLines(
 export async function buildMemberContext(
   memberId: string,
   focusModuleKey?: string | null,
+  /**
+   * `excludeConversationId` is the chat the caller is currently in, so it can
+   * be kept out of the history block. It arrives from the client and is used
+   * for nothing else — the list it filters is already scoped to this member, so
+   * passing someone else's id removes nothing and reveals nothing.
+   */
+  options?: { excludeConversationId?: string | null },
 ): Promise<MemberContext | null> {
-  // Seven reads rather than four. They are issued together and every one is a
+  // Eight reads rather than four. They are issued together and every one is a
   // small, member_id-filtered, column-limited query, so the added latency is
   // one query's worth at most — nothing next to the model call that follows.
-  // The three new ones deliberately fetch no document or summary bodies; see
+  // None of them fetches a document, summary or transcript body; see
   // getMemberDocumentTitles in lib/appStore.ts for why that is a separate
-  // function rather than a flag.
-  const [member, assessment, completedByModule, facts, decisions, summaries, documents] =
-    await Promise.all([
-      getMemberById(memberId),
-      getBusinessAssessment(memberId),
-      getCompletedStepsByModule(memberId),
-      getMemberFacts(memberId),
-      getMemberDecisions(memberId, MAX_CONTEXT_DECISIONS),
-      getModuleSummaryRefs(memberId, MAX_CONTEXT_SUMMARIES),
-      getMemberDocumentTitles(memberId, MAX_CONTEXT_DOCUMENTS),
-    ]);
+  // function rather than a flag, and listConversations for the same choice made
+  // one level down.
+  const [
+    member,
+    assessment,
+    completedByModule,
+    facts,
+    decisions,
+    summaries,
+    documents,
+    recentConversations,
+  ] = await Promise.all([
+    getMemberById(memberId),
+    getBusinessAssessment(memberId),
+    getCompletedStepsByModule(memberId),
+    getMemberFacts(memberId),
+    getMemberDecisions(memberId, MAX_CONTEXT_DECISIONS),
+    getModuleSummaryRefs(memberId, MAX_CONTEXT_SUMMARIES),
+    getMemberDocumentTitles(memberId, MAX_CONTEXT_DOCUMENTS),
+    listConversations(memberId, MAX_CONTEXT_CONVERSATIONS + 1),
+  ]);
 
   if (!member) return null;
 
@@ -316,6 +394,13 @@ export async function buildMemberContext(
 
   const artifacts = artifactLines(decisions, summaries, documents);
   if (artifacts) parts.push(artifacts);
+
+  const conversations = conversationLines(
+    recentConversations
+      .filter((conversation) => conversation.id !== options?.excludeConversationId)
+      .slice(0, MAX_CONTEXT_CONVERSATIONS),
+  );
+  if (conversations) parts.push(conversations);
 
   if (focus) {
     parts.push(

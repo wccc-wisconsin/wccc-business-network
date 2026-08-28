@@ -9,7 +9,7 @@ here and let the commit history carry it.
 
 ## 0. Where the AI stands today
 
-Six surfaces, all fed from one shared description of the member
+Seven surfaces, all fed from one shared description of the member
 (`lib/memberContext.ts`):
 
 | Surface | Route | Output |
@@ -20,6 +20,7 @@ Six surfaces, all fed from one shared description of the member
 | Module Summary | `app/api/ai/summarize-module` | Saved prose artifact per module |
 | Toolkit Documents | `app/api/ai/document` | A real document built from the member's own answers |
 | Funding & Programs | `app/api/ai/opportunities` | Selection from a retrieved catalog, never recall |
+| Fact extraction | `app/api/ai/extract-facts` | Proposals drawn from a chat, each quoting the member, none saved without a tap |
 
 Three decisions already made that the rest of this file builds on:
 
@@ -38,16 +39,23 @@ Everything below is an extension of one of those three, not a new direction.
 
 ---
 
-## 0.4 Unmerged work
+## 0.4 The memory loop, merged
 
-Three commits sit on `feature/memory-loop`, ahead of master. See
-`NEXT-SESSION-PROMPT.md` — it has the merge sequence and the schema step, which
-is not optional for this one.
+`feature/memory-loop` fast-forwarded into master on 2026-08-28. Three commits:
 
-Built and unmerged: token accounting, streaming Coach replies, and the memory
-loop (stored conversations plus member-confirmed fact extraction). That closes
-items 2.2, 2.3 and section 3's remaining entries, along with issues 1, 2 and 5
-from the original review. Delete them from below once master has them.
+| Commit | What |
+| --- | --- |
+| `865d56e` | Token counts persisted on `ai_usage`; the rate limiter's three round trips cut to two. |
+| `156b0a3` | Coach replies stream as they are written. |
+| `5e3f019` | Conversations stored; a conversation can propose profile facts for the member to confirm. |
+
+It needs `supabase-schema.sql` re-run — a whole table (`conversations`) and four
+columns on `ai_usage`. Until it is, saving a conversation and recording spend
+both fail silently: the member chats, the Coach works, and nothing is kept.
+`supabase-verify.sql` should report 101 columns and every row `ok`.
+
+Item 2.3 was built by this and has been deleted from below. Item 2.2 was not:
+there is still no `ai_feedback` table and no rating on any answer.
 
 ---
 
@@ -74,8 +82,32 @@ being done in the same sitting:**
    `grants_cache` rows should read `ok`. Same degradation until then: the cache
    reads return null and every search falls through to a live call.
 
-Then `VERIFY-DEPLOY.md`, whose two checks have been open since PR #16 and are
-now running on a deploy that has changed considerably.
+Then `VERIFY-DEPLOY.md`, whose two oldest checks have been open since PR #16 and
+are now running on a deploy that has changed considerably.
+
+---
+
+## 0.6 The other half of the memory loop
+
+Storing a member's chats without showing them to that member was the one part of
+the loop that did not land with the rest, and it was the half that made the
+storage defensible. Built on 2026-08-28, no schema change:
+
+- **The Coach has a history drawer.** "Past chats" beside the heading lists what
+  is stored — opening line, module, message count, date — and reopens or deletes
+  any of it. Deleting detaches the id from the chat on screen, because
+  `saveConversation` upserts on whatever id it is handed and would otherwise
+  recreate the row on the member's next message.
+- **The Coach reads what it stored.** `lib/memberContext.ts` puts the openings
+  of up to three earlier conversations into the shared context and tells the
+  model plainly that openings are all it has. The chat in progress is excluded
+  by id, which is what keeps the cached prompt prefix stable across a
+  conversation.
+
+Left open, and the reason it is a separate PR: those three rows are read as
+whole transcripts, because `listConversations` derives the opening line from the
+transcript. An `opening` column written at save time would make both the drawer
+and the context read cheap. That is a schema change; it is in section 3.
 
 ---
 
@@ -151,25 +183,7 @@ can be read against what actually produced it. Do not store the full prompt.
 **Size.** Small, but it touches the schema, so it follows the schema rules in
 `README.md` exactly.
 
-### 2.3 — Stream the Coach
-
-**Problem.** Every AI surface is a non-streaming POST that resolves to JSON. On
-the Coach — the one surface that reads as a conversation — the member watches a
-spinner for the whole generation. It is the cheapest available improvement to
-how fast the portal feels, and it changes no advice at all.
-
-**Fix.** Stream the Coach reply, and the Grill's questions. Leave
-`review-step`, the Grill brief, `summarize-module`, `document` and
-`opportunities` alone: they parse or validate structured output, and streaming
-buys them nothing while adding a partial-JSON failure mode.
-
-**Watch for.** The rate limiter must still run before the stream opens. Errors
-after the first byte cannot be a 502 any more — decide how a mid-stream failure
-renders before writing the route, not after. Prompt caching is unaffected.
-
-**Size.** Medium, mostly client-side.
-
-### 2.4 — Tell the member what to do next, unprompted
+### 2.3 — Tell the member what to do next, unprompted
 
 **Problem.** Every surface waits to be asked. A member who does not know what to
 ask gets nothing, and those are the members the portal is most for.
@@ -200,10 +214,18 @@ is worth a release on its own.
   default unchanged, keeps the existing behaviour when unset and makes the
   swap a dashboard change rather than a deploy. `summarize-module` is a
   candidate too; `document` and `grill` are not.
-- **The rate limiter costs three round trips.** Two counts plus an insert before
-  the model is called at all. A single Postgres function returning both counts
-  and recording the attempt would make it one. Keep the fail-open behaviour
-  exactly as it is.
+- **The rate limiter costs two round trips.** It was three; `865d56e` folded the
+  two counts into one, leaving a count and an insert before the model is called
+  at all. A single Postgres function returning the counts *and* recording the
+  attempt would make it one. Keep the fail-open behaviour exactly as it is.
+- **An `opening` column on `conversations`.** Written at save time from the
+  first member turn, alongside a `message_count`. Today both the history drawer
+  and the coach's conversation recall read whole transcripts to derive them —
+  see the comment on `listConversations` in `lib/appStore.ts`, which says as
+  much, and `MAX_CONTEXT_CONVERSATIONS` in `lib/memberContext.ts`, which is held
+  at three because of it. Schema change, so it ships with its `alter table ...
+  add column if not exists`, a backfill for the rows already stored, and a
+  regenerated `supabase-verify.sql`.
 - **Six `select("*")` calls in `lib/appStore.ts`.** Considered and skipped
   twice now: naming columns by hand without a live database to test against
   risks a runtime break on the dashboard for a small win. Worth doing with a
@@ -230,10 +252,20 @@ The document stays for the reasoning in §0 and §1, both of which are worth
 reading before publishing member data anywhere for any reason. Revisit only if
 someone asks for member-to-member search *on this site* specifically.
 
-**Persisting Coach chat history across visits.** Tempting, and 2.1 gets most of
-the benefit for far less: the member's saved artifacts are the durable part of a
-conversation, and the chat transcript is mostly not. Revisit only if members ask
-for it.
+**Free-text fact extraction.** `lib/factExtraction.ts` proposes facts only from
+the answers a member picked, never from prose they typed. A wrong
+`monthly_costs` lifted out of a sentence looks exactly as plausible on a
+confirmation card as a right one, and that card is the only thing standing
+between a guess and the member's profile. Worth revisiting after watching the
+confirmation flow work on real conversations, not before — one line per fact in
+`isExtractableFact` when it is.
+
+> An earlier version of this section listed "persisting Coach chat history
+> across visits" as deliberately not started, reasoning that a member's saved
+> artifacts are the durable part of a conversation and the transcript is not.
+> That was reversed and built — see 0.4 and 0.6. The reasoning turned out to be
+> half right: the transcript is still not what the assistant reads back, only
+> the opening lines are.
 
 ---
 

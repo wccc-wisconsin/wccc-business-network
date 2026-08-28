@@ -1,14 +1,17 @@
 # Post-deploy verification
 
-Four checks that can only be answered against the live site. Each one covers a
+Five checks that can only be answered against the live site. Each one covers a
 mechanism that **fails silently** — the app looks fine either way, and the only
 difference is whether it is doing the thing it was built to do.
 
-Current on `2b91008`. Run these on the deployed Vercel URL, signed in as a real
-member account. They are independent; do them in any order, or one at a time.
+Current on master as of 2026-08-28. Run these on the deployed Vercel URL, signed
+in as a real member account. They are independent; do them in any order, or one
+at a time.
 
-Checks 1 and 2 have been open since PR #16. Checks 3 and 4 are new with the
-Grants.gov cache.
+Checks 1 and 2 have been open since PR #16. Checks 3 and 4 came with the
+Grants.gov cache. Check 5 is new with the Coach's history drawer, and it is the
+only one that has no unit test behind it at all — the drawer is client state,
+and this repo has no browser test harness.
 
 ---
 
@@ -135,6 +138,53 @@ your plan permits scheduled functions.
 
 ---
 
+## Check 5 — the Coach's history drawer, end to end
+
+**What it proves.** Three things that are invisible from the outside and each
+break quietly:
+
+- transcripts are actually being stored (`conversations` table applied),
+- reopening a stored chat replaces what is on screen rather than joining it, and
+- deleting a chat **detaches it from the chat in progress**. `saveConversation`
+  upserts on whatever conversation id it is handed, so a Coach still holding
+  the id of a deleted row would write that row straight back on the next
+  message. The member deletes something, keeps talking, and finds it there
+  again.
+
+**Steps.**
+
+1. Sign in → dashboard → AI Coach. Ask something recognisable, e.g.
+   `verification test — what licences does a caterer need?`. Wait for the reply.
+2. Press **Past chats**. The conversation should be listed, with its opening
+   line and `2 messages`.
+3. Send a second message, then reopen the drawer. Same single entry, now
+   `4 messages` — *not* two entries.
+4. Press **Hide**, reload the page, press **Past chats** again. The entry is
+   still there. Press **Reopen**: the transcript comes back on screen.
+5. Open the drawer, **Delete** → **Delete for good** on that entry. It goes.
+6. Now send another message in the still-open chat, then reopen the drawer.
+
+**Pass on step 3:** one entry with a growing message count. Two entries means
+the id is not being reused and every exchange is leaving a partial copy.
+
+**Pass on step 6:** a **new** entry, opening with the message you just sent. The
+deleted conversation does not reappear.
+
+**Fail on step 2 — the drawer stays empty:** nothing is being stored. Almost
+always the schema: re-run `supabase-schema.sql`, then `supabase-verify.sql`, and
+check the `conversations` rows read `ok`.
+
+**Fail on step 6 — the deleted conversation is back:** the id was not detached.
+`adoptConversation(null)` in `components/AICoach.tsx` is what does it.
+
+**While you are here:** ask the Coach something in a *new* chat after all this,
+and see whether it refers to what you were working on before. That is the
+conversation-recall block in `lib/memberContext.ts`. It should be able to say
+what you came about last time and should *not* claim to remember what it
+answered — it is given opening lines only.
+
+---
+
 ## Reporting back
 
 "Pass" is enough. For a failure, what actually helps:
@@ -143,3 +193,4 @@ your plan permits scheduled functions.
 - Check 2 — the full `callClaude usage` line from both messages.
 - Check 3 — the exact provenance line under the results.
 - Check 4 — the status code from step 1, and the `refresh-grants` log line if there is one.
+- Check 5 — which step, and what the drawer showed instead.

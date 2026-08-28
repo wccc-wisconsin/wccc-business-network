@@ -23,6 +23,12 @@ export async function POST(request: NextRequest) {
 
   const body = await request.json().catch(() => null);
   const moduleKey = typeof body?.moduleKey === "string" ? body.moduleKey : null;
+  // Which stored conversation this chat is, once the client has been told. Used
+  // for exactly one thing — keeping this chat out of the "earlier conversations"
+  // block below, where being reminded of the message you just sent would read
+  // as a malfunction. It is never used to read or write a row here, so an id
+  // belonging to someone else excludes nothing and reveals nothing.
+  const conversationId = typeof body?.conversationId === "string" ? body.conversationId : null;
   const messages = body?.messages;
   if (!Array.isArray(messages)) {
     return NextResponse.json({ ok: false, error: "Missing messages." }, { status: 400 });
@@ -49,7 +55,9 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ ok: false, error: "No question to answer." }, { status: 400 });
   }
 
-  const context = await buildMemberContext(userId, moduleKey);
+  const context = await buildMemberContext(userId, moduleKey, {
+    excludeConversationId: conversationId,
+  });
   if (!context) {
     return NextResponse.json({ ok: false, error: "Member profile not found." }, { status: 404 });
   }
