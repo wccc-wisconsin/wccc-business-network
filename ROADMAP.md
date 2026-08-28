@@ -38,6 +38,19 @@ Everything below is an extension of one of those three, not a new direction.
 
 ---
 
+## 0.4 Unmerged work
+
+Three commits sit on `feature/memory-loop`, ahead of master. See
+`NEXT-SESSION-PROMPT.md` — it has the merge sequence and the schema step, which
+is not optional for this one.
+
+Built and unmerged: token accounting, streaming Coach replies, and the memory
+loop (stored conversations plus member-confirmed fact extraction). That closes
+items 2.2, 2.3 and section 3's remaining entries, along with issues 1, 2 and 5
+from the original review. Delete them from below once master has them.
+
+---
+
 ## 0.5 Shipped, and what it still needs from a person
 
 Three changes merged into master as `4509af1` (fast-forwarded, no merge commit):
@@ -200,11 +213,22 @@ is worth a release on its own.
 
 ## 4. Deliberately not started
 
-**The member directory.** `DIRECTORY-DESIGN.md` is complete and two decisions
-block any code: contact method (in-portal relay, member-chooses, or plain
-email) and reciprocity (must you be listed to browse). Note §0 of that document
-— isolation here is application code, not RLS, so the directory needs a
-server-side read path that structurally cannot return non-consented data.
+**The member directory — shelved, and probably for good.** `DIRECTORY-DESIGN.md`
+is a complete proposal and no code was ever written against it. It is parked
+because of what this site is for, not because the design is unfinished.
+
+Asked to decide how members would contact each other, the answer was that they
+largely don't — and where they do, it happens in the WCCC hub. This site is a
+technical assistant for owners who need answers to their own problems, not a
+networking directory. A feature that exists to connect members to each other is
+solving a problem this portal does not have, and it would carry the heaviest
+privacy burden in the repo to do it: consent handling, a server-side read path
+that structurally cannot return non-consented data, and a standing obligation to
+keep both correct.
+
+The document stays for the reasoning in §0 and §1, both of which are worth
+reading before publishing member data anywhere for any reason. Revisit only if
+someone asks for member-to-member search *on this site* specifically.
 
 **Persisting Coach chat history across visits.** Tempting, and 2.1 gets most of
 the benefit for far less: the member's saved artifacts are the durable part of a

@@ -1,6 +1,26 @@
 # WCCC member-to-member directory — consent and read-path design
 
-**Status: proposal. No code written. Needs your approval, and on two points your decision.**
+**Status: SHELVED, 2026-08-27. No code was written and none is planned.**
+
+Not shelved because the design is unfinished — it is finished. Shelved because
+of what this site turned out to be for. Asked to decide how members would
+contact each other through it (Q1 below), the answer was that they largely
+don't, and where they do it happens in the WCCC hub. This portal is a technical
+assistant for owners working on their own business, and a member-to-member
+directory answers a question nobody here is asking — while carrying the heaviest
+privacy obligation in the repo to do it.
+
+Everything below stands as written. Two parts are worth reading even if the
+directory is never built:
+
+  - **§0**, which corrects a load-bearing misconception: member isolation in
+    this codebase is enforced by application code, not by RLS. The service role
+    bypasses policies. Anything the server asks for, it gets.
+  - **§1**, which works out which member facts should never be publishable even
+    with consent, and why consent to publish `monthly_costs` or a renewal date
+    is not informed consent.
+
+Read both before exposing member data anywhere, for any reason.
 
 This is half two of the catalog work: let members find each other for trade — who
 in the chamber can supply what. The data mostly exists already in `member_facts`.

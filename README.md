@@ -31,7 +31,7 @@ The script is additive and safe to re-run — every statement uses `if not exist
 1. Supabase dashboard → SQL Editor → New query → paste all of `supabase-schema.sql` → Run.
 2. Paste all of `supabase-verify.sql` → Run.
 
-Step 2 runs two checks: that every one of the 87 columns the app reads or
+Step 2 runs two checks: that every one of the 90 columns the app reads or
 writes exists, and that Row Level Security is on for every table. Every row should read `ok`. It is
 generated from `supabase-schema.sql`, so regenerate it when you add a table or
 column there.
@@ -48,6 +48,7 @@ absent — the member fills in the form, sees a result, and nothing is saved:
 | `member_documents` | Module toolkit documents aren't kept |
 | `member_facts` | Facts gathered from guided steps don't carry over, and the compliance calendar can't personalise |
 | `ai_usage` | The per-member daily caps on the AI features stop applying — see `lib/aiRateLimit.ts`. Fails open, so AI keeps working, uncapped |
+| `grants_cache` | Every funding search calls Grants.gov live again, inside the member's request, and the nightly `/api/cron/refresh-grants` job has nowhere to write. Degrades to the pre-cache behaviour rather than breaking — so it looks fine and is simply slower and more fragile |
 
 A note on re-running: `create table if not exists` is a **no-op on a table that
 already exists**, so it will not add a column to a table created by an earlier
