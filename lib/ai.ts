@@ -176,6 +176,221 @@ export async function callClaude(
   }
 }
 
+
+/**
+ * One piece of a streamed reply.
+ *
+ * `error` can arrive at any point, including after text has already been sent —
+ * which is the whole reason this is a typed event stream rather than raw text.
+ * A non-streaming route answers a failure with a 502 and a message; a streamed
+ * one has already sent a 200 and some words by the time it finds out. The
+ * member has to be told inside the stream or not at all.
+ */
+export type ClaudeStreamEvent =
+  | { type: "text"; value: string }
+  | { type: "error"; message: string }
+  | { type: "done"; usage: AiSpend };
+
+/** Anthropic's SSE frames, narrowed to the fields this cares about. */
+type StreamFrame = {
+  type?: unknown;
+  delta?: { type?: unknown; text?: unknown };
+  message?: { usage?: unknown };
+  usage?: unknown;
+  error?: { message?: unknown };
+};
+
+/**
+ * Streams a reply, yielding text as it is written.
+ *
+ * Same prompt handling as callClaude — including the cache split — so a route
+ * can switch between them without changing what the model receives. What
+ * differs is only when the member sees the words.
+ *
+ * Always ends with exactly one terminal event, `done` or `error`, so a consumer
+ * never has to guess whether a stream that stopped was finished or broken.
+ *
+ * Usage arrives in two halves: input and cache counts in `message_start`,
+ * output in the final `message_delta`. Both are accumulated and reported on
+ * `done`, so spend accounting works the same as it does for a whole-response
+ * call.
+ */
+export async function* streamClaude(
+  systemPrompt: SystemPrompt,
+  messages: ChatMessage[],
+  maxTokens = 700,
+  label = "unlabelled",
+): AsyncGenerator<ClaudeStreamEvent> {
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) {
+    yield {
+      type: "error",
+      message: "AI features aren't configured yet — an admin needs to add ANTHROPIC_API_KEY in Vercel.",
+    };
+    return;
+  }
+  if (messages.length === 0) {
+    yield { type: "error", message: "Nothing to send to the AI." };
+    return;
+  }
+
+  let response: Response;
+  try {
+    response = await fetch(ANTHROPIC_API_URL, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-api-key": apiKey,
+        "anthropic-version": "2023-06-01",
+      },
+      body: JSON.stringify({
+        model: MODEL,
+        max_tokens: maxTokens,
+        system: buildSystem(systemPrompt),
+        messages,
+        stream: true,
+      }),
+    });
+  } catch (error) {
+    console.error("streamClaude: request failed", error);
+    yield { type: "error", message: "Couldn't reach the AI assistant. Please try again shortly." };
+    return;
+  }
+
+  if (!response.ok || !response.body) {
+    const body = await response.text().catch(() => "");
+    console.error("streamClaude: Anthropic API error", response.status, body);
+    yield {
+      type: "error",
+      message: "The AI assistant is temporarily unavailable. Please try again shortly.",
+    };
+    return;
+  }
+
+  const usage: AiSpend = {
+    inputTokens: 0,
+    outputTokens: 0,
+    cacheReadTokens: 0,
+    cacheWriteTokens: 0,
+  };
+  let sawText = false;
+
+  try {
+    for await (const frame of readSseFrames(response.body)) {
+      if (frame.type === "content_block_delta") {
+        const delta = frame.delta;
+        if (delta?.type === "text_delta" && typeof delta.text === "string" && delta.text !== "") {
+          sawText = true;
+          yield { type: "text", value: delta.text };
+        }
+        continue;
+      }
+
+      // Input and cache counts are only ever sent here; output only in the
+      // final message_delta. Merging rather than overwriting is what keeps
+      // both halves.
+      if (frame.type === "message_start") {
+        Object.assign(usage, mergeSpend(usage, readSpend(frame.message?.usage)));
+        continue;
+      }
+      if (frame.type === "message_delta") {
+        Object.assign(usage, mergeSpend(usage, readSpend(frame.usage)));
+        continue;
+      }
+      if (frame.type === "error") {
+        const detail = frame.error?.message;
+        console.error("streamClaude: stream error frame", detail);
+        yield {
+          type: "error",
+          message: "The AI assistant stopped part-way through. Please try again.",
+        };
+        return;
+      }
+    }
+  } catch (error) {
+    // A connection dropped mid-stream. Whatever was already yielded is real
+    // and stays on screen; the member is told the rest is missing rather than
+    // being left with a sentence that stops.
+    console.error("streamClaude: stream broke", error);
+    yield {
+      type: "error",
+      message: sawText
+        ? "The connection dropped part-way through that answer. Please try again."
+        : "Couldn't reach the AI assistant. Please try again shortly.",
+    };
+    return;
+  }
+
+  logUsage(label, typeof systemPrompt !== "string", usage);
+  yield { type: "done", usage };
+}
+
+/**
+ * Keeps the larger of each count.
+ *
+ * `message_start` carries input and cache tokens with output at zero;
+ * `message_delta` carries the final output with the rest absent. Taking the
+ * maximum merges them without needing to know which frame carries what — and
+ * is stable if a future API version sends a field in both.
+ */
+function mergeSpend(a: AiSpend, b: AiSpend): AiSpend {
+  return {
+    inputTokens: Math.max(a.inputTokens, b.inputTokens),
+    outputTokens: Math.max(a.outputTokens, b.outputTokens),
+    cacheReadTokens: Math.max(a.cacheReadTokens, b.cacheReadTokens),
+    cacheWriteTokens: Math.max(a.cacheWriteTokens, b.cacheWriteTokens),
+  };
+}
+
+/**
+ * Parses an SSE body into frames.
+ *
+ * Only the `data:` lines matter — the `event:` line repeats the `type` already
+ * inside the JSON. Frames are separated by a blank line, and a chunk boundary
+ * can fall anywhere, including mid-line, so the buffer is only consumed up to
+ * the last complete separator.
+ *
+ * Unparseable data is skipped rather than thrown on. A single malformed frame
+ * should cost the member that fragment, not the rest of their answer.
+ */
+async function* readSseFrames(body: ReadableStream<Uint8Array>): AsyncGenerator<StreamFrame> {
+  const decoder = new TextDecoder();
+  const reader = body.getReader();
+  let buffer = "";
+
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+
+      let separator = buffer.indexOf("\n\n");
+      while (separator !== -1) {
+        const block = buffer.slice(0, separator);
+        buffer = buffer.slice(separator + 2);
+
+        for (const line of block.split("\n")) {
+          if (!line.startsWith("data:")) continue;
+          const payload = line.slice(5).trim();
+          if (!payload || payload === "[DONE]") continue;
+          try {
+            yield JSON.parse(payload) as StreamFrame;
+          } catch {
+            // Skip the fragment, keep the stream.
+          }
+        }
+
+        separator = buffer.indexOf("\n\n");
+      }
+    }
+  } finally {
+    // Releasing matters on an early return — an abandoned reader keeps the
+    // connection open for the rest of the function invocation.
+    reader.releaseLock();
+  }
+}
+
 /**
  * Reads the API's usage block into the four numbers that are billed separately.
  *

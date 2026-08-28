@@ -3,7 +3,7 @@ import { auth } from "@clerk/nextjs/server";
 import { enforceAiRateLimit, recordSpend } from "@/lib/aiRateLimit";
 import { findModule } from "@/data/modules";
 import { buildMemberContext } from "@/lib/memberContext";
-import { callClaude, type ChatMessage } from "@/lib/ai";
+import { streamClaude, type ChatMessage, type ClaudeStreamEvent } from "@/lib/ai";
 
 // Freeform AI Coach chat. Runs on module pages (where it's told which module
 // the member is looking at) and on the dashboard (where it isn't), so
@@ -72,15 +72,73 @@ Be concise, practical, and specific to their situation — no generic encouragem
   // for a member with a filled-in profile it runs to a couple of thousand
   // tokens. `stable` with no `volatile` because nothing in it varies turn to
   // turn — the conversation itself travels in `messages`, after the prompt.
-  const result = await callClaude({ stable: systemPrompt }, safeMessages, 500, "coach");
+  //
+  // Streamed, unlike every other AI route. This is the one surface that reads
+  // as a conversation, and it was the one where the member watched a spinner
+  // for the whole generation. The routes that return structured JSON stay
+  // whole-response on purpose: streaming buys them nothing and adds a
+  // partial-JSON failure mode.
+  const events = streamClaude({ stable: systemPrompt }, safeMessages, 500, "coach");
 
-  // Files what this call cost against the attempt the limiter recorded. A
-  // failed call has no usage to report, so its row stays null — which is how a
-  // call that never came back is told apart from one that cost nothing.
-  await recordSpend(usageId, result.ok ? result.usage : undefined);
-  if (!result.ok) {
-    return NextResponse.json({ ok: false, error: result.error }, { status: 502 });
-  }
+  return new NextResponse(toNdjson(events, usageId), {
+    status: 200,
+    headers: {
+      "content-type": "application/x-ndjson; charset=utf-8",
+      // Without these a proxy is free to buffer the whole body and deliver it
+      // in one piece — every cost of streaming and none of the benefit.
+      "cache-control": "no-store, no-transform",
+      "x-accel-buffering": "no",
+    },
+  });
+}
 
-  return NextResponse.json({ ok: true, reply: result.text });
+/**
+ * Turns the event generator into newline-delimited JSON.
+ *
+ * NDJSON rather than raw text because a failure can land after the first byte
+ * has gone out. By then the status is 200 and unchangeable, so an error has to
+ * travel inside the body as something the client can recognise — see
+ * ClaudeStreamEvent in lib/ai.ts. With raw text the client could not tell an
+ * answer that finished from one that broke off mid-sentence.
+ *
+ * Spend is filed on `done`, which carries the totals the stream accumulated. A
+ * stream ending in `error` files nothing and leaves the row null, exactly as a
+ * failed whole-response call does.
+ */
+function toNdjson(
+  events: AsyncGenerator<ClaudeStreamEvent>,
+  usageId: string | null,
+): ReadableStream<Uint8Array> {
+  const encoder = new TextEncoder();
+
+  return new ReadableStream({
+    async start(controller) {
+      try {
+        for await (const event of events) {
+          if (event.type === "done") {
+            // Awaited before the stream closes, so the write cannot be cut
+            // short by the invocation ending as the response completes.
+            await recordSpend(usageId, event.usage);
+            controller.enqueue(encoder.encode(JSON.stringify({ type: "done" }) + "\n"));
+            continue;
+          }
+          controller.enqueue(encoder.encode(JSON.stringify(event) + "\n"));
+        }
+      } catch (error) {
+        // The generator is written not to throw, but a stream that dies
+        // silently looks to a member like an answer that simply stopped.
+        console.error("coach: stream failed", error);
+        controller.enqueue(
+          encoder.encode(
+            JSON.stringify({
+              type: "error",
+              message: "That answer stopped unexpectedly. Please try again.",
+            }) + "\n",
+          ),
+        );
+      } finally {
+        controller.close();
+      }
+    },
+  });
 }

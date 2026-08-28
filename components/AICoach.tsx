@@ -19,6 +19,78 @@ type Props = {
 // not persisted across visits (the route injects the member's context fresh
 // into the system prompt on every request, so nothing is lost by not saving
 // history).
+/**
+ * Reads the NDJSON event stream, appending text to the reply as it arrives.
+ *
+ * The assistant message is created on the first `text` event and grown in place
+ * after that, so nothing appears until there is something to show and the reply
+ * is never briefly blank.
+ *
+ * An `error` can arrive after text has already rendered — the response was a
+ * 200 long before the failure happened. Whatever arrived stays on screen and
+ * the error is shown beneath it: a half-answer a member can read beats an empty
+ * box, as long as they are told it is a half-answer.
+ */
+async function consumeStream(
+  body: ReadableStream<Uint8Array>,
+  setMessages: React.Dispatch<React.SetStateAction<Message[]>>,
+  setError: (message: string) => void,
+) {
+  const reader = body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let started = false;
+
+  const handle = (line: string) => {
+    if (!line.trim()) return;
+    let event: { type?: string; value?: string; message?: string };
+    try {
+      event = JSON.parse(line);
+    } catch {
+      // A truncated trailing line. Nothing to show, nothing worth failing over.
+      return;
+    }
+
+    if (event.type === "text" && typeof event.value === "string") {
+      const text = event.value;
+      if (!started) {
+        started = true;
+        setMessages((m) => [...m, { role: "assistant", content: text }]);
+        return;
+      }
+      setMessages((m) => {
+        const last = m[m.length - 1];
+        if (!last || last.role !== "assistant") return m;
+        return [...m.slice(0, -1), { role: "assistant", content: last.content + text }];
+      });
+      return;
+    }
+
+    if (event.type === "error") {
+      setError(event.message || "Something went wrong.");
+    }
+  };
+
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+
+      let newline = buffer.indexOf("\n");
+      while (newline !== -1) {
+        handle(buffer.slice(0, newline));
+        buffer = buffer.slice(newline + 1);
+        newline = buffer.indexOf("\n");
+      }
+    }
+    handle(buffer);
+  } finally {
+    reader.releaseLock();
+  }
+}
+
 export default function AICoach({ moduleKey, moduleLabel }: Props) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
@@ -40,12 +112,15 @@ export default function AICoach({ moduleKey, moduleLabel }: Props) {
           headers: { "content-type": "application/json" },
           body: JSON.stringify({ moduleKey, messages: next }),
         });
-        const data = await res.json();
-        if (!data.ok) {
-          setError(data.error || "Something went wrong.");
+        // A rejection before the stream opens — not signed in, over the daily
+        // cap — is still an ordinary JSON error response.
+        if (!res.ok || !res.body) {
+          const data = await res.json().catch(() => null);
+          setError(data?.error || "Something went wrong.");
           return;
         }
-        setMessages((m) => [...m, { role: "assistant", content: data.reply }]);
+
+        await consumeStream(res.body, setMessages, setError);
       } catch {
         setError("Couldn't reach the AI assistant. Please try again.");
       }
@@ -81,7 +156,11 @@ export default function AICoach({ moduleKey, moduleLabel }: Props) {
             {m.content}
           </div>
         ))}
-        {isPending && <p className="text-xs text-white/40">Thinking…</p>}
+        {/* Only until the first words land — after that the reply itself is
+            the progress indicator. */}
+        {isPending && messages[messages.length - 1]?.role === "user" && (
+          <p className="text-xs text-white/40">Thinking…</p>
+        )}
       </div>
 
       {error && <p className="mt-3 text-xs font-semibold text-red-400">{error}</p>}
