@@ -28,7 +28,9 @@ vi.mock("@supabase/supabase-js", () => ({
 const mock = createSupabaseMock();
 supabase.mock = mock;
 
-const { buildMemberContext } = await import("@/lib/memberContext");
+const { buildMemberContext, buildLanguageDirective, memberLanguageDirective } = await import(
+  "@/lib/memberContext"
+);
 
 const MEMBER_ROW = {
   id: "user_1",
@@ -74,28 +76,50 @@ const DOCUMENT_ROW = {
 
 /**
  * Stored Coach conversations, newest first — the shape listConversations reads.
- * `transcript` is what the opening line and the message count are derived from.
+ *
+ * Columns, not transcripts. `opening` and `message_count` are written beside the
+ * transcript at save time, so a list read never touches the stored chat itself.
  */
 const CONVERSATION_ROWS = [
   {
     id: "conv_1",
     module_key: "launch",
+    opening: "How do I get DBE certified?",
+    message_count: 2,
     updated_at: "2026-08-24T09:00:00.000Z",
-    transcript: [
-      { role: "user", content: "How do I get DBE certified?" },
-      { role: "assistant", content: "Start with the WisDOT application." },
-    ],
   },
   {
     id: "conv_2",
     module_key: null,
+    opening: "Can I afford a second van?",
+    message_count: 2,
     updated_at: "2026-08-18T09:00:00.000Z",
-    transcript: [
-      { role: "user", content: "Can I afford a second van?" },
-      { role: "assistant", content: "What does the first one bring in?" },
-    ],
   },
 ];
+
+/**
+ * A stored Business Snapshot. `free_module_key` is the column name; the field
+ * is `priorityModuleKey` — see the note in lib/appStore.ts.
+ */
+const ASSESSMENT_ROW = {
+  answers: {},
+  score: 40,
+  stage: "Early Stage",
+  free_module_key: "revenue",
+  updated_at: "2026-08-20T00:00:00.000Z",
+};
+
+/** One `member_facts` row, in the shape getMemberFacts reads. */
+function factRow(key: string, value: string) {
+  return {
+    fact_key: key,
+    value,
+    source: "profile",
+    source_label: "Business Snapshot",
+    updated_at: "2026-08-20T00:00:00.000Z",
+    confirmed_at: "2026-08-20T00:00:00.000Z",
+  };
+}
 
 /** Rows per table. Anything not listed resolves to an empty read. */
 function rowsFrom(tables: Record<string, unknown>) {
@@ -303,9 +327,21 @@ describe("conversation recall", () => {
 
     expect(context!.summary).toContain("opening lines, not transcripts");
     expect(context!.summary).toContain("never claim to remember");
-    // The reply half of a stored exchange is not in the prompt, only the
-    // opening — the guarantee the sentence above is making.
-    expect(context!.summary).not.toContain("Start with the WisDOT application.");
+  });
+
+  /**
+   * The sentence above is a promise, and this is what keeps it true: the
+   * transcript is not merely left out of the prompt, it is never read. A
+   * request for it here would be a stored chat crossing the wire on every
+   * single AI call to produce one line of text.
+   */
+  it("does not ask the database for the transcripts at all", async () => {
+    await buildMemberContext("user_1");
+
+    const read = mock.forTable("conversations")[0];
+    expect(read.columns).toBeDefined();
+    expect(read.columns).not.toContain("transcript");
+    expect(read.columns).toContain("opening");
   });
 
   it("leaves out the chat that is currently in progress", async () => {
@@ -326,8 +362,9 @@ describe("conversation recall", () => {
         conversations: [1, 2, 3, 4, 5].map((n) => ({
           id: `conv_${n}`,
           module_key: null,
+          opening: `Question number ${n}`,
+          message_count: 1,
           updated_at: `2026-08-0${n}T09:00:00.000Z`,
-          transcript: [{ role: "user", content: `Question number ${n}` }],
         })),
       }),
     );
@@ -363,8 +400,9 @@ describe("conversation recall", () => {
           {
             id: "conv_x",
             module_key: null,
+            opening: "Two things.\n\nOne: payroll.",
+            message_count: 1,
             updated_at: "2026-08-24T09:00:00.000Z",
-            transcript: [{ role: "user", content: "Two things.\n\nOne: payroll." }],
           },
         ],
       }),
@@ -382,11 +420,14 @@ describe("conversation recall", () => {
       rowsFrom({
         members: MEMBER_ROW,
         conversations: [
+          // A row from before the opening column existed that the backfill
+          // could not fill, or a chat with no member turn in it at all.
           {
             id: "conv_y",
             module_key: null,
+            opening: null,
+            message_count: null,
             updated_at: "2026-08-24T09:00:00.000Z",
-            transcript: [{ role: "assistant", content: "Are you still there?" }],
           },
         ],
       }),
@@ -406,10 +447,176 @@ describe("conversation recall", () => {
     expect(context!.summary).toContain("Golden Lotus Catering");
   });
 
-  it("never puts a transcript body on the wire twice over", async () => {
+  it("reads the conversation list once, not once per turn or module", async () => {
     await buildMemberContext("user_1");
 
-    // One read, not one per turn or per module.
     expect(mock.forTable("conversations")).toHaveLength(1);
+  });
+});
+
+
+/**
+ * The language preference.
+ *
+ * This is the only fact that changes how the portal answers rather than what it
+ * knows, and it reaches the model as an instruction rather than as a claim.
+ * Four things have to hold, and each one fails quietly if it stops holding:
+ *
+ *   - English and no-preference produce *nothing*, so a member who never
+ *     touched this setting sends the exact prompt they always did,
+ *   - a stored value naming no language we offer is treated as absent rather
+ *     than pasted into the prompt,
+ *   - names, numbers and URLs are ruled back into English inside the
+ *     translated text — a translated agency name is a search that finds
+ *     nothing, and
+ *   - the preference never appears in the block of things the member said
+ *     about their business, because it is not one.
+ */
+describe("the language directive", () => {
+  const withLanguage = (value: string) =>
+    rowsFrom({ members: MEMBER_ROW, member_facts: [factRow("preferred_language", value)] });
+
+  it("says nothing at all when the member has no preference", async () => {
+    mock.reset(rowsFrom({ members: MEMBER_ROW }));
+
+    const context = await buildMemberContext("user_1");
+
+    expect(context!.languageDirective).toBe("");
+  });
+
+  it("says nothing when the member chose English", async () => {
+    mock.reset(withLanguage("en"));
+
+    const context = await buildMemberContext("user_1");
+
+    expect(context!.languageDirective).toBe("");
+  });
+
+  it("names the language the member asked for", async () => {
+    mock.reset(withLanguage("zh-Hant"));
+
+    const context = await buildMemberContext("user_1");
+
+    expect(context!.languageDirective).toContain("Traditional Chinese");
+    // Simplified and Traditional are separate choices; picking one must not
+    // produce the other.
+    expect(context!.languageDirective).not.toContain("Simplified");
+  });
+
+  it("keeps agency names, form numbers and web addresses in English", async () => {
+    mock.reset(withLanguage("es"));
+
+    const directive = (await buildMemberContext("user_1"))!.languageDirective;
+
+    expect(directive).toContain("Keep in English");
+    expect(directive).toContain("WEDC");
+    expect(directive).toContain("form numbers");
+    expect(directive).toContain("web address");
+  });
+
+  it("protects the JSON parsers on the surfaces that have them", async () => {
+    mock.reset(withLanguage("hmn"));
+
+    const directive = (await buildMemberContext("user_1"))!.languageDirective;
+
+    expect(directive).toContain("translate the values and never the keys");
+    // The Grill's confidence level is matched against three English words and
+    // silently falls back to "Medium" — a translated one shows the member a
+    // level nobody chose.
+    expect(directive).toContain("fixes a value to a specific set of English words");
+  });
+
+  /**
+   * A stored value is data, and this is the one place data would become an
+   * instruction to the model. Anything not in the table is treated as absent.
+   */
+  it("ignores a stored value that names no language it offers", () => {
+    const stored = (value: string) => ({
+      preferred_language: {
+        key: "preferred_language",
+        value,
+        source: "profile",
+        sourceLabel: "Business Snapshot",
+        updatedAt: "2026-08-20T00:00:00.000Z",
+        confirmedAt: "2026-08-20T00:00:00.000Z",
+      },
+    });
+
+    expect(buildLanguageDirective(stored("klingon"))).toBe("");
+    expect(buildLanguageDirective(stored(""))).toBe("");
+    expect(buildLanguageDirective({})).toBe("");
+  });
+
+  it("never states the preference as a fact about the business", async () => {
+    mock.reset(withLanguage("zh-Hans"));
+
+    const context = await buildMemberContext("user_1");
+
+    // The summary block is introduced as what the member said about their
+    // business. A language preference is not that, and listing it there would
+    // also put it in front of every surface as though it were.
+    expect(context!.summary).not.toContain("Preferred language");
+    expect(context!.summary).toContain("no saved details about this business");
+  });
+
+  it("reads the same preference for the surfaces that build no context", async () => {
+    mock.reset(withLanguage("es"));
+
+    const directive = await memberLanguageDirective("user_1");
+
+    expect(directive).toContain("Spanish");
+    expect(mock.forTable("member_facts")[0].filters).toContainEqual(["eq", "member_id", "user_1"]);
+  });
+});
+
+
+/**
+ * The Business Snapshot's priority answer, and what happened to tier gating.
+ *
+ * The answer used to unlock one roadmap module free and had no other consumer,
+ * so when gating was switched off it would have become a stored value nothing
+ * read — and the card on the dashboard would have gone on promising an unlock.
+ * It reaches the assistant instead, which is the use it was always better at.
+ */
+describe("the member's stated priority", () => {
+  it("tells the assistant what the member said they are working on", async () => {
+    mock.reset(rowsFrom({ members: MEMBER_ROW, business_assessments: ASSESSMENT_ROW }));
+
+    const context = await buildMemberContext("user_1");
+
+    expect(context!.summary).toContain("matters most right now");
+    // The module's label, not the stored key.
+    expect(context!.summary).toContain('"Revenue"');
+  });
+
+  it("says nothing when the Snapshot has not been taken", async () => {
+    mock.reset(rowsFrom({ members: MEMBER_ROW }));
+
+    const context = await buildMemberContext("user_1");
+
+    expect(context!.summary).not.toContain("matters most right now");
+    expect(context!.summary).toContain("haven't filled in the Business Snapshot");
+  });
+
+  it("does not claim the member has acted on it", async () => {
+    mock.reset(rowsFrom({ members: MEMBER_ROW, business_assessments: ASSESSMENT_ROW }));
+
+    const context = await buildMemberContext("user_1");
+
+    expect(context!.summary).toContain("do not assume they have made progress");
+  });
+
+  /**
+   * Tier gating is off — every module is open to every member, whatever they
+   * pay. The roadmap block is built from isModuleUnlocked, so if that ever
+   * silently starts gating again, a Network member's prompt says so here first.
+   */
+  it("never tells the assistant a stage is locked", async () => {
+    mock.reset(rowsFrom({ members: MEMBER_ROW }));
+
+    const context = await buildMemberContext("user_1");
+
+    expect(context!.summary).toContain("Their roadmap standing");
+    expect(context!.summary).not.toContain("locked (needs");
   });
 });

@@ -45,7 +45,20 @@ beforeEach(() => {
       return { data: { id: "c1", module_key: null, transcript: TURNS, created_at: "x", updated_at: "y" }, error: null };
     }
     if (call.op === "select") {
-      return { data: [{ id: "c1", module_key: null, transcript: TURNS, updated_at: "y" }], error: null };
+      // A list read: columns only. The transcript is deliberately absent, the
+      // way it is absent from the real query.
+      return {
+        data: [
+          {
+            id: "c1",
+            module_key: null,
+            opening: "Should I lease a commercial kitchen?",
+            message_count: 2,
+            updated_at: "y",
+          },
+        ],
+        error: null,
+      };
     }
     if (call.op === "insert" || call.op === "upsert") return { data: { id: "c1" }, error: null };
     if (call.op === "delete") return { data: [{ id: "c1" }], error: null };
@@ -102,6 +115,38 @@ describe("saving", () => {
     expect(calls.filter((c) => c.op === "upsert")).toHaveLength(1);
   });
 
+  /**
+   * The denormalised pair travels on the same upsert as the transcript it
+   * describes. Written from a different call — or read back and written
+   * later — they could describe a different conversation than the one stored
+   * beside them, which is the failure mode denormalising always risks.
+   */
+  it("writes the opening line and the count alongside the transcript", async () => {
+    await saveConversation("user_1", TURNS, null, "c1");
+
+    const write = mock.forTable("conversations").find((c) => c.op === "upsert")!;
+    expect(write.payload).toMatchObject({
+      opening: "Should I lease a commercial kitchen?",
+      message_count: 2,
+      transcript: TURNS,
+    });
+  });
+
+  it("takes the opening from the member's first turn, not the assistant's", async () => {
+    await saveConversation(
+      "user_1",
+      [
+        { role: "assistant", content: "Anything I can help with?" },
+        { role: "user", content: "Yes — payroll." },
+      ],
+      null,
+      null,
+    );
+
+    const write = mock.forTable("conversations").find((c) => c.op === "upsert")!;
+    expect(write.payload).toMatchObject({ opening: "Yes — payroll." });
+  });
+
   it("reuses the same row when given an id", async () => {
     await saveConversation("user_1", TURNS, null, "c1");
 
@@ -130,12 +175,46 @@ describe("saving", () => {
 });
 
 describe("listing", () => {
-  it("reduces transcripts to an opening line rather than shipping them whole", async () => {
+  /**
+   * The opening line and the count are columns now, written beside the
+   * transcript at save time. They used to be derived here, which meant a list
+   * of twenty conversations read twenty whole stored chats to print twenty
+   * headings — and the coach's conversation recall paid the same cost on every
+   * AI request.
+   */
+  it("never asks for the transcript", async () => {
+    await listConversations("user_1");
+
+    const read = mock.forTable("conversations")[0];
+    expect(read.columns).toBeDefined();
+    expect(read.columns).not.toContain("transcript");
+    expect(read.columns).toContain("opening");
+    expect(read.columns).toContain("message_count");
+  });
+
+  it("returns what a list needs and no message bodies", async () => {
     const list = await listConversations("user_1");
 
     expect(list[0].opening).toBe("Should I lease a commercial kitchen?");
     expect(list[0].messageCount).toBe(2);
     expect(list[0]).not.toHaveProperty("transcript");
+  });
+
+  /**
+   * A row written before the columns existed that the backfill could not fill —
+   * a chat with no member turn in it. Empty and zero are the honest answers;
+   * throwing or rendering "null" would not be.
+   */
+  it("survives a row with no stored opening", async () => {
+    mock.reset(() => ({
+      data: [{ id: "c9", module_key: null, opening: null, message_count: null, updated_at: "y" }],
+      error: null,
+    }));
+
+    const list = await listConversations("user_1");
+
+    expect(list[0].opening).toBe("");
+    expect(list[0].messageCount).toBe(0);
   });
 
   it("bounds how many it returns", async () => {

@@ -6,12 +6,12 @@ import { redirect } from "next/navigation";
 import {
   saveBusinessAssessment,
   saveStepProgress,
+  updateMemberProfile,
   upsertMember,
   upsertMemberFacts,
   type FactWrite,
-  type JourneyType,
-  type MembershipTier,
 } from "@/lib/appStore";
+import { industryOptions } from "@/data/industries";
 import { findStep, stepProvenanceLabel } from "@/data/modules";
 import { assessmentQuestions, computeAssessment, profileQuestions } from "@/data/assessment";
 import { factDefinition, isValidFactValue } from "@/data/facts";
@@ -31,25 +31,6 @@ function fieldValue(formData: FormData, name: string) {
   return typeof value === "string" ? value.trim() : "";
 }
 
-// Still accepts "personal" and "both" even while the personal track is switched
-// off and the onboarding form stops offering them (PERSONAL_TRACK_ENABLED in
-// data/modules.ts). Coercing them to "business" here would quietly overwrite the
-// stored preference of members who chose one before it was disabled, and there's
-// nothing to protect against: an unexpected value just means the dashboard's
-// tracksForJourney falls back to the business roadmap.
-function journeyValue(value: string): JourneyType {
-  if (value === "personal") return "personal";
-  if (value === "both") return "both";
-  return "business";
-}
-
-function tierValue(value: string): MembershipTier {
-  if (value === "individual") return "individual";
-  if (value === "business") return "business";
-  if (value === "corporate") return "corporate";
-  return "network";
-}
-
 export async function completeProfileAction(formData: FormData) {
   const { userId } = await auth();
   if (!userId) redirect("/login");
@@ -63,12 +44,72 @@ export async function completeProfileAction(formData: FormData) {
     businessName: fieldValue(formData, "businessName"),
     industry: fieldValue(formData, "industry"),
     city: fieldValue(formData, "city"),
-    journey: journeyValue(fieldValue(formData, "journey")),
-    membershipTier: tierValue(fieldValue(formData, "membershipTier")),
+    // Neither of these is asked at onboarding any more, and neither is read
+    // from the form — a value posted under either name would be ignored.
+    //
+    // `journey` is fixed to the business track because it is the only one with
+    // guided steps built (PERSONAL_TRACK_ENABLED in data/modules.ts). Members
+    // who chose "personal" or "both" before that was switched off still hold
+    // those values; this only ever runs for someone completing onboarding, and
+    // it does not run again.
+    //
+    // `membershipTier` starts everyone at network. It no longer decides what
+    // anyone can open (TIER_GATING_ENABLED in data/modules.ts), so it is now a
+    // record of what WCCC has actually been paid rather than a self-declared
+    // access level — which means the right default is the honest one, and
+    // someone at WCCC sets it when a membership is really taken out.
+    journey: "business",
+    membershipTier: "network",
   });
 
   revalidatePath("/dashboard");
   redirect("/dashboard");
+}
+
+/**
+ * Changes the four profile answers onboarding asks for.
+ *
+ * Onboarding is a one-way door — app/onboarding/page.tsx redirects to the
+ * dashboard the moment `industry` is set, so it cannot be reopened even by
+ * typing the URL. Until this existed, a member who moved city, renamed their
+ * business, or picked the wrong industry was stuck with that answer for the
+ * life of the account, and the AI went on describing them by it.
+ *
+ * Industry is checked against the list rather than trusted: it is passed to
+ * Grants.gov as a search term and is the value the dashboard gates on, so an
+ * arbitrary string posted here would be stored, searched for, and rendered as a
+ * selected option that is not in the picker. Name is required because every AI
+ * prompt opens with it. The other two may be blank — see updateMemberProfile
+ * for why blanking has to be allowed to mean blank.
+ */
+export async function updateMemberProfileAction(
+  _prevState: FormState,
+  formData: FormData,
+): Promise<FormState> {
+  const { userId } = await auth();
+  if (!userId) redirect("/login");
+
+  const name = fieldValue(formData, "name");
+  if (!name) return { ok: false, error: "Please enter your name." };
+
+  const industry = fieldValue(formData, "industry");
+  if (!industryOptions.some((option) => option.value === industry)) {
+    return { ok: false, error: "Please choose an industry from the list." };
+  }
+
+  const result = await updateMemberProfile(userId, {
+    name,
+    businessName: fieldValue(formData, "businessName"),
+    industry,
+    city: fieldValue(formData, "city"),
+  });
+
+  if (!result.ok) {
+    return { ok: false, error: "Couldn't save your profile — please try again in a moment." };
+  }
+
+  revalidatePath("/dashboard");
+  return { ok: true, error: null };
 }
 
 // Saves one guided-step's checkbox + question answers together (see
@@ -170,9 +211,9 @@ export async function saveBusinessAssessmentAction(
     factWrites.push({ key, value, source: "profile", sourceLabel: "Business Snapshot" });
   }
 
-  const { score, stage, freeModuleKey } = computeAssessment(answers);
+  const { score, stage, priorityModuleKey } = computeAssessment(answers);
   const [result, factsResult] = await Promise.all([
-    saveBusinessAssessment(userId, answers, score, stage, freeModuleKey),
+    saveBusinessAssessment(userId, answers, score, stage, priorityModuleKey),
     upsertMemberFacts(userId, factWrites),
   ]);
   revalidatePath("/dashboard");

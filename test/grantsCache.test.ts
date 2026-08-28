@@ -330,3 +330,52 @@ describe("the daily refresh", () => {
     expect(report.refreshed.some((entry) => entry.ok)).toBe(true);
   });
 });
+
+/**
+ * The industry a member picks and the keyword Grants.gov is asked for are two
+ * different strings — see data/industries.ts. "Finance & Accounting" was being
+ * searched for verbatim, ampersand and all, and "Other" searched for the word
+ * *other*.
+ *
+ * The mapping has to happen in exactly one place, because the read path and the
+ * nightly refresh both have to arrive at the same keyword. If they disagree the
+ * cache still "works": every search simply misses, falls through to a live
+ * Grants.gov call, returns perfectly good results, and quietly undoes the whole
+ * reason this file exists. Nothing errors, and nothing in the panel looks wrong.
+ */
+describe("the industry a member picked, and the keyword it searches for", () => {
+  it("asks the cache for the mapped keyword, not the label", async () => {
+    mock.reset(handlerFor(cacheRow(["cached-1"], 60 * 60 * 1000)));
+
+    await getFederalGrants("Finance & Accounting");
+
+    const read = mock.forTable("grants_cache")[0];
+    expect(read.filters).toContainEqual(["eq", "keyword", "finance"]);
+  });
+
+  it("warms exactly what the read path will ask for", async () => {
+    mock.reset(handlerFor(null, [{ industry: "finance & accounting" }, { industry: "other" }]));
+
+    const keywords = await keywordsToRefresh();
+
+    expect(keywords).toContain("finance");
+    expect(keywords).not.toContain("finance & accounting");
+    // "Other" maps onto the generic row rather than warming a useless one of
+    // its own, so it de-duplicates against the keyword that is always included.
+    expect(keywords.filter((k) => k === "small business")).toHaveLength(1);
+    expect(keywords).not.toContain("other");
+  });
+
+  /**
+   * A stored industry from an older version of the list, or one typed straight
+   * into the database, is left exactly as it was before the mapping existed.
+   */
+  it("passes an unrecognised industry through unchanged", async () => {
+    mock.reset(handlerFor(cacheRow(["cached-1"], 60 * 60 * 1000)));
+
+    await getFederalGrants("Food Service / Catering");
+
+    const read = mock.forTable("grants_cache")[0];
+    expect(read.filters).toContainEqual(["eq", "keyword", "food service / catering"]);
+  });
+});

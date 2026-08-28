@@ -111,8 +111,23 @@ export async function POST(request: NextRequest) {
   const context = `${memberContext.summary}\n\nThe decision on the table: "${topic}"`;
 
   return phase === "question"
-    ? askNextQuestion(context, memberContext.references, messages, questionsAsked, usageId)
-    : writeBrief(userId, topic, context, memberContext.references, messages, usageId);
+    ? askNextQuestion(
+        context,
+        memberContext.references,
+        memberContext.languageDirective,
+        messages,
+        questionsAsked,
+        usageId,
+      )
+    : writeBrief(
+        userId,
+        topic,
+        context,
+        memberContext.references,
+        memberContext.languageDirective,
+        messages,
+        usageId,
+      );
 }
 
 // ---------------------------------------------------------------------------
@@ -120,6 +135,7 @@ export async function POST(request: NextRequest) {
 async function askNextQuestion(
   context: string,
   references: string,
+  languageDirective: string,
   messages: ChatMessage[],
   questionsAsked: number,
   usageId: string | null,
@@ -148,7 +164,7 @@ Rules, all of them strict:
 - Never re-ask something already answered in this conversation. Build on their last answer.
 - Plain language a busy owner understands. No consultant jargon. Under 80 words total.
 - After the question, add a line beginning exactly with "Suggested answer:" giving your best guess at their answer, so they can confirm or correct it instead of writing an essay.
-- If an answer reveals something that genuinely needs a lawyer, accountant, or lender, name that in your next question rather than giving legal, tax, or financial advice yourself. You are not their attorney, accountant, or financial adviser.`;
+- If an answer reveals something that genuinely needs a lawyer, accountant, or lender, name that in your next question rather than giving legal, tax, or financial advice yourself. You are not their attorney, accountant, or financial adviser.${languageDirective ? `\n\n${languageDirective}` : ""}`;
 
   const volatilePrompt = `\n- You have ${remaining} question${remaining === 1 ? "" : "s"} left. Spend them on what matters most.`;
 
@@ -179,6 +195,7 @@ async function writeBrief(
   topic: string,
   context: string,
   references: string,
+  languageDirective: string,
   messages: ChatMessage[],
   usageId: string | null,
 ) {
@@ -200,7 +217,11 @@ Return ONLY strict JSON, no text around it, matching exactly this shape:
   "risks": [{"risk": "what could go wrong", "mitigation": "the concrete way to reduce it"}],
   "nextSteps": [{"step": "one concrete action", "timeframe": "e.g. This week, Within 30 days"}]
 }
-Use 2-4 risks and 3-5 nextSteps. Every string is plain prose with no markdown.`;
+Use 2-4 risks and 3-5 nextSteps. Every string is plain prose with no markdown.${
+    languageDirective
+      ? `\n\n${languageDirective}\n\nOne exception to translating values: "confidence" stays exactly one of the three English words above, whatever language the rest of the brief is in. The portal matches on that value and falls back to "Medium" when it does not recognise it, so a translated one would show the member a confidence level you did not choose.`
+      : ""
+  }`;
 
   // Not cached: the brief is written once at the end of an interview, and its
   // prompt differs from askNextQuestion's from the first line, so there is no

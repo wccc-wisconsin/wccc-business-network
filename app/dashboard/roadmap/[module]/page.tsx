@@ -1,7 +1,7 @@
 import { auth } from "@clerk/nextjs/server";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
-import { findModule, isModuleUnlocked, tierMeetsMinimum, stepsForModule } from "@/data/modules";
+import { findModule, isModuleUnlocked, stepsForModule } from "@/data/modules";
 import {
   getBusinessAssessment,
   getMemberById,
@@ -57,9 +57,8 @@ export default async function ModulePage({ params }: ModulePageProps) {
   if (!found) notFound();
 
   const { track, module: mod, prev, next } = found;
-  const unlockedByTier = tierMeetsMinimum(member.membershipTier, mod.minTier);
-  const unlocked = isModuleUnlocked(member.membershipTier, mod, assessment?.freeModuleKey);
-  const unlockedByFreeGrant = unlocked && !unlockedByTier;
+  const unlocked = isModuleUnlocked(member.membershipTier, mod, assessment?.priorityModuleKey);
+  const isPriority = !!assessment?.priorityModuleKey && mod.key === assessment.priorityModuleKey;
   const steps = stepsForModule(mod);
   const hasGuidedSteps = steps.length > 0;
 
@@ -153,9 +152,9 @@ export default async function ModulePage({ params }: ModulePageProps) {
         </div>
         <p className="mt-3 text-base text-white/60">{mod.tagline}</p>
 
-        {unlockedByFreeGrant && (
+        {isPriority && (
           <span className="mt-3 inline-block rounded-full border border-emerald-400/30 bg-emerald-400/10 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.12em] text-emerald-300">
-            ✓ Unlocked free from your Business Snapshot
+            ★ Your stated priority
           </span>
         )}
 

@@ -1,6 +1,6 @@
 # Post-deploy verification
 
-Five checks that can only be answered against the live site. Each one covers a
+Six checks that can only be answered against the live site. Each one covers a
 mechanism that **fails silently** — the app looks fine either way, and the only
 difference is whether it is doing the thing it was built to do.
 
@@ -9,9 +9,11 @@ in as a real member account. They are independent; do them in any order, or one
 at a time.
 
 Checks 1 and 2 have been open since PR #16. Checks 3 and 4 came with the
-Grants.gov cache. Check 5 is new with the Coach's history drawer, and it is the
-only one that has no unit test behind it at all — the drawer is client state,
-and this repo has no browser test harness.
+Grants.gov cache. Checks 5 and 6 are new with the Coach's history drawer and
+bilingual advice. Check 5 is the only one with no unit test behind it at all —
+the drawer is client state, and this repo has no browser test harness. Check 6
+is the only one that cannot be answered by a machine at all: it asks whether the
+writing is any good, which needs a person who reads the language.
 
 ---
 
@@ -99,9 +101,14 @@ time, and the date should not change between them.
 
 **Fail — no "checked" date:** `federalFetchedAt` is null, which means the read
 returned nothing and the row was written fresh by that request. Once is normal
-on a keyword nobody has searched before. Every time means the table is missing
-or the write is failing — re-run `supabase-verify.sql` and check the
-`grants_cache` row.
+on a keyword nobody has searched before. Every time means one of two things:
+the table is missing — re-run `supabase-verify.sql` and check the `grants_cache`
+row — or the request path and the nightly refresh disagree about which keyword
+to use, so every search misses a cache full of rows nobody asks for. Both halves
+go through `normalizeKeyword` in `lib/grantsCache.ts`, which maps the member's
+industry to a search term (`data/industries.ts`); if a keyword is ever added on
+one side only, this is the symptom, and it looks exactly like everything
+working.
 
 **Fail — an amber "Grants.gov couldn't be reached" line:** the fallback is
 working as designed, but Grants.gov is unreachable. Worth knowing, not a bug
@@ -170,9 +177,12 @@ the id is not being reused and every exchange is leaving a partial copy.
 **Pass on step 6:** a **new** entry, opening with the message you just sent. The
 deleted conversation does not reappear.
 
-**Fail on step 2 — the drawer stays empty:** nothing is being stored. Almost
-always the schema: re-run `supabase-schema.sql`, then `supabase-verify.sql`, and
-check the `conversations` rows read `ok`.
+**Fail on step 2 — the drawer stays empty:** nothing is being stored, or the
+list read is failing. Almost always the schema: re-run `supabase-schema.sql`,
+then `supabase-verify.sql`, and check the `conversations` rows read `ok`. Note
+that `opening` and `message_count` are newer than the table itself — if those
+two are missing, the transcripts are being stored perfectly well and the drawer
+is still empty, which looks identical from the outside.
 
 **Fail on step 6 — the deleted conversation is back:** the id was not detached.
 `adoptConversation(null)` in `components/AICoach.tsx` is what does it.
@@ -185,6 +195,52 @@ answered — it is given opening lines only.
 
 ---
 
+## Check 6 — the language preference actually reaches the model
+
+**What it proves.** That a member who asks to be answered in their own language
+is, and that the rules protecting them survive the translation. This is the one
+check a machine cannot finish: the plumbing is unit-tested, but whether the
+output reads naturally needs someone who reads the language. **Until that
+person has read it, the feature is built, not verified — don't announce it.**
+
+**Steps.**
+
+1. Dashboard → Business Snapshot → **Edit**. The last field is "Which language
+   would you like the AI features to answer in?" Pick one you or a colleague can
+   read. Save.
+2. Ask the AI Coach a Wisconsin question — licensing, registration, a filing
+   deadline. Something that should make it name an agency.
+3. Run a Decision Grill through to the brief.
+4. Set the preference back to English and ask the Coach one more question.
+
+**Pass on step 2:** the answer is in the chosen language, and inside it, agency
+names (WI DFI, WEDC, Wisconsin SBDC, SCORE, WWBIC), form numbers and web
+addresses are still in English. Those are what a member types into a government
+site, and a translated one finds nothing.
+
+**Pass on step 3:** the brief renders normally — every field populated, and a
+confidence badge reading High, Medium or Low in English. The prose inside it is
+translated; the confidence word is not, because the portal matches on it.
+
+**Pass on step 4:** English again, immediately. The preference is read fresh on
+every request, so there is nothing to clear.
+
+**Fail — still English at step 2:** the preference did not save, or is not
+reaching the prompt. Check the Snapshot reopens with your choice still selected.
+If it does, the fact is stored and the problem is downstream, in
+`buildLanguageDirective`.
+
+**Fail — the brief loses its confidence badge, or a panel comes back blank:** a
+JSON key or a fixed value was translated. That is the failure the directive's
+last two rules exist to prevent, and it means the model ignored one of them.
+Worth reporting with the language you chose — the fix is prompt wording.
+
+**Fail — the language is right but the writing is poor,** stilted, or reads as
+translated English: also a real failure, and the only one here that needs a
+human to see it. Note which surface, and keep the reply.
+
+---
+
 ## Reporting back
 
 "Pass" is enough. For a failure, what actually helps:
@@ -194,3 +250,4 @@ answered — it is given opening lines only.
 - Check 3 — the exact provenance line under the results.
 - Check 4 — the status code from step 1, and the `refresh-grants` log line if there is one.
 - Check 5 — which step, and what the drawer showed instead.
+- Check 6 — which language, which surface, and the reply itself.

@@ -64,6 +64,18 @@ export type MemberContext = {
   /** The member's facts, for callers that need the values rather than prose. */
   facts: Record<string, MemberFact>;
   /**
+   * How to answer, when the member has asked for a language other than English.
+   * Empty string otherwise — see buildLanguageDirective.
+   *
+   * A third thing again, kept out of both `summary` and `references` for the
+   * same reason those two are kept apart: `summary` is who the member is,
+   * `references` is what may be asserted, and this is what language to say it
+   * in. A surface that answers a member embeds it; one that only summarises
+   * their own words back to them has to decide for itself, which is the point
+   * of it being separate.
+   */
+  languageDirective: string;
+  /**
    * Verified reference material plus the rules for using it — see
    * lib/adviceCatalog.ts.
    *
@@ -80,6 +92,82 @@ export type MemberContext = {
   references: string;
 };
 
+/** The fact carrying the member's language choice. */
+export const LANGUAGE_FACT_KEY = "preferred_language";
+
+/**
+ * What each stored value is called when the model is told to write in it.
+ *
+ * Named in English on purpose: this is an instruction to the model, not text a
+ * member reads, and "write in Chinese (Traditional)" is less ambiguous to a
+ * model than a directive written in the target language would be.
+ */
+const languageNames: Record<string, string> = {
+  "zh-Hans": "Simplified Chinese (简体中文)",
+  "zh-Hant": "Traditional Chinese (繁體中文)",
+  es: "Spanish (Español)",
+  hmn: "Hmong (Hmoob)",
+};
+
+/**
+ * How to answer, for a member who asked for something other than English.
+ *
+ * Returns "" for English, for no preference, and for a stored value that names
+ * no language we offer — all three mean "answer the way you always have", and
+ * an empty string appended to a prompt changes nothing. A value that is not in
+ * the table is treated as absent rather than passed through: handing the model
+ * a language name taken from the database would be the one place in this file
+ * where stored text becomes an instruction.
+ *
+ * What the rules protect, in order:
+ *
+ *   - **Names and numbers stay in English.** A translated agency name is worse
+ *     than useless — it is a search that returns nothing, for a member standing
+ *     in front of a government form. This is the whole reason the feature has
+ *     rules at all rather than just "reply in X".
+ *   - **JSON keys stay in English.** Three surfaces parse the reply
+ *     (`review-step`, the Grill's brief, `opportunities`). A translated key
+ *     does not fail loudly; it fails as a blank panel.
+ *   - **Say so if you cannot.** A model that half-translates, or answers in
+ *     English without explanation, leaves the member unsure whether the feature
+ *     is broken or their answer was.
+ *
+ * The JSON rule is carried even on surfaces that return prose. One directive
+ * with one wording is a single thing to get right and a single thing to change,
+ * and on a prose surface the clause is inert — it costs a few tokens inside a
+ * prompt that is cached anyway.
+ */
+export function buildLanguageDirective(facts: Record<string, MemberFact>): string {
+  const choice = facts[LANGUAGE_FACT_KEY]?.value ?? "";
+  const name = languageNames[choice];
+  if (!name) return "";
+
+  return `Language: this member has asked to be answered in ${name}. Write your entire reply in ${name}, naturally rather than as a translation of English phrasing.
+
+Keep in English, inside the ${name} text and without translating them: organisation and agency names (WEDC, WWBIC, Wisconsin SBDC, WHEDA, WI DFI, SCORE, SBA, WCCC), program and certification names, form numbers, legal entity types, and every web address. A member has to type those into a government site or a search box exactly as they are printed, and a translated one finds nothing. Naming the thing in English and explaining it in ${name} is right; translating the name is not.
+
+If your reply is structured as JSON, translate the values and never the keys — and where the shape you were given fixes a value to a specific set of English words, keep that value exactly as it was given.
+
+If you cannot write reliably in ${name}, answer in English and say plainly, in English, that you could not.`;
+}
+
+/**
+ * The language directive for one member, for the surfaces that do not build a
+ * whole context.
+ *
+ * `review-step`, `summarize-module` and `opportunities` read the member row and
+ * nothing else, so without this they would answer in English to a member who
+ * asked for Chinese — a half-shipped feature, which is worse than none, because
+ * the member cannot tell a missing surface from a broken one.
+ *
+ * One small member_id-filtered read. Issue it inside whatever `Promise.all` the
+ * route already has and it costs no latency at all; awaited on its own it costs
+ * one round trip, which is still nothing beside the model call after it.
+ */
+export async function memberLanguageDirective(memberId: string): Promise<string> {
+  return buildLanguageDirective(await getMemberFacts(memberId));
+}
+
 /**
  * The facts section of the summary.
  *
@@ -92,6 +180,11 @@ export type MemberContext = {
 function factLines(facts: Record<string, MemberFact>, now: Date): string {
   const entries: { def: FactDefinition; fact: MemberFact }[] = [];
   for (const fact of Object.values(facts)) {
+    // The language choice is stored as a fact but is not a claim about the
+    // business, and this block is introduced to the model as things the member
+    // said about their business. It is acted on by buildLanguageDirective
+    // instead.
+    if (fact.key === LANGUAGE_FACT_KEY) continue;
     const def = factDefinition(fact.key);
     // A fact whose definition has since been removed from the catalog is
     // skipped rather than rendered raw: without a label it would reach the
@@ -124,7 +217,7 @@ type ModuleStanding = {
 
 function standingsFor(
   member: Member,
-  freeModuleKey: string | null,
+  priorityModuleKey: string | null,
   completedByModule: Record<string, string[]>,
 ): ModuleStanding[] {
   const tracks = roadmapTracks.filter(
@@ -137,7 +230,7 @@ function standingsFor(
       const done = new Set(completedByModule[mod.key] ?? []);
       return {
         module: mod,
-        unlocked: isModuleUnlocked(member.membershipTier, mod, freeModuleKey),
+        unlocked: isModuleUnlocked(member.membershipTier, mod, priorityModuleKey),
         // Intersected with the module's current steps for the same reason the
         // dashboard does it: stored rows outlive edits to data/modules.ts, so
         // counting them blind can report more completed steps than exist.
@@ -200,12 +293,13 @@ const MAX_CONTEXT_DOCUMENTS = 6;
  * during one is that chat's own, which is excluded — and changes once when the
  * member starts a new conversation.
  *
- * Kept to three, and not raised casually: listConversations reduces transcripts
- * to an opening line but has to read them to do it, so each row here is a whole
- * stored chat crossing the wire from Supabase to compose one line of prompt.
- * Four rows of that is a fair price for the assistant knowing the member has
- * been here before; twenty would not be. The way to make it cheap is an
- * `opening` column written at save time — a schema change, and its own PR.
+ * Three is now a choice about the prompt rather than about the query. It was
+ * both: listConversations used to read whole transcripts to derive an opening
+ * line, so every extra row here was a whole stored chat crossing the wire to
+ * compose one line of prompt. An `opening` column removed that cost, and this
+ * stayed at three because that is as much history as is worth carrying in a
+ * prompt re-sent on every turn — a member with twenty stored chats does not
+ * want the assistant opening on the one from March.
  */
 const MAX_CONTEXT_CONVERSATIONS = 3;
 
@@ -362,7 +456,7 @@ export async function buildMemberContext(
 
   if (!member) return null;
 
-  const standings = standingsFor(member, assessment?.freeModuleKey ?? null, completedByModule);
+  const standings = standingsFor(member, assessment?.priorityModuleKey ?? null, completedByModule);
   const focus = focusModuleKey
     ? standings.find((s) => s.module.key === focusModuleKey)
     : undefined;
@@ -382,6 +476,25 @@ export async function buildMemberContext(
     parts.push(
       `Their Business Snapshot puts them at: ${assessment.stage}. Treat that as their self-reported starting point, not a verified fact.`,
     );
+
+    // The Snapshot's last question — which stage matters most to them right now.
+    //
+    // It used to unlock one roadmap module free and did nothing else, so when
+    // tier gating was switched off (TIER_GATING_ENABLED in data/modules.ts) the
+    // answer had no consumer left. It is a better signal than it ever was an
+    // unlock: it is the member saying, in their own words, what they are
+    // working on. Every surface that answers them should know it.
+    //
+    // Stable for the prompt cache — it changes only when the member retakes the
+    // Snapshot, which is also when the rest of this summary changes.
+    const priority = assessment.priorityModuleKey
+      ? findModule(assessment.priorityModuleKey)?.module
+      : undefined;
+    if (priority) {
+      parts.push(
+        `Asked which part of their business matters most right now, they chose "${priority.label}" (${priority.tagline}). That is their own statement of what they are working on — lead with it where their question leaves room, but do not treat it as the only thing they care about, and do not assume they have made progress on it.`,
+      );
+    }
   } else {
     parts.push(
       "They haven't filled in the Business Snapshot yet, so you don't know their stage — ask rather than assume.",
@@ -421,5 +534,11 @@ export async function buildMemberContext(
 
   // `now` is read once above for staleness and reused here, so a deadline
   // cannot be filtered against a different instant than the facts were.
-  return { member, summary: parts.join("\n\n"), facts, references: referenceSection(facts, now) };
+  return {
+    member,
+    summary: parts.join("\n\n"),
+    facts,
+    languageDirective: buildLanguageDirective(facts),
+    references: referenceSection(facts, now),
+  };
 }

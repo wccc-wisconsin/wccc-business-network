@@ -113,6 +113,8 @@ with expected(table_name, column_name) as (
     ('conversations', 'surface'),
     ('conversations', 'module_key'),
     ('conversations', 'transcript'),
+    ('conversations', 'opening'),
+    ('conversations', 'message_count'),
     ('conversations', 'created_at'),
     ('conversations', 'updated_at')
 )

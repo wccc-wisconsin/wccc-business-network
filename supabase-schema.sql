@@ -387,9 +387,48 @@ create table if not exists conversations (
   surface text not null default 'coach',
   module_key text,
   transcript jsonb not null default '[]'::jsonb,
+  opening text not null default '',
+  message_count integer not null default 0,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
+
+-- `opening` and `message_count` are denormalised from `transcript`, written by
+-- saveConversation on the same upsert that writes the transcript itself.
+--
+-- Both are derivable, and were derived until this column existed: the history
+-- drawer and the coach's conversation recall each need the member's first line
+-- and a count, and nothing else. Reading them out of the transcript meant
+-- fetching whole stored chats — twenty of them to draw a list of twenty
+-- headings, three more on every single AI request — to produce two short
+-- values. That is the read this pair removes, and it is why the coach's recall
+-- was capped at three conversations rather than a number chosen for the prompt.
+--
+-- The duplication is safe because there is exactly one writer. saveConversation
+-- upserts the whole row every time, so these two can never describe a
+-- transcript other than the one they were stored beside; nothing appends turns
+-- to an existing row. If that ever changes, these become stale first.
+alter table conversations add column if not exists opening text not null default '';
+alter table conversations add column if not exists message_count integer not null default 0;
+
+-- Backfill for rows stored before the two columns existed. Runs once — the
+-- `where` clause makes a second run a no-op rather than a rewrite, so this is
+-- safe in a script that is re-run every deploy.
+--
+-- 140 characters matches CONVERSATION_OPENING_CHARS in lib/appStore.ts. If that
+-- constant changes, old rows keep the old length until they are next saved,
+-- which is a cosmetic difference in a list and not worth a migration.
+update conversations
+   set opening = left(
+         coalesce(
+           (select turn->>'content'
+              from jsonb_array_elements(transcript) as turn
+             where turn->>'role' = 'user'
+             limit 1),
+           ''),
+         140),
+       message_count = coalesce(jsonb_array_length(transcript), 0)
+ where opening = '' and jsonb_array_length(transcript) > 0;
 
 -- Serves the member's own list (newest first) and the nightly prune, which
 -- scans by age. member_id leads because every member-facing query filters on it.

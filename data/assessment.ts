@@ -156,6 +156,11 @@ export const profileQuestions: string[] = [
   "pays_estimated_tax",
   "seller_permit",
   "target_customer",
+  // Not a fact about the business, and the only entry here that changes how the
+  // portal answers rather than what it knows. It lives on this form because the
+  // form is the one place a member can revisit and change a stored answer — see
+  // the note on preferred_language in data/facts.ts.
+  "preferred_language",
 ];
 
 // Same guard as the priority question above: a profile key that names no real
@@ -181,7 +186,7 @@ export type AssessmentResult = {
   score: number;
   stage: BusinessStage;
   /** The module key to unlock for free, or null if the priority answer was missing/invalid. */
-  freeModuleKey: string | null;
+  priorityModuleKey: string | null;
 };
 
 /**
@@ -206,6 +211,6 @@ export function computeAssessment(answers: Record<string, string>): AssessmentRe
   return {
     score,
     stage: stageForScore(score),
-    freeModuleKey: validPriority ? priorityAnswer : null,
+    priorityModuleKey: validPriority ? priorityAnswer : null,
   };
 }

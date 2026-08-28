@@ -120,18 +120,41 @@ export function tierMeetsMinimum(memberTier: MembershipTierKey, minTier: Members
 }
 
 /**
- * Whether a member can access a given module: either their membership tier
- * covers it, or it's the one module their Business Snapshot assessment
- * unlocked for free (see data/assessment.ts, components/BusinessAssessmentCard.tsx).
- * `freeModuleKey` is the member's current free-unlock choice, or null/undefined
- * if they haven't taken the assessment (or it hasn't loaded).
+ * Whether membership tier restricts what a member can open. It does not.
+ *
+ * WCCC's direction is to give every member everything: the portal's job is to
+ * help a Wisconsin owner run their business, and a stage they cannot open helps
+ * nobody. So every module is open to everyone, whatever they pay.
+ *
+ * A flag rather than a deletion, deliberately, and the same shape as
+ * PERSONAL_TRACK_ENABLED below. `minTier` still describes each module and
+ * `tierMeetsMinimum` still answers honestly, so the day someone decides paid
+ * stages should come back, this is one line and none of the data had to be
+ * reconstructed. The public site still sells the tiers — see
+ * components/MembershipCTA.tsx — and `members.membership_tier` is still stored,
+ * so WCCC can record who has paid without that record locking anyone out.
+ */
+export const TIER_GATING_ENABLED = false;
+
+/**
+ * Whether a member can open a given module.
+ *
+ * With TIER_GATING_ENABLED off this is always true, which is the whole point.
+ * The rest is what it answered before and answers again if gating returns:
+ * their tier covers the module, or it is the one they named as their priority
+ * in the Business Snapshot (see data/assessment.ts).
+ *
+ * `priorityModuleKey` used to be a free unlock and is now only a stated
+ * priority — it is left in this check so that turning gating back on restores
+ * the old behaviour exactly rather than approximately.
  */
 export function isModuleUnlocked(
   memberTier: MembershipTierKey,
   mod: BusinessModule,
-  freeModuleKey?: string | null,
+  priorityModuleKey?: string | null,
 ) {
-  return tierMeetsMinimum(memberTier, mod.minTier) || mod.key === freeModuleKey;
+  if (!TIER_GATING_ENABLED) return true;
+  return tierMeetsMinimum(memberTier, mod.minTier) || mod.key === priorityModuleKey;
 }
 
 // The 7 engines of the AI Business Builder, in lifecycle order:

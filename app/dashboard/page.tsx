@@ -19,6 +19,7 @@ import {
 import { SAVED_DECISIONS_LIMIT } from "@/data/decisions";
 import AICoach from "@/components/AICoach";
 import BusinessAssessmentCard from "@/components/BusinessAssessmentCard";
+import MemberProfileCard from "@/components/MemberProfileCard";
 import ComplianceCalendar from "@/components/ComplianceCalendar";
 import DashboardRoadmapTabs from "@/components/DashboardRoadmapTabs";
 import DashboardSectionNav, { type DashboardSection } from "@/components/DashboardSectionNav";
@@ -99,7 +100,7 @@ export default async function DashboardPage() {
   const factValues = Object.fromEntries(
     Object.entries(facts).map(([key, fact]) => [key, fact.value]),
   );
-  const freeModuleKey = businessAssessment?.freeModuleKey ?? null;
+  const priorityModuleKey = businessAssessment?.priorityModuleKey ?? null;
 
   // Which roadmap(s) to show, from the journey picked at onboarding. The
   // matching lives in data/modules.ts (shared with the per-module detail page)
@@ -121,7 +122,7 @@ export default async function DashboardPage() {
   // counting stored rows directly would let progress exceed 100%.
   const unlockedModules = roadmapTracks
     .flatMap((track) => track.modules)
-    .filter((mod) => isModuleUnlocked(member.membershipTier, mod, freeModuleKey));
+    .filter((mod) => isModuleUnlocked(member.membershipTier, mod, priorityModuleKey));
 
   let totalSteps = 0;
   let completedSteps = 0;
@@ -145,6 +146,7 @@ export default async function DashboardPage() {
   // work, so keep them together when adding a panel.
   const sectionNavItems: DashboardSection[] = [
     { id: "overview", label: "Overview" },
+    { id: "profile", label: "Profile" },
     { id: "snapshot", label: "Snapshot" },
     ...(roadmapTracks.length > 0
       ? [{ id: "roadmap", label: "Roadmap" } as DashboardSection]
@@ -215,20 +217,24 @@ export default async function DashboardPage() {
                   📍 {member.city}, WI
                 </span>
               )}
-              <span className={`rounded px-3 py-1 text-xs font-bold uppercase tracking-[0.15em] ${
-                member.membershipTier === "network"
-                  ? "bg-white/10 text-white/50"
-                  : member.membershipTier === "individual"
-                  ? "bg-[#d7a84d]/20 text-[#d7a84d]"
-                  : member.membershipTier === "business"
-                  ? "bg-[#d7a84d]/30 text-[#d7a84d]"
-                  : "bg-[#d7a84d] text-[#0f2d4a]"
-              }`}>
-                {member.membershipTier === "network" ? "Network (Free)" :
-                 member.membershipTier === "individual" ? "Individual Member" :
-                 member.membershipTier === "business" ? "Business Member" :
-                 "Corporate Member"}
-              </span>
+              {/* Shown only to members WCCC has actually recorded as paying.
+                  It used to badge everyone, and since nobody is asked to choose
+                  a tier any more, every new member would wear an identical
+                  "Network (Free)" label — a status marker that marks nothing.
+                  A paid membership is still worth acknowledging on the page. */}
+              {member.membershipTier !== "network" && (
+                <span className={`rounded px-3 py-1 text-xs font-bold uppercase tracking-[0.15em] ${
+                  member.membershipTier === "individual"
+                    ? "bg-[#d7a84d]/20 text-[#d7a84d]"
+                    : member.membershipTier === "business"
+                    ? "bg-[#d7a84d]/30 text-[#d7a84d]"
+                    : "bg-[#d7a84d] text-[#0f2d4a]"
+                }`}>
+                  {member.membershipTier === "individual" ? "Individual Member" :
+                   member.membershipTier === "business" ? "Business Member" :
+                   "Corporate Member"}
+                </span>
+              )}
             </div>
 
             <div className="mt-7">
@@ -326,6 +332,22 @@ export default async function DashboardPage() {
             readable list here next to `sectionNavItems`. The wrappers are
             layout-neutral — the panels keep their own `mt-6`, which collapses
             through the bare div. */}
+        {/* The four answers onboarding asks for, and the only place they can
+            be changed — /onboarding redirects away once `industry` is set.
+            Keyed on the values themselves so a save that changes any of them
+            remounts the card collapsed, showing what was stored; see the note
+            on the form in components/MemberProfileCard.tsx. */}
+        <div id="profile">
+          <MemberProfileCard
+            key={`${member.name}|${member.businessName}|${member.industry}|${member.city}`}
+            name={member.name}
+            businessName={member.businessName}
+            industry={member.industry}
+            city={member.city}
+            email={member.email}
+          />
+        </div>
+
         <div id="snapshot">
           <BusinessAssessmentCard
             key={businessAssessment?.updatedAt ?? "new"}
@@ -347,7 +369,7 @@ export default async function DashboardPage() {
               tracks={roadmapTracks}
               membershipTier={member.membershipTier}
               tierLabels={tierLabels}
-              freeModuleKey={freeModuleKey}
+              priorityModuleKey={priorityModuleKey}
             />
           </div>
         ) : (
@@ -360,9 +382,13 @@ export default async function DashboardPage() {
               <div className="mb-5">
                 <p className="text-xs font-bold uppercase tracking-[0.3em] text-[#d7a84d]">{track.eyebrow}</p>
                 <h2 className="mt-1 font-serif text-2xl font-bold text-white">{track.heading}</h2>
+                {/* Was "Your Network membership unlocks 1 of 7". Every stage
+                    is open to every member now (TIER_GATING_ENABLED in
+                    data/modules.ts), so that sentence would have counted 7 of 7
+                    at every tier and still put the member's tier in front of
+                    them for no reason. */}
                 <p className="mt-1 text-sm text-white/50">
-                  {track.modules.length} stages of resources. Your {tierLabels[member.membershipTier]} membership
-                  unlocks {track.modules.filter((m) => isModuleUnlocked(member.membershipTier, m, freeModuleKey)).length} of {track.modules.length}.
+                  {track.modules.length} stages of resources, all open to you.
                 </p>
               </div>
 
@@ -371,7 +397,7 @@ export default async function DashboardPage() {
                 modules={track.modules}
                 membershipTier={member.membershipTier}
                 tierLabels={tierLabels}
-                freeModuleKey={freeModuleKey}
+                priorityModuleKey={priorityModuleKey}
               />
             </section>
           ))
@@ -428,9 +454,21 @@ export default async function DashboardPage() {
           >
             <div className="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
               <div>
-                <p className="text-xs font-bold uppercase tracking-[0.25em] text-[#d7a84d] mb-1">Unlock Full Membership</p>
-                <h3 className="font-serif text-xl font-bold text-white">You&apos;re on the free network tier</h3>
-                <p className="mt-1 text-sm text-white/60">Upgrade to unlock every stage of your roadmap instead of just the first.</p>
+                {/* This used to read "Upgrade to unlock every stage of your
+                    roadmap instead of just the first." Every stage is open to
+                    every member now (TIER_GATING_ENABLED in data/modules.ts),
+                    so that sentence became untrue the day gating was switched
+                    off — and a paywall notice on a page with no paywall is the
+                    kind of thing a member notices and stops trusting the rest
+                    of the page over. It asks for support instead of dangling
+                    features, and names no perk that is not already on the
+                    membership page. */}
+                <p className="text-xs font-bold uppercase tracking-[0.25em] text-[#d7a84d] mb-1">Support WCCC</p>
+                <h3 className="font-serif text-xl font-bold text-white">Everything here is already yours</h3>
+                <p className="mt-1 text-sm text-white/60">
+                  Every stage of the roadmap and every AI tool on this page is open to you at no
+                  cost. Paid membership is how WCCC funds them — the team will arrange it with you.
+                </p>
               </div>
               <div className="flex flex-wrap gap-3 shrink-0">
                 {[

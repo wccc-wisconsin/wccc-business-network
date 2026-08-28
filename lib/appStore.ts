@@ -183,6 +183,64 @@ export async function upsertMember(input: UpsertMemberInput) {
 
 }
 
+/**
+ * The four profile answers a member may change after onboarding.
+ *
+ * A separate function from upsertMember rather than a flag on it, because
+ * upsertMember is wrong for an edit in three ways and each one is a real bug
+ * here rather than a stylistic difference:
+ *
+ *   1. **It overwrites `journey` and `membership_tier` with whatever it is
+ *      handed.** An edit form does not ask for either, so calling it would
+ *      reset a paying member to the free tier every time they corrected a
+ *      typo in their city.
+ *   2. **It treats blank as "keep what is there"** (`input.name || existing.name`).
+ *      That is right for onboarding, where a blank field means the member
+ *      skipped it. On an edit form it means a member can never clear their
+ *      business name or city once set — they delete the text, save, and it
+ *      comes back.
+ *   3. **It reports nothing.** It awaits the write and ignores the error, so a
+ *      failed save is invisible. That is survivable behind a redirect; behind a
+ *      form that says "Saved" it is a lie.
+ *
+ * Name and industry are required by the form and are not written blank here
+ * either — an empty one means something went wrong upstream, and blanking the
+ * industry would break funding search and the dashboard's own gate on it.
+ */
+export async function updateMemberProfile(
+  memberId: string,
+  input: { name: string; businessName: string; industry: string; city: string },
+): Promise<{ ok: boolean }> {
+  const name = input.name.trim();
+  const industry = input.industry.trim();
+  if (!name || !industry) return { ok: false };
+
+  try {
+    const { error } = await db()
+      .from("members")
+      .update({
+        name,
+        industry,
+        // Trimmed but not defended: empty is a legitimate value for both, and
+        // storing it is how a member removes something they no longer want the
+        // AI to describe them by.
+        business_name: input.businessName.trim(),
+        city: input.city.trim(),
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", memberId);
+
+    if (error) {
+      console.error("updateMemberProfile: failed to write", error);
+      return { ok: false };
+    }
+    return { ok: true };
+  } catch (error) {
+    console.error("updateMemberProfile: Supabase unavailable", error);
+    return { ok: false };
+  }
+}
+
 type RecordMemberSignInInput = {
   clerkId: string;
   email: string;
@@ -675,11 +733,19 @@ export async function saveConversation(
 
   try {
     const now = new Date().toISOString();
+    // `opening` and `message_count` are derived here and written on the same
+    // upsert as the transcript they describe — see the note beside them in
+    // supabase-schema.sql. Deriving them at write time is what lets every list
+    // read skip the transcript entirely; deriving them at read time is what
+    // this replaced.
+    const firstMemberTurn = transcript.find((turn) => turn.role === "user");
     const row: Record<string, unknown> = {
       member_id: memberId,
       surface: "coach",
       module_key: moduleKey,
       transcript,
+      opening: (firstMemberTurn?.content ?? "").slice(0, CONVERSATION_OPENING_CHARS),
+      message_count: transcript.length,
       updated_at: now,
     };
     // Only set on an update. Letting the database default it on insert keeps
@@ -746,10 +812,16 @@ export async function getConversation(
 /**
  * The member's conversations, newest first, without their full contents.
  *
- * Transcripts are fetched because the opening line and the message count both
- * come from them and Postgres cannot cheaply give either — but they are reduced
- * here and never leave this function, so a list of twenty conversations does
- * not put twenty full chats on the wire to the browser.
+ * No transcript is read at all. It used to be — the opening line and the count
+ * were derived from it here, which meant twenty stored chats crossed the wire
+ * to draw a list of twenty headings, and three more on every AI request that
+ * asked what the member had been working on. Both values are now written beside
+ * the transcript by saveConversation, so this reads five short columns.
+ *
+ * A row stored before those columns existed is backfilled by
+ * `supabase-schema.sql`. One that somehow escaped both shows an empty opening
+ * and a count of zero, which the drawer renders as an untitled conversation
+ * rather than failing.
  */
 export async function listConversations(
   memberId: string,
@@ -758,7 +830,7 @@ export async function listConversations(
   try {
     const { data, error } = await db()
       .from("conversations")
-      .select("id, module_key, transcript, updated_at")
+      .select("id, module_key, opening, message_count, updated_at")
       .eq("member_id", memberId)
       .order("updated_at", { ascending: false })
       .limit(limit);
@@ -768,19 +840,21 @@ export async function listConversations(
       return [];
     }
 
-    return ((data ?? []) as { id: string; module_key: string | null; transcript: unknown; updated_at: string }[]).map(
-      (row) => {
-        const transcript = asTranscript(row.transcript);
-        const first = transcript.find((turn) => turn.role === "user");
-        return {
-          id: row.id,
-          moduleKey: row.module_key ?? null,
-          opening: (first?.content ?? "").slice(0, CONVERSATION_OPENING_CHARS),
-          messageCount: transcript.length,
-          updatedAt: row.updated_at,
-        };
-      },
-    );
+    return (
+      (data ?? []) as {
+        id: string;
+        module_key: string | null;
+        opening: string | null;
+        message_count: number | null;
+        updated_at: string;
+      }[]
+    ).map((row) => ({
+      id: row.id,
+      moduleKey: row.module_key ?? null,
+      opening: row.opening ?? "",
+      messageCount: row.message_count ?? 0,
+      updatedAt: row.updated_at,
+    }));
   } catch (error) {
     console.error("listConversations: Supabase unavailable", error);
     return [];
@@ -1435,7 +1509,7 @@ export type BusinessAssessment = {
   answers: Record<string, string>;
   score: number;
   stage: string;
-  freeModuleKey: string | null;
+  priorityModuleKey: string | null;
   updatedAt: string;
 };
 
@@ -1455,7 +1529,14 @@ export async function getBusinessAssessment(
       answers: (data.answers ?? {}) as Record<string, string>,
       score: data.score,
       stage: data.stage,
-      freeModuleKey: data.free_module_key ?? null,
+      // The column is still `free_module_key` while the field is
+      // `priorityModuleKey`. The answer stopped unlocking anything when tier
+      // gating was switched off (TIER_GATING_ENABLED in data/modules.ts) and
+      // became purely the member's stated priority, which is what the code now
+      // calls it. The column keeps its old name because renaming it would mean
+      // an `alter table ... rename column`, and that is not safe to leave in a
+      // script that is re-run on every deploy — it errors the second time.
+      priorityModuleKey: data.free_module_key ?? null,
       updatedAt: data.updated_at,
     };
   } catch (error) {
@@ -1470,7 +1551,7 @@ export async function saveBusinessAssessment(
   answers: Record<string, string>,
   score: number,
   stage: string,
-  freeModuleKey: string | null,
+  priorityModuleKey: string | null,
 ): Promise<{ ok: boolean }> {
   try {
     const now = new Date().toISOString();
@@ -1480,7 +1561,7 @@ export async function saveBusinessAssessment(
         answers,
         score,
         stage,
-        free_module_key: freeModuleKey,
+        free_module_key: priorityModuleKey,
         updated_at: now,
       },
       { onConflict: "member_id" },

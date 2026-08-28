@@ -17,11 +17,17 @@ type Props = {
 
 const initialFormState: FormState = { ok: false, error: null };
 
-// "Business Snapshot" — a 7-question card on the dashboard that classifies
-// a member's business stage and, from their stated top priority, unlocks
-// one roadmap module for free regardless of membership tier (see
-// isModuleUnlocked in data/modules.ts and saveBusinessAssessmentAction in
-// app/actions.ts). Uncontrolled radios (defaultChecked, like the onboarding
+// "Business Snapshot" — a 7-question card on the dashboard that classifies a
+// member's business stage and records the stage they say matters most to them
+// right now.
+//
+// That last answer used to unlock one roadmap module free, which was its only
+// job. Every module is open to every member now (TIER_GATING_ENABLED in
+// data/modules.ts), so there is nothing left to unlock — but the answer itself
+// turned out to be the valuable half. It goes into the member context every AI
+// surface reads (lib/memberContext.ts), so the Coach, the Grill and the
+// document generator lead with what the member said they are working on
+// instead of guessing from their stage. Uncontrolled radios (defaultChecked, like the onboarding
 // form) — no need to mirror answers into React state since the server
 // action reads straight off FormData.
 //
@@ -43,8 +49,8 @@ export default function BusinessAssessmentCard({ initialAssessment, initialFacts
   const [isOpen, setIsOpen] = useState(!initialAssessment);
   const [state, formAction, isSaving] = useActionState(saveBusinessAssessmentAction, initialFormState);
 
-  const unlockedModule = initialAssessment?.freeModuleKey
-    ? businessModules.find((m) => m.key === initialAssessment.freeModuleKey)
+  const priorityModule = initialAssessment?.priorityModuleKey
+    ? businessModules.find((m) => m.key === initialAssessment.priorityModuleKey)
     : null;
 
   // Counted across the whole catalog, not just the questions on this card:
@@ -57,10 +63,10 @@ export default function BusinessAssessmentCard({ initialAssessment, initialFacts
   const expanded = isOpen || isEditing;
 
   // Collapsed, the header has to carry the result on its own, otherwise
-  // collapsing loses the stage and the free-module unlock entirely.
+  // collapsing loses both the stage and the priority.
   const collapsedSummary = initialAssessment
-    ? `${initialAssessment.stage}${unlockedModule ? ` · ${unlockedModule.label} unlocked free` : ""}`
-    : "7 quick questions unlock one roadmap module free, matched to what you need most right now.";
+    ? `${initialAssessment.stage}${priorityModule ? ` · focused on ${priorityModule.label}` : ""}`
+    : "7 quick questions. They set your stage and tell your AI coach what you're working on right now.";
 
   return (
     <section className="mt-6 rounded-[8px] border border-white/10 bg-[#132f52] p-5 sm:p-6">
@@ -141,25 +147,27 @@ export default function BusinessAssessmentCard({ initialAssessment, initialFacts
         </div>
       )}
 
-      {!isEditing && unlockedModule && (
+      {!isEditing && priorityModule && (
         <div className="mt-4 rounded-[8px] border border-emerald-400/30 bg-emerald-400/10 p-4">
           <div className="flex items-center gap-3">
-            <span className="text-2xl">{unlockedModule.icon}</span>
+            <span className="text-2xl">{priorityModule.icon}</span>
             <div>
-              <p className="text-xs font-bold uppercase tracking-[0.15em] text-emerald-300">Unlocked free for you</p>
+              <p className="text-xs font-bold uppercase tracking-[0.15em] text-emerald-300">
+                What you said matters most
+              </p>
               <p className="text-sm font-bold text-white">
-                {unlockedModule.label} — {unlockedModule.tagline}
+                {priorityModule.label} — {priorityModule.tagline}
               </p>
             </div>
           </div>
 
-          {unlockedModule.resources.length > 0 && (
+          {priorityModule.resources.length > 0 && (
             <>
               <p className="mt-4 text-[10px] font-bold uppercase tracking-[0.2em] text-white/50">
                 Start with these
               </p>
               <ul className="mt-2 space-y-1.5">
-                {unlockedModule.resources.map((r) => (
+                {priorityModule.resources.map((r) => (
                   <li key={r} className="flex items-start gap-2 text-sm text-white/80">
                     <span className="mt-0.5 shrink-0 text-emerald-300">☐</span>
                     {r}
@@ -170,10 +178,10 @@ export default function BusinessAssessmentCard({ initialAssessment, initialFacts
           )}
 
           <Link
-            href={`/dashboard/roadmap/${unlockedModule.key}`}
+            href={`/dashboard/roadmap/${priorityModule.key}`}
             className="mt-4 inline-flex items-center gap-1 rounded-full bg-emerald-400/20 px-4 py-2 text-xs font-bold uppercase tracking-[0.12em] text-emerald-300 transition hover:bg-emerald-400/30"
           >
-            Start {unlockedModule.label} →
+            Start {priorityModule.label} →
           </Link>
         </div>
       )}

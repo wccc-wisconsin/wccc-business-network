@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import { enforceAiRateLimit, recordSpend } from "@/lib/aiRateLimit";
 import { getMemberById, saveMemberOpportunities, type Opportunity } from "@/lib/appStore";
+import { memberLanguageDirective } from "@/lib/memberContext";
 import { callClaude, parseClaudeJson } from "@/lib/ai";
 import { buildCatalog, formatCatalogForPrompt, type CatalogEntry } from "@/lib/opportunityCatalog";
 
@@ -162,7 +163,13 @@ export async function POST() {
   const { limited, usageId } = await enforceAiRateLimit(userId, "opportunities");
   if (limited) return limited;
 
-  const member = await getMemberById(userId);
+  // Two reads issued together, so the language preference costs no latency at
+  // all — see memberLanguageDirective in lib/memberContext.ts for why this
+  // surface has to fetch it rather than receive it in a member context.
+  const [member, languageDirective] = await Promise.all([
+    getMemberById(userId),
+    memberLanguageDirective(userId),
+  ]);
   if (!member) {
     return NextResponse.json({ ok: false, error: "Member profile not found." }, { status: 404 });
   }
@@ -206,8 +213,12 @@ ${formatCatalogForPrompt(catalog)}`;
   // sentences per result instead of a full description, so the output is
   // roughly half the size. Worth sizing to the work, since max_tokens is also
   // the ceiling on what a runaway generation can cost.
+  // Appended rather than folded in: for an English-speaking member the stable
+  // half stays byte-identical to what every other member sends, which is one
+  // shared cache entry across the whole membership. A language preference
+  // splits that into one entry per language, which is still five at most.
   const result = await callClaude(
-    { stable: SELECTION_RULES },
+    { stable: languageDirective ? `${SELECTION_RULES}\n\n${languageDirective}` : SELECTION_RULES },
     [{ role: "user", content: userPrompt }],
     700,
     "opportunities",

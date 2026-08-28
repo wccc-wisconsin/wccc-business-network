@@ -9,44 +9,71 @@ pick up tomorrow.
 
 ---
 
-## Read this first: the work is uncommitted, and master is clean
+## Read this first: the schema step is not optional this time
 
-`master` and `origin/master` are both at `e39cdf1`. Nothing is unmerged and no
-branch is outstanding. What is outstanding is eight modified files in the
-working tree, all from this session, all verified (below) and none committed —
-**you run the git commands, so nothing was committed for you.**
-
-```
-M app/api/conversations/route.ts     GET: list, and one transcript to reopen
-M app/api/ai/coach/route.ts          accepts conversationId, passes it to the context
-M components/AICoach.tsx             the "Past chats" drawer
-M lib/memberContext.ts               earlier conversations in the shared context
-M test/memberContext.test.ts         +9 tests (151 total, was 142)
-M README.md  M ROADMAP.md  M VERIFY-DEPLOY.md  (and this file)
-```
-
-It is one coherent change and reads well as one commit. Something like:
+The conversation-history work is committed and pushed — `35e2745`, on `master`.
+What sits uncommitted after it is bilingual advice and the `opening` column,
+both verified (below), neither committed. **You run the git commands, so nothing
+was committed for you.**
 
 ```
-git checkout -b feature/conversation-history
+M data/facts.ts                      preferred_language, five options
+M data/assessment.ts                 it appears on the Business Snapshot form
+M lib/memberContext.ts               language directive, and the stated priority
+M lib/appStore.ts                    opening/message_count written; list reads no transcripts
+M app/api/ai/*/route.ts              all six prompts carry the language directive
+M app/onboarding/page.tsx            journey and tier questions removed
+M app/actions.ts                     journey/tier set server-side, not read from the form
+M data/modules.ts                    TIER_GATING_ENABLED = false
+M app/dashboard/**  M components/**  no lock badges, no tier counting, priority badge
+A data/industries.ts                 one industry list, each with a Grants.gov keyword
+A components/MemberProfileCard.tsx   the profile card, and the only way to change those answers
+M lib/grantsCache.ts                 one keyword path for both the read and the refresh
+M test/appStore.writes.test.ts       +5 tests
+M test/grantsCache.test.ts           +3 tests
+M supabase-schema.sql                two columns on conversations, plus a backfill
+M supabase-verify.sql                103 expected columns, was 101
+M test/conversations.test.ts         +4 tests
+M test/memberContext.test.ts         +13 tests (176 total, was 151)
+M README.md  M ROADMAP.md  M VERIFY-DEPLOY.md  M DEMO-SCRIPT.md
+M GOLDEN-LOTUS-PERSONA.md  (and this file)
+```
+
+Four commits rather than one — they are independent, and each is worth being
+able to revert on its own:
+
+```
+git add data/facts.ts data/assessment.ts app/api/ai
+git commit -m "Answer members in the language they asked for"
+git add supabase-schema.sql supabase-verify.sql
+git commit -m "Store a conversation's opening line instead of deriving it"
 git add -A
-git commit -m "Let members see and delete their stored conversations"
-git push -u origin feature/conversation-history
+git commit -m "Open every stage to every member, and cut onboarding to four questions"
+git add -A
+git commit -m "Let a member change their own profile, and fix what industry searches for"
+git push
 ```
 
-**No schema change this time.** Nothing new to run in Supabase — but if
-`supabase-schema.sql` has not been re-run since the memory-loop merge, do that
-first, or none of this has anything to show. `supabase-verify.sql` should report
-101 columns and every row `ok`. Until then a member chats, the Coach answers,
-"Past chats" stays empty, and nothing anywhere says why.
+`lib/memberContext.ts` and `lib/appStore.ts` carry changes belonging to more than
+one of those, so they land wherever `git add -A` picks them up. If you would
+rather not think about it, commit everything as one — the three messages above
+still describe what changed.
+
+**Then re-run `supabase-schema.sql`, followed by `supabase-verify.sql`.** This
+release adds `opening` and `message_count` to `conversations` and backfills the
+rows already stored. Until it is applied, the list read asks for two columns
+that do not exist and fails — so the Coach's history drawer goes *empty*, on a
+member whose transcripts are all safely stored. `supabase-verify.sql` should
+report 103 columns and every row `ok`.
 
 ---
 
 ## What was built
 
-Items 1 and 2 of the previous handoff, which were the two halves of the same
-thing: the portal had started keeping transcripts that members could not see,
-and was not reading them back either.
+**Committed already (`35e2745`):** the Coach's history drawer and conversation
+recall — items 1 and 2 of the previous handoff, which were the two halves of the
+same thing: the portal had started keeping transcripts that members could not
+see, and was not reading them back either.
 
 **1. A history drawer in the Coach.** "Past chats" beside the heading. Lists
 what is stored — opening line, module, message count, date — and reopens or
@@ -72,36 +99,111 @@ excluded by id (the client sends `conversationId`; the route passes it through),
 which stops the coach reminding a member of the sentence they just typed *and*
 keeps the cached prompt prefix identical across the turns of one chat.
 
-**Verified:** typecheck, lint, 151 tests and `next build`, all in a clean Linux
-container. Then mutation-tested — six rules broken one at a time, each caught by
-the one test written for it, named in the run. The drawer itself has no test:
-this repo has no browser harness, so it is `VERIFY-DEPLOY.md` check 5 instead.
+**Uncommitted, built after that:**
+
+**3. Onboarding cut to four questions, and tier gating switched off** (ROADMAP
+§0.8), on WCCC's direction to give every member everything.
+
+The journey question had one possible answer and was already hiding itself. The
+membership picker decided which stages opened, on the honour system, with no
+payment anywhere in the flow — it asked someone to price themselves before they
+had seen anything. Both are gone; `completeProfileAction` sets the business
+track and the network tier itself and reads neither from the form.
+
+`TIER_GATING_ENABLED` in `data/modules.ts` is a flag, not a deletion: every
+module keeps its `minTier`, `tierMeetsMinimum` still answers honestly, and paid
+stages return with one line. The public site still sells memberships and the
+tier column is still stored — it now records what WCCC has actually been paid
+rather than what someone claimed, and the dashboard badges it only for members
+who hold one.
+
+The knock-on worth knowing about: the Business Snapshot's priority answer
+existed only to unlock a module free, so it would have become a stored value
+nothing read, behind a card still promising an unlock. It goes into the member
+context instead — *"asked which part of their business matters most right now,
+they chose Revenue"* — which is the use it was always better at. In code it is
+`priorityModuleKey`; the column stays `free_module_key`, because renaming it
+would need an `alter table ... rename`, and that is not safe in a script re-run
+on every deploy.
+
+**4. A member can change their own answers** (ROADMAP §0.9), which cutting
+onboarding down made urgent: those four answers were frozen for the life of an
+account, and `/onboarding` cannot be reopened even by typing the URL.
+
+A Profile card on the dashboard, above the Business Snapshot and shaped like it.
+Its write path is a new `updateMemberProfile` rather than `upsertMember`, which
+is wrong for an edit in three silent ways — it rewrites `journey` and
+`membership_tier` from its input (so an edit would reset a paying member to the
+free tier), it treats blank as "keep what is there" (so a business name could
+never be cleared), and it ignores the error it gets back. Each is a test now.
+
+`data/industries.ts` is the one list both forms render, and each option carries
+a `grantsKeyword`, because the industry was doing two jobs badly: it is handed
+to Grants.gov as the funding search term, so "Finance & Accounting" searched for
+a string with an ampersand in it and "Other" searched for the word *other*. The
+mapping lives in `normalizeKeyword`, which the nightly refresh now goes through
+as well — if those two ever disagree, every search misses the cache, falls back
+to a live call, and returns good results while quietly undoing the reason the
+cache exists.
+
+**5. Bilingual advice** (was ROADMAP 2.1). A `preferred_language` fact —
+English, Simplified Chinese, Traditional Chinese, Spanish, Hmong — on the
+Business Snapshot, which is the one form a member can reopen and change. One
+directive built in `lib/memberContext.ts` reaches all seven surfaces: three take
+it off the member context, three fetch it beside the member read they already
+do, so nothing is left answering in English to a member who asked otherwise.
+
+Three rules in that directive are load-bearing, and each protects against a
+failure you would not see in a test run:
+
+- **Agency names, form numbers and URLs stay in English** inside the translated
+  text. A translated agency name is a search that finds nothing, for a member
+  standing at a government form.
+- **JSON keys stay in English.** Three surfaces parse the reply; a translated
+  key fails as a blank panel, not as an error.
+- **The Grill's `confidence` stays one of its three English words.** The route
+  matches on that value and falls back to "Medium" when it does not recognise
+  it — a translated one shows a confidence level nobody chose.
+
+**It is not verified in the way that matters.** The plumbing is tested; whether
+the Chinese reads well to a Chinese speaker is not something this repo can
+answer. `VERIFY-DEPLOY.md` check 6 is that job. Don't announce the feature until
+someone has read real output.
+
+**6. An `opening` column on `conversations`** (was ROADMAP §3), with
+`message_count` beside it, both written by `saveConversation` on the same upsert
+as the transcript. The drawer and the recall now read five short columns instead
+of whole stored chats — twenty of them to draw a list, three more on every AI
+request. Safe to denormalise because there is exactly one writer and it replaces
+the whole row; if anything ever starts appending turns to an existing row, these
+two go stale first.
+
+**Verified:** typecheck, lint, 176 tests and `next build`, all in a clean Linux
+container. Then mutation-tested at each stage — twenty-five rules broken one at
+a time, every one caught by the test written for it, named in the run. Two things
+have no automated test and are `VERIFY-DEPLOY.md` checks 5 and 6 instead: the
+drawer, because this repo has no browser harness, and whether the translated
+writing is any good, because that needs a person who reads the language.
 
 ---
 
 ## Still open, in the order I would take them
 
-**1. Bilingual advice.** `ROADMAP.md` §2.1. A `preferred_language` fact and one
-line in each system prompt. Small in code; probably the widest-reaching thing
-left for this membership. Keep agency names, form numbers and URLs in English —
-that is what a member has to type into a government site.
-
-**2. An `opening` column on `conversations`.** `ROADMAP.md` §3. Written at save
-time from the first member turn, with a `message_count` beside it. Both the
-drawer and the coach's recall currently read whole transcripts to derive two
-values from them, which is why the recall is capped at three conversations.
-Schema change, so: `alter table ... add column if not exists`, a backfill for
-rows already stored, and a regenerated `supabase-verify.sql`, in the one PR.
-
-**3. `npm audit` — 5 high severity.** Build-chain, not request-path. Its own PR:
+**1. `npm audit` — 5 high severity.** Build-chain, not request-path. Its own PR:
 `npm audit fix`, then test, lint and build, commit only if all three stay green.
 
-**4. `VERIFY-DEPLOY.md` — five checks, none run.** Two have been open since PR
-#16. All five exist because the mechanism they test fails silently. Check 5 is
-the new drawer, and is the only part of this session's work with nothing
-automated behind it.
+**2. `VERIFY-DEPLOY.md` — six checks, none run.** Two have been open since PR
+#16. All six exist because the mechanism they test fails silently. Checks 5 and
+6 cover this session's work and are the only parts of it with nothing automated
+behind them — and 6 needs someone who reads the language, not a session.
 
-**5. Free-text fact extraction.** Still deliberately excluded; the reasoning
+**3. A feedback loop on answer quality.** `ROADMAP.md` §2.1. An `ai_feedback`
+table and two buttons under Coach replies, Grill briefs and step reviews.
+Nothing currently records whether any answer was useful, which means every
+prompt change — including this session's language directive — is being made on
+taste.
+
+**4. Free-text fact extraction.** Still deliberately excluded; the reasoning
 moved to `ROADMAP.md` §4.
 
 ---

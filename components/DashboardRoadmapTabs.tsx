@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import type { BusinessModule, MembershipTierKey } from "@/data/modules";
-import { isModuleUnlocked } from "@/data/modules";
 import RoadmapModuleList from "@/components/RoadmapModuleList";
 
 export type RoadmapTrack = {
@@ -17,14 +16,14 @@ type Props = {
   membershipTier: MembershipTierKey;
   tierLabels: Record<string, string>;
   /** The member's Business Snapshot free-unlock choice, if any — see data/assessment.ts. */
-  freeModuleKey?: string | null;
+  priorityModuleKey?: string | null;
 };
 
 // Tabbed view for members whose journey unlocks more than one roadmap
 // (e.g. journey === "both"), so Business Networking and Personal
 // Networking each get their own spotlighted tab instead of being
 // stacked one after another.
-export default function DashboardRoadmapTabs({ tracks, membershipTier, tierLabels, freeModuleKey }: Props) {
+export default function DashboardRoadmapTabs({ tracks, membershipTier, tierLabels, priorityModuleKey }: Props) {
   const [activeKey, setActiveKey] = useState(tracks[0]?.key);
   const active = tracks.find((t) => t.key === activeKey) ?? tracks[0];
 
@@ -56,9 +55,10 @@ export default function DashboardRoadmapTabs({ tracks, membershipTier, tierLabel
       <div className="mb-5">
         <p className="text-xs font-bold uppercase tracking-[0.3em] text-[#d7a84d]">{active.eyebrow}</p>
         <h2 className="mt-1 font-serif text-2xl font-bold text-white">{active.heading}</h2>
+        {/* See the same line in app/dashboard/page.tsx: every stage is open to
+            every member, so counting them against a tier says nothing. */}
         <p className="mt-1 text-sm text-white/50">
-          {active.modules.length} stages of resources. Your {tierLabels[membershipTier]} membership unlocks{" "}
-          {active.modules.filter((m) => isModuleUnlocked(membershipTier, m, freeModuleKey)).length} of {active.modules.length}.
+          {active.modules.length} stages of resources, all open to you.
         </p>
       </div>
 
@@ -67,7 +67,7 @@ export default function DashboardRoadmapTabs({ tracks, membershipTier, tierLabel
         modules={active.modules}
         membershipTier={membershipTier}
         tierLabels={tierLabels}
-        freeModuleKey={freeModuleKey}
+        priorityModuleKey={priorityModuleKey}
       />
     </section>
   );

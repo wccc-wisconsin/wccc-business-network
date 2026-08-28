@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import { enforceAiRateLimit, recordSpend } from "@/lib/aiRateLimit";
 import { getMemberById } from "@/lib/appStore";
+import { memberLanguageDirective } from "@/lib/memberContext";
 import { findStep } from "@/data/modules";
 import { callClaude, parseClaudeJson } from "@/lib/ai";
 
@@ -27,7 +28,13 @@ export async function POST(request: NextRequest) {
   const { limited, usageId } = await enforceAiRateLimit(userId, "review-step");
   if (limited) return limited;
 
-  const member = await getMemberById(userId);
+  // Two reads issued together, so the language preference costs no latency at
+  // all — see memberLanguageDirective in lib/memberContext.ts for why this
+  // surface has to fetch it rather than receive it in a member context.
+  const [member, languageDirective] = await Promise.all([
+    getMemberById(userId),
+    memberLanguageDirective(userId),
+  ]);
   if (!member) {
     return NextResponse.json({ ok: false, error: "Member profile not found." }, { status: 404 });
   }
@@ -49,7 +56,7 @@ export async function POST(request: NextRequest) {
     .map((q) => `Q: ${q.label}\nA: ${(answers as Record<string, string>)[q.key]?.trim() || "(left blank)"}`)
     .join("\n\n");
 
-  const systemPrompt = `You are reviewing one step of a Wisconsin small-business owner's AI Business Builder workbook, part of the Wisconsin Chinese Chamber of Commerce (WCCC) member portal. Respond with concise, specific, practical feedback only — no marketing language, no generic encouragement, no restating the question. Return ONLY a strict JSON object with exactly these keys: "strongestPoint" (one sentence naming what's genuinely strong or clear about their answers), "gap" (one sentence naming the single biggest gap, risk, or missing detail), "wisconsinTip" (one concise, concrete, actionable tip specific to running a small business in Wisconsin — reference a real resource where relevant, e.g. WI DFI, Wisconsin SBDC, WEDC, or a WCCC program). No text outside the JSON object.`;
+  const systemPrompt = `You are reviewing one step of a Wisconsin small-business owner's AI Business Builder workbook, part of the Wisconsin Chinese Chamber of Commerce (WCCC) member portal. Respond with concise, specific, practical feedback only — no marketing language, no generic encouragement, no restating the question. Return ONLY a strict JSON object with exactly these keys: "strongestPoint" (one sentence naming what's genuinely strong or clear about their answers), "gap" (one sentence naming the single biggest gap, risk, or missing detail), "wisconsinTip" (one concise, concrete, actionable tip specific to running a small business in Wisconsin — reference a real resource where relevant, e.g. WI DFI, Wisconsin SBDC, WEDC, or a WCCC program). No text outside the JSON object.${languageDirective ? `\n\n${languageDirective}` : ""}`;
 
   const userPrompt = `Module: ${found.module.label} (${found.module.tagline})
 Step: ${found.step.title}

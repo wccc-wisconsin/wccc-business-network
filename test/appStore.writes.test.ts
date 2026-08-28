@@ -29,7 +29,9 @@ const mock = createSupabaseMock();
 supabase.mock = mock;
 
 // Imported after the mock is registered.
-const { saveStepProgress, recordMemberSignIn } = await import("@/lib/appStore");
+const { saveStepProgress, recordMemberSignIn, updateMemberProfile } = await import(
+  "@/lib/appStore"
+);
 
 beforeEach(() => {
   mock.reset();
@@ -168,5 +170,73 @@ describe("recordMemberSignIn", () => {
     await recordMemberSignIn(input);
 
     expect(mock.writes().map((call) => call.table)).not.toContain("activities");
+  });
+});
+
+/**
+ * The profile card's write path.
+ *
+ * It exists as its own function because upsertMember — the obvious thing to
+ * reuse — is wrong for an edit in three ways, and each of the first three tests
+ * here is one of them. All three are silent: nothing throws, the member sees
+ * "Saved", and the damage shows up later.
+ */
+describe("updateMemberProfile", () => {
+  const VALID = {
+    name: "Mei Chen",
+    businessName: "Golden Lotus Catering",
+    industry: "Food & Beverage",
+    city: "Milwaukee",
+  };
+
+  /**
+   * upsertMember writes `membership_tier` and `journey` from its input every
+   * time. The edit form asks for neither, so reusing it would have reset a
+   * paying member to the free tier whenever they fixed a typo in their city.
+   */
+  it("never touches membership tier or journey", async () => {
+    await updateMemberProfile("user_1", VALID);
+
+    const write = mock.forTable("members").find((call) => call.op === "update")!;
+    expect(write.payload).not.toHaveProperty("membership_tier");
+    expect(write.payload).not.toHaveProperty("journey");
+    expect(write.filters).toContainEqual(["eq", "id", "user_1"]);
+  });
+
+  /**
+   * upsertMember treats a blank field as "keep what is there", which is right
+   * for onboarding and wrong here: a member who clears their business name has
+   * to be able to clear it, not watch it come back on the next page load.
+   */
+  it("lets a member clear their business name and city", async () => {
+    await updateMemberProfile("user_1", { ...VALID, businessName: "", city: "" });
+
+    const write = mock.forTable("members").find((call) => call.op === "update")!;
+    expect(write.payload).toMatchObject({ business_name: "", city: "" });
+  });
+
+  /** upsertMember ignores the error it gets back. A form that says "Saved" cannot. */
+  it("reports a failed write instead of swallowing it", async () => {
+    mock.reset(() => ({ data: null, error: { message: "nope" } }));
+
+    expect(await updateMemberProfile("user_1", VALID)).toEqual({ ok: false });
+  });
+
+  /**
+   * Name opens every AI prompt and industry is both the funding search term and
+   * the value the dashboard gates on — blanking either breaks something a long
+   * way from this form, so neither is written empty.
+   */
+  it("refuses to blank the two answers other things depend on", async () => {
+    expect(await updateMemberProfile("user_1", { ...VALID, name: "  " })).toEqual({ ok: false });
+    expect(await updateMemberProfile("user_1", { ...VALID, industry: "" })).toEqual({ ok: false });
+    expect(mock.forTable("members")).toHaveLength(0);
+  });
+
+  it("trims what it stores", async () => {
+    await updateMemberProfile("user_1", { ...VALID, name: "  Mei Chen  ", city: " Milwaukee " });
+
+    const write = mock.forTable("members").find((call) => call.op === "update")!;
+    expect(write.payload).toMatchObject({ name: "Mei Chen", city: "Milwaukee" });
   });
 });

@@ -104,7 +104,7 @@ Rules that override anything above:
 - Use only what the member actually told you. Never invent figures, customer names, testimonials, credentials, or track record.
 - Where something needed is missing from their answers, say so in one short line rather than filling the gap with a plausible guess.
 - Plain language a busy owner reads once. No preamble, no restating the task, no closing encouragement.
-- Output the document itself and nothing else.`;
+- Output the document itself and nothing else.${context.languageDirective ? `\n\n${context.languageDirective}` : ""}`;
 
   // Left as a plain string: one document per request, nothing re-sent inside
   // the five-minute cache window, so marking it cacheable would only add the

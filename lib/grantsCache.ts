@@ -7,6 +7,7 @@ import {
   saveCachedGrants,
 } from "@/lib/appStore";
 import { fetchFederalGrants, type FederalGrant } from "@/lib/grantsGov";
+import { grantsKeywordFor } from "@/data/industries";
 
 /**
  * When Grants.gov is actually called.
@@ -60,9 +61,24 @@ export type FederalGrantsResult =
     }
   | { ok: false; reason: string };
 
-/** Keywords are stored lowercased, so "Food Service" and "food service" share a row. */
+/**
+ * The one place a stored industry becomes the keyword this cache is keyed by.
+ *
+ * Two things happen here, and both have to happen in the same function or the
+ * cache stops working:
+ *
+ *   - the industry is mapped to a search term (see data/industries.ts — the
+ *     label a member picks is not a good Grants.gov query), and
+ *   - the result is lowercased, so "Food Service" and "food service" share a
+ *     row rather than warming two.
+ *
+ * The daily refresh runs member industries through this same function before
+ * deciding what to warm. If the read path mapped and the refresh did not, every
+ * search would miss a cache full of rows nobody asks for — which fails silently,
+ * because a miss is a live Grants.gov call that returns perfectly good results.
+ */
 export function normalizeKeyword(industry: string): string {
-  return industry.trim().toLowerCase() || "small business";
+  return grantsKeywordFor(industry).trim().toLowerCase() || "small business";
 }
 
 function ageMs(fetchedAt: string, now: number): number {
@@ -141,7 +157,10 @@ export type RefreshReport = {
 export async function keywordsToRefresh(): Promise<string[]> {
   const [industries, ages] = await Promise.all([listMemberIndustries(), listCachedGrantAges()]);
 
-  const due = new Set<string>(["small business", ...industries]);
+  // Mapped through normalizeKeyword, not used raw: these are stored industry
+  // values, and the read path asks for the mapped keyword. Warming the raw ones
+  // would fill the table with rows no search ever reads.
+  const due = new Set<string>(["small business", ...industries.map(normalizeKeyword)]);
   const fetchedAt = new Map(ages.map((row) => [row.keyword, row.fetchedAt]));
   const now = Date.now();
 

@@ -30,7 +30,13 @@ export type FactType = "text" | "date" | "choice";
 
 export type FactOption = { value: string; label: string };
 
-export type FactGroup = "legal" | "money" | "market" | "capability" | "renewals";
+export type FactGroup =
+  | "legal"
+  | "money"
+  | "market"
+  | "capability"
+  | "renewals"
+  | "preferences";
 
 export type FactDefinition = {
   key: string;
@@ -60,6 +66,7 @@ export const factGroupLabels: Record<FactGroup, string> = {
   market: "Customers & pricing",
   capability: "What you sell",
   renewals: "Dates that expire",
+  preferences: "How the portal talks to you",
 };
 
 /** One year and two years, named so the intent is readable at the call site. */
@@ -346,6 +353,49 @@ export const factDefinitions: FactDefinition[] = [
     purpose: "Renewal leverage disappears if you find out late.",
     staleAfterDays: null,
     group: "renewals",
+    optional: true,
+  },
+  /**
+   * The one fact here that is not about the business.
+   *
+   * It sits with the others because it travels the same road — stored on
+   * `member_facts`, editable in the Business Snapshot, read into the AI prompts
+   * from one place — and building a second mechanism for a single value would
+   * be the worse trade. What it is *not* is a claim about the business, so
+   * unlike every other fact it never reaches the "what they told us" block; it
+   * is read by languageDirective in lib/memberContext.ts and nowhere else.
+   *
+   * `staleAfterDays: null` deliberately. Every other preference-shaped thing
+   * here expires because the world moves on; the language someone reads in
+   * does not, and being asked twice a year to confirm it would be its own kind
+   * of rude.
+   *
+   * Values are BCP-47 tags so they can be handed to `lang=` or to Intl
+   * untouched if anything ever needs to. Labels lead with the endonym, because
+   * a member who reads Hmong should not have to find "Hmong" in an English list
+   * first.
+   *
+   * Simplified and Traditional are offered separately rather than as one
+   * "Chinese". For this membership specifically that is the distinction most
+   * likely to matter, and a model told only "Chinese" will pick one for the
+   * member — silently, and the same way every time.
+   */
+  {
+    key: "preferred_language",
+    label: "Preferred language",
+    question: "Which language would you like the AI features to answer in?",
+    type: "choice",
+    options: [
+      { value: "en", label: "English" },
+      { value: "zh-Hans", label: "简体中文 — Chinese, Simplified" },
+      { value: "zh-Hant", label: "繁體中文 — Chinese, Traditional" },
+      { value: "es", label: "Español — Spanish" },
+      { value: "hmn", label: "Hmoob — Hmong" },
+    ],
+    purpose:
+      "The AI Coach, Decision Grill and generated documents answer in this language. Agency names, form numbers and web addresses stay in English, because that is what you will have to type into a government site.",
+    staleAfterDays: null,
+    group: "preferences",
     optional: true,
   },
 ];

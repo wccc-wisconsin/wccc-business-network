@@ -3,14 +3,14 @@
 import { useEffect, useRef, useState, type TouchEvent } from "react";
 import Link from "next/link";
 import type { BusinessModule, MembershipTierKey } from "@/data/modules";
-import { isModuleUnlocked, tierMeetsMinimum } from "@/data/modules";
+import { isModuleUnlocked } from "@/data/modules";
 
 type Props = {
   modules: BusinessModule[];
   membershipTier: MembershipTierKey;
   tierLabels: Record<string, string>;
   /** The member's Business Snapshot free-unlock choice, if any — see data/assessment.ts. */
-  freeModuleKey?: string | null;
+  priorityModuleKey?: string | null;
 };
 
 // Card-deck stepper: one roadmap stage front-and-center at a time, with the
@@ -24,7 +24,7 @@ type Props = {
 /** Horizontal travel below which a touch is treated as a tap, not a swipe. */
 const SWIPE_MIN_PX = 45;
 
-export default function RoadmapModuleList({ modules, membershipTier, tierLabels, freeModuleKey }: Props) {
+export default function RoadmapModuleList({ modules, membershipTier, tierLabels, priorityModuleKey }: Props) {
   const [index, setIndex] = useState(0);
   const total = modules.length;
 
@@ -95,9 +95,8 @@ export default function RoadmapModuleList({ modules, membershipTier, tierLabels,
           const offset = i - clamped;
           if (offset < -1 || offset > 1) return null; // only render prev / active / next
           const isActive = offset === 0;
-          const unlockedByTier = tierMeetsMinimum(membershipTier, mod.minTier);
-          const unlocked = isModuleUnlocked(membershipTier, mod, freeModuleKey);
-          const unlockedByFreeGrant = unlocked && !unlockedByTier;
+          const unlocked = isModuleUnlocked(membershipTier, mod, priorityModuleKey);
+          const isPriority = !!priorityModuleKey && mod.key === priorityModuleKey;
           return (
             <div
               key={mod.key}
@@ -124,9 +123,16 @@ export default function RoadmapModuleList({ modules, membershipTier, tierLabels,
               </p>
               <p className="mt-1 text-sm text-white/50">{mod.tagline}</p>
 
-              {unlockedByFreeGrant && (
+              {/* This badge used to read "Unlocked free from your Business
+                  Snapshot", and was shown when a module was open despite the
+                  member's tier. With gating off every module is open, so that
+                  condition is now true of every stage above Launch and the
+                  badge would have appeared on all of them, announcing a free
+                  unlock nobody was given. What the answer still means is which
+                  stage the member said matters most, so that is what it says. */}
+              {isPriority && (
                 <span className="mt-3 inline-block w-fit rounded-full border border-emerald-400/30 bg-emerald-400/10 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.12em] text-emerald-300">
-                  ✓ Unlocked free from your Business Snapshot
+                  ★ Your stated priority
                 </span>
               )}
 

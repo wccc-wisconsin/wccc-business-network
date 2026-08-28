@@ -104,10 +104,110 @@ storage defensible. Built on 2026-08-28, no schema change:
   by id, which is what keeps the cached prompt prefix stable across a
   conversation.
 
-Left open, and the reason it is a separate PR: those three rows are read as
-whole transcripts, because `listConversations` derives the opening line from the
-transcript. An `opening` column written at save time would make both the drawer
-and the context read cheap. That is a schema change; it is in section 3.
+That last cost was paid off the same day — see 0.7.
+
+---
+
+## 0.7 Bilingual advice, and the read that paid for it
+
+Both built on 2026-08-28, after 0.6. **This pair needs `supabase-schema.sql`
+re-run** — two columns on `conversations`, and `supabase-verify.sql` now expects
+103 columns rather than 101.
+
+**Bilingual advice (was 2.1).** A `preferred_language` fact — English,
+Simplified Chinese, Traditional Chinese, Spanish, Hmong — set in the Business
+Snapshot, which is the one form a member can reopen and change. One directive,
+built once in `lib/memberContext.ts`, reaches all seven AI surfaces: the three
+that build a member context get it on the context, and the three that read only
+the member row fetch it alongside that read, so it costs no latency and no
+surface is left answering in English to a member who asked otherwise.
+
+What the directive spends its words on is the part that matters. Agency names,
+program names, form numbers and URLs stay in English inside the translated text,
+because a translated agency name is a search that returns nothing for a member
+standing at a government form. JSON keys stay in English, because three surfaces
+parse the reply and a translated key fails as a blank panel rather than as an
+error. And the Grill's `confidence` is pinned to its three English words: the
+route matches on that value and silently falls back to "Medium", so a translated
+one would have shown a member a confidence level nobody chose.
+
+**Still unverified in the way that matters.** The plumbing is tested and
+mutation-tested; whether the Chinese reads naturally to a Chinese speaker is not
+something this repo can answer. House rule stands — do not claim the feature
+works until a speaker has read real output.
+
+**An `opening` column on `conversations` (was in section 3).** `opening` and
+`message_count`, written by `saveConversation` on the same upsert as the
+transcript. The history drawer and the coach's recall now read five short
+columns instead of whole stored chats — twenty of them to draw a list, three
+more on every AI request. Existing rows are backfilled by the migration; a row
+that escapes it reads as an untitled conversation rather than breaking.
+
+---
+
+## 0.8 Onboarding cut down, and tier gating switched off
+
+Built 2026-08-28, on WCCC's direction: give every member everything. No schema
+change.
+
+**Two questions left the onboarding form.** "Which journey interests you most?"
+had one possible answer and was already hiding itself — the personal track has
+no guided steps and is off. "Choose your membership" decided which roadmap
+stages opened, on the honour system, with no payment anywhere in the flow; it
+asked someone to price themselves before they had seen anything. What is left is
+name, business, industry and city — only what the portal cannot start without.
+`completeProfileAction` sets the business track and the network tier itself, and
+reads neither from the form.
+
+**Tier gating is off.** `TIER_GATING_ENABLED` in `data/modules.ts`, a flag in
+the same shape as `PERSONAL_TRACK_ENABLED`, not a deletion: every module keeps
+its `minTier`, `tierMeetsMinimum` still answers honestly, and paid stages come
+back with a one-line change if anyone ever wants them. The public site still
+sells memberships and `members.membership_tier` is still stored — it is now a
+record of what WCCC has been paid rather than a self-declared access level, and
+the dashboard badges it only for members who actually hold one.
+
+**The Business Snapshot's priority answer found a better job.** Unlocking one
+module free was all it did, so switching gating off would have left it stored
+and unread, with the card still promising an unlock. It now goes into the shared
+member context — *"asked which part of their business matters most right now,
+they chose Revenue"* — so every AI surface leads with what the member said they
+are working on. The field is `priorityModuleKey` in code; the column is still
+`free_module_key`, because renaming it would need an `alter table ... rename`,
+which is not safe in a script re-run on every deploy.
+
+---
+
+## 0.9 A member can change their own answers
+
+Built 2026-08-28, straight after 0.8, because cutting onboarding down made the
+gap it exposed worse: those four answers were frozen for the life of an account.
+`/onboarding` redirects to the dashboard the moment `industry` is set, so it
+could not be reopened even by typing the URL, and nothing else wrote those
+columns. No schema change.
+
+**A Profile card on the dashboard**, shaped like the Business Snapshot card and
+sitting above it. Name, business, industry, city; email shown read-only because
+Clerk owns it.
+
+**Its own write path, `updateMemberProfile`.** `upsertMember` was the obvious
+thing to reuse and is wrong for an edit in three ways, each of them silent:
+it writes `journey` and `membership_tier` from its input every time, so an edit
+would have reset a paying member to the free tier whenever they fixed a typo;
+it treats blank as "keep what is there", so a member could never clear their
+business name once set; and it ignores the error it gets back, which is
+survivable behind a redirect and a lie behind a form that says "Saved". Each of
+those is now a test.
+
+**Industry stopped doing two jobs badly.** `data/industries.ts` holds the one
+list both forms render, and gives each option a `grantsKeyword` — the label a
+member recognises and the query that finds them federal money are different
+strings. "Finance & Accounting" was being searched for verbatim, ampersand and
+all; "Other" searched Grants.gov for the word *other*. The mapping lives in
+`normalizeKeyword`, which both the read path and the nightly refresh now go
+through, because if those two disagree the cache misses every time, falls back
+to a live call, returns perfectly good results, and silently undoes the reason
+`lib/grantsCache.ts` exists.
 
 ---
 
@@ -141,30 +241,7 @@ if a member reports it hanging.
 Each item states the problem before the fix, because in six months the fix will
 be obvious and the reason for it will not.
 
-### 2.1 — Bilingual advice
-
-**Problem.** This is a Chinese Chamber of Commerce, and the AI is the one part
-of the portal that could speak a member's own language at almost no cost.
-Today it is English-only. The need is already acknowledged in the data model —
-the Launch module's contract-review step asks whether having a document
-translated or reviewed in another language would help — but nothing acts on the
-answer.
-
-**Fix.** A `preferred_language` fact in `data/facts.ts`, set in onboarding and
-changeable in the profile, plus one line in each system prompt. Generated
-documents and decision briefs follow the same preference.
-
-**Watch for.** Named Wisconsin resources, agency names, form numbers and URLs
-stay in English, because that is what the member will have to type into a
-government site. Say so explicitly in the prompt rather than hoping. The
-`review-step` and `grill` routes return JSON with fixed keys — translate the
-values, never the keys, or the parsers break. Verify with a real speaker before
-claiming the feature works; the house rule about not claiming until verified
-applies here more than anywhere.
-
-**Size.** Small in code, real in review effort.
-
-### 2.2 — A feedback loop on answer quality
+### 2.1 — A feedback loop on answer quality
 
 **Problem.** Nothing records whether any AI answer was useful. Prompt changes
 are therefore made on taste, and a hallucination that slips past the structural
@@ -183,7 +260,7 @@ can be read against what actually produced it. Do not store the full prompt.
 **Size.** Small, but it touches the schema, so it follows the schema rules in
 `README.md` exactly.
 
-### 2.3 — Tell the member what to do next, unprompted
+### 2.2 — Tell the member what to do next, unprompted
 
 **Problem.** Every surface waits to be asked. A member who does not know what to
 ask gets nothing, and those are the members the portal is most for.
@@ -218,14 +295,6 @@ is worth a release on its own.
   two counts into one, leaving a count and an insert before the model is called
   at all. A single Postgres function returning the counts *and* recording the
   attempt would make it one. Keep the fail-open behaviour exactly as it is.
-- **An `opening` column on `conversations`.** Written at save time from the
-  first member turn, alongside a `message_count`. Today both the history drawer
-  and the coach's conversation recall read whole transcripts to derive them —
-  see the comment on `listConversations` in `lib/appStore.ts`, which says as
-  much, and `MAX_CONTEXT_CONVERSATIONS` in `lib/memberContext.ts`, which is held
-  at three because of it. Schema change, so it ships with its `alter table ...
-  add column if not exists`, a backfill for the rows already stored, and a
-  regenerated `supabase-verify.sql`.
 - **Six `select("*")` calls in `lib/appStore.ts`.** Considered and skipped
   twice now: naming columns by hand without a live database to test against
   risks a runtime break on the dashboard for a small win. Worth doing with a

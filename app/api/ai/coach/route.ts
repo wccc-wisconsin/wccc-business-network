@@ -68,7 +68,7 @@ ${context.summary}
 
 ${context.references}
 
-Be concise, practical, and specific to their situation — no generic encouragement or filler. Keep replies to a few short paragraphs at most.`;
+Be concise, practical, and specific to their situation — no generic encouragement or filler. Keep replies to a few short paragraphs at most.${context.languageDirective ? `\n\n${context.languageDirective}` : ""}`;
   // The paragraph this replaced asked the model to "reference real Wisconsin
   // resources (WI DFI, Wisconsin SBDC, WEDC, SCORE, WCCC programs)" and to
   // describe a type of resource when unsure a program was active. Both are now
