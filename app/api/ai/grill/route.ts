@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
-import { enforceAiRateLimit } from "@/lib/aiRateLimit";
+import { enforceAiRateLimit, recordSpend } from "@/lib/aiRateLimit";
 import { saveMemberDecision, type DecisionBrief } from "@/lib/appStore";
 import { buildMemberContext } from "@/lib/memberContext";
 import { callClaude, parseClaudeJson, type ChatMessage } from "@/lib/ai";
@@ -39,7 +39,7 @@ export async function POST(request: NextRequest) {
 
   // Per-member daily cap. See lib/aiRateLimit.ts — every request past
   // this point spends money.
-  const limited = await enforceAiRateLimit(userId, "grill");
+  const { limited, usageId } = await enforceAiRateLimit(userId, "grill");
   if (limited) return limited;
 
   const body = await request.json().catch(() => null);
@@ -111,8 +111,8 @@ export async function POST(request: NextRequest) {
   const context = `${memberContext.summary}\n\nThe decision on the table: "${topic}"`;
 
   return phase === "question"
-    ? askNextQuestion(context, memberContext.references, messages, questionsAsked)
-    : writeBrief(userId, topic, context, memberContext.references, messages);
+    ? askNextQuestion(context, memberContext.references, messages, questionsAsked, usageId)
+    : writeBrief(userId, topic, context, memberContext.references, messages, usageId);
 }
 
 // ---------------------------------------------------------------------------
@@ -122,6 +122,7 @@ async function askNextQuestion(
   references: string,
   messages: ChatMessage[],
   questionsAsked: number,
+  usageId: string | null,
 ) {
   const remaining = MAX_GRILL_QUESTIONS - questionsAsked;
 
@@ -157,6 +158,11 @@ Rules, all of them strict:
     350,
     "grill",
   );
+
+  // Files what this call cost against the attempt the limiter recorded. A
+  // failed call has no usage to report, so its row stays null — which is how a
+  // call that never came back is told apart from one that cost nothing.
+  await recordSpend(usageId, result.ok ? result.usage : undefined);
   if (!result.ok) {
     return NextResponse.json({ ok: false, error: result.error }, { status: 502 });
   }
@@ -174,6 +180,7 @@ async function writeBrief(
   context: string,
   references: string,
   messages: ChatMessage[],
+  usageId: string | null,
 ) {
   const systemPrompt = `You are the WCCC Decision Grill, part of the Wisconsin Chinese Chamber of Commerce member portal. The interview is over. Write the member's decision brief.
 
@@ -204,6 +211,11 @@ Use 2-4 risks and 3-5 nextSteps. Every string is plain prose with no markdown.`;
     1100,
     "grill-brief",
   );
+
+  // Files what this call cost against the attempt the limiter recorded. A
+  // failed call has no usage to report, so its row stays null — which is how a
+  // call that never came back is told apart from one that cost nothing.
+  await recordSpend(usageId, result.ok ? result.usage : undefined);
   if (!result.ok) {
     return NextResponse.json({ ok: false, error: result.error }, { status: 502 });
   }

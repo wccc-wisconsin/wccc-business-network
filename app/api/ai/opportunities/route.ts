@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
-import { enforceAiRateLimit } from "@/lib/aiRateLimit";
+import { enforceAiRateLimit, recordSpend } from "@/lib/aiRateLimit";
 import { getMemberById, saveMemberOpportunities, type Opportunity } from "@/lib/appStore";
 import { callClaude, parseClaudeJson } from "@/lib/ai";
 import { buildCatalog, formatCatalogForPrompt, type CatalogEntry } from "@/lib/opportunityCatalog";
@@ -159,7 +159,7 @@ export async function POST() {
   // this app is a guest on. An empty catalog only happens when Grants.gov is
   // unreachable *and* no Wisconsin entry is verified, so the cost of this
   // ordering is one of twenty daily units in a rare state.
-  const limited = await enforceAiRateLimit(userId, "opportunities");
+  const { limited, usageId } = await enforceAiRateLimit(userId, "opportunities");
   if (limited) return limited;
 
   const member = await getMemberById(userId);
@@ -212,6 +212,11 @@ ${formatCatalogForPrompt(catalog)}`;
     700,
     "opportunities",
   );
+
+  // Files what this call cost against the attempt the limiter recorded. A
+  // failed call has no usage to report, so its row stays null — which is how a
+  // call that never came back is told apart from one that cost nothing.
+  await recordSpend(usageId, result.ok ? result.usage : undefined);
   if (!result.ok) {
     return NextResponse.json({ ok: false, error: result.error }, { status: 502 });
   }

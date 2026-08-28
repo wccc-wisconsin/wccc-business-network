@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
-import { enforceAiRateLimit } from "@/lib/aiRateLimit";
+import { enforceAiRateLimit, recordSpend } from "@/lib/aiRateLimit";
 import { getMemberById } from "@/lib/appStore";
 import { findStep } from "@/data/modules";
 import { callClaude, parseClaudeJson } from "@/lib/ai";
@@ -24,7 +24,7 @@ export async function POST(request: NextRequest) {
 
   // Per-member daily cap. See lib/aiRateLimit.ts — every request past
   // this point spends money.
-  const limited = await enforceAiRateLimit(userId, "review-step");
+  const { limited, usageId } = await enforceAiRateLimit(userId, "review-step");
   if (limited) return limited;
 
   const member = await getMemberById(userId);
@@ -58,6 +58,11 @@ Member's business: ${member.businessName || "(not provided)"} — industry: ${me
 ${answerLines}`;
 
   const result = await callClaude(systemPrompt, [{ role: "user", content: userPrompt }], 400, "review-step");
+
+  // Files what this call cost against the attempt the limiter recorded. A
+  // failed call has no usage to report, so its row stays null — which is how a
+  // call that never came back is told apart from one that cost nothing.
+  await recordSpend(usageId, result.ok ? result.usage : undefined);
   if (!result.ok) {
     return NextResponse.json({ ok: false, error: result.error }, { status: 502 });
   }

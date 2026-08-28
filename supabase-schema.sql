@@ -290,8 +290,33 @@ create table if not exists ai_usage (
   id uuid primary key default gen_random_uuid(),
   member_id text not null references members(id) on delete cascade,
   route text not null,
-  created_at timestamptz not null default now()
+  created_at timestamptz not null default now(),
+  input_tokens integer,
+  output_tokens integer,
+  cache_read_tokens integer,
+  cache_write_tokens integer
 );
+
+-- Token counts, added after the table shipped — so the `create table if not
+-- exists` above is a no-op on an existing database and would not add them.
+--
+-- Nullable on purpose, and the null is meaningful: a row is written *before*
+-- the model is called, because an attempt is what costs money and the caps are
+-- about spend. A row still null after the fact is one where the call never
+-- returned — a timeout, a 5xx, a member closing the tab. Defaulting these to
+-- zero would erase exactly the failures worth noticing, by making a request
+-- that died look identical to one that cost nothing.
+--
+-- The three input columns are separate because they are billed at three
+-- different rates: plain input at full price, a cache read at roughly a tenth,
+-- a cache write at 1.25x. Summing them would report prompt caching as having no
+-- effect, which is the opposite of the truth. Keeping the write column apart is
+-- what makes the question answerable in both directions — whether caching is
+-- saving money, and what it is costing to maintain.
+alter table ai_usage add column if not exists input_tokens integer;
+alter table ai_usage add column if not exists output_tokens integer;
+alter table ai_usage add column if not exists cache_read_tokens integer;
+alter table ai_usage add column if not exists cache_write_tokens integer;
 
 -- Serves both reads: "this member's calls in the last 24h" and the same
 -- narrowed to one route. member_id leads because every query filters on it;

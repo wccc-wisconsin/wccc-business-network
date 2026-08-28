@@ -101,6 +101,10 @@ with expected(table_name, column_name) as (
     ('ai_usage', 'member_id'),
     ('ai_usage', 'route'),
     ('ai_usage', 'created_at'),
+    ('ai_usage', 'input_tokens'),
+    ('ai_usage', 'output_tokens'),
+    ('ai_usage', 'cache_read_tokens'),
+    ('ai_usage', 'cache_write_tokens'),
     ('grants_cache', 'keyword'),
     ('grants_cache', 'grants'),
     ('grants_cache', 'fetched_at')

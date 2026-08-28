@@ -1429,16 +1429,82 @@ export async function upsertMemberFacts(
  * outage degrades the cap toward permissive, which is the same direction
  * countAiCallsSince fails in.
  */
-export async function recordAiCall(memberId: string, route: string): Promise<void> {
+export async function recordAiCall(memberId: string, route: string): Promise<string | null> {
   try {
-    const { error } = await db().from("ai_usage").insert({
-      member_id: memberId,
-      route,
-      created_at: new Date().toISOString(),
-    });
-    if (error) console.error("recordAiCall: failed to record", error);
+    // `select("id").single()` on the insert so the caller gets the row back in
+    // the same round trip. That id is what lets the token counts be attached to
+    // *this* attempt once the model has answered — matching on member and route
+    // afterwards would race with the member's own concurrent requests.
+    const { data, error } = await db()
+      .from("ai_usage")
+      .insert({
+        member_id: memberId,
+        route,
+        created_at: new Date().toISOString(),
+      })
+      .select("id")
+      .single();
+
+    if (error) {
+      console.error("recordAiCall: failed to record", error);
+      return null;
+    }
+    return (data as { id: string } | null)?.id ?? null;
   } catch (error) {
     console.error("recordAiCall: Supabase unavailable", error);
+    return null;
+  }
+}
+
+/**
+ * What one call actually cost, as the Anthropic API reports it.
+ *
+ * Four numbers rather than two because the three input kinds are billed at
+ * three different rates — plain input at full price, a cache read at roughly a
+ * tenth, a cache write at 1.25x. Collapsing them would make the one question
+ * worth asking of this table ("is the prompt caching paying for itself?")
+ * unanswerable.
+ */
+export type AiSpend = {
+  /** Uncached input tokens, billed at the full rate. */
+  inputTokens: number;
+  outputTokens: number;
+  /** Input served from the prompt cache, billed at roughly a tenth. */
+  cacheReadTokens: number;
+  /** Input written into the cache, billed at 1.25x. */
+  cacheWriteTokens: number;
+};
+
+/**
+ * Attaches the token counts to an attempt already recorded by recordAiCall.
+ *
+ * Separate from that insert because the numbers do not exist yet when it runs:
+ * the row is written before the model is called, deliberately, so that a
+ * request which fails mid-flight still counts against the member's cap. An
+ * attempt is what costs money.
+ *
+ * The consequence is that a row whose token columns are still null is a call
+ * that never came back, and that is worth being able to see rather than
+ * papering over — see the comment in supabase-schema.sql.
+ *
+ * Best-effort, like every other write here: a member must never lose an answer
+ * they waited for because the accounting failed.
+ */
+export async function recordAiSpend(usageId: string, spend: AiSpend): Promise<void> {
+  try {
+    const { error } = await db()
+      .from("ai_usage")
+      .update({
+        input_tokens: spend.inputTokens,
+        output_tokens: spend.outputTokens,
+        cache_read_tokens: spend.cacheReadTokens,
+        cache_write_tokens: spend.cacheWriteTokens,
+      })
+      .eq("id", usageId);
+
+    if (error) console.error("recordAiSpend: failed to record", error);
+  } catch (error) {
+    console.error("recordAiSpend: Supabase unavailable", error);
   }
 }
 
@@ -1450,28 +1516,54 @@ export async function recordAiCall(memberId: string, route: string): Promise<voi
  * and allow the request, rather than locking members out of a working feature
  * because a count query failed.
  */
-export async function countAiCallsSince(
+/** A member's AI calls inside one window: the total, and the split by route. */
+export type AiCallCounts = {
+  total: number;
+  byRoute: Record<string, number>;
+};
+
+/**
+ * Both numbers the rate limiter needs, in one query.
+ *
+ * This replaced two `count: "exact", head: true` queries — one for the route,
+ * one for the total — which meant three round trips to Supabase before the
+ * model was even asked anything, on every single AI request. Fetching the route
+ * column for the window and counting in JavaScript gets it to two, and the rows
+ * are bounded by the caps themselves: a member at the total limit has 120 of
+ * them, each one short string.
+ *
+ * `SAFETY_LIMIT` is far above any cap and exists only so a member whose window
+ * grew unbounded during a Supabase outage (when the limiter fails open) cannot
+ * drag a huge result set back. Truncating there undercounts, which errs toward
+ * allowing the request — the same direction every other failure here errs in.
+ */
+export async function aiCallCountsSince(
   memberId: string,
   since: Date,
-  route?: string,
-): Promise<number | null> {
+): Promise<AiCallCounts | null> {
+  const SAFETY_LIMIT = 500;
+
   try {
-    let query = db()
+    const { data, error } = await db()
       .from("ai_usage")
-      .select("id", { count: "exact", head: true })
+      .select("route")
       .eq("member_id", memberId)
-      .gte("created_at", since.toISOString());
+      .gte("created_at", since.toISOString())
+      .limit(SAFETY_LIMIT);
 
-    if (route) query = query.eq("route", route);
-
-    const { count, error } = await query;
     if (error) {
-      console.error("countAiCallsSince: failed to count", error);
+      console.error("aiCallCountsSince: failed to count", error);
       return null;
     }
-    return count ?? 0;
+
+    const rows = (data ?? []) as { route: string }[];
+    const byRoute: Record<string, number> = {};
+    for (const row of rows) {
+      byRoute[row.route] = (byRoute[row.route] ?? 0) + 1;
+    }
+    return { total: rows.length, byRoute };
   } catch (error) {
-    console.error("countAiCallsSince: Supabase unavailable", error);
+    console.error("aiCallCountsSince: Supabase unavailable", error);
     return null;
   }
 }

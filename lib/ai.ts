@@ -7,6 +7,8 @@ import "server-only";
 // the deployment's environment variables (Vercel: Settings -> Environment
 // Variables) — that key must be added by a project admin, never entered by
 // this app or committed to the repo.
+import type { AiSpend } from "@/lib/appStore";
+
 const ANTHROPIC_API_URL = "https://api.anthropic.com/v1/messages";
 
 // Overridable from the environment so the model can be changed in the Vercel
@@ -17,7 +19,9 @@ const MODEL = process.env.ANTHROPIC_MODEL || "claude-sonnet-5";
 
 export type ChatMessage = { role: "user" | "assistant"; content: string };
 
-export type ClaudeResult = { ok: true; text: string } | { ok: false; error: string };
+export type ClaudeResult =
+  | { ok: true; text: string; usage: AiSpend }
+  | { ok: false; error: string };
 
 /**
  * How a caller describes its system prompt.
@@ -121,7 +125,8 @@ export async function callClaude(
 
     const data = await res.json();
 
-    logUsage(label, typeof systemPrompt !== "string", data?.usage);
+    const usage = readSpend(data?.usage);
+    logUsage(label, typeof systemPrompt !== "string", usage);
 
     // `content` is an array of blocks, and a text block is not guaranteed to
     // be at index 0 — the model can emit other block types ahead of it. This
@@ -164,11 +169,31 @@ export async function callClaude(
       return { ok: false, error: "The AI assistant didn't return a response. Please try again." };
     }
 
-    return { ok: true, text };
+    return { ok: true, text, usage };
   } catch (error) {
     console.error("callClaude: request failed", error);
     return { ok: false, error: "Couldn't reach the AI assistant. Please try again shortly." };
   }
+}
+
+/**
+ * Reads the API's usage block into the four numbers that are billed separately.
+ *
+ * Every field is coerced through `num`, because a usage block that is missing,
+ * partial, or shaped differently than expected must degrade to zeros rather
+ * than throw. Nothing here is worth failing a member's answered request over —
+ * and a row of zeros is visibly wrong in a way that a crashed request is not.
+ */
+function readSpend(usage: unknown): AiSpend {
+  const u = (usage ?? {}) as Record<string, unknown>;
+  const num = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? v : 0);
+
+  return {
+    inputTokens: num(u.input_tokens),
+    outputTokens: num(u.output_tokens),
+    cacheReadTokens: num(u.cache_read_input_tokens),
+    cacheWriteTokens: num(u.cache_creation_input_tokens),
+  };
 }
 
 /**
@@ -188,20 +213,15 @@ export async function callClaude(
  * Wrapped in try/catch because a logging failure must never turn a successful
  * AI response into an error for the member.
  */
-function logUsage(label: string, cacheRequested: boolean, usage: unknown): void {
+function logUsage(label: string, cacheRequested: boolean, usage: AiSpend): void {
   try {
-    const u = (usage ?? {}) as Record<string, unknown>;
-    const num = (v: unknown) => (typeof v === "number" ? v : 0);
-
-    const cacheWrite = num(u.cache_creation_input_tokens);
-    const cacheRead = num(u.cache_read_input_tokens);
-    const uncachedInput = num(u.input_tokens);
+    const { cacheWriteTokens: cacheWrite, cacheReadTokens: cacheRead } = usage;
 
     console.log("callClaude usage", {
       route: label,
       model: MODEL,
-      inputTokens: uncachedInput + cacheWrite + cacheRead,
-      outputTokens: num(u.output_tokens),
+      inputTokens: usage.inputTokens + cacheWrite + cacheRead,
+      outputTokens: usage.outputTokens,
       cacheWrite,
       cacheRead,
       // Distinguishes "we didn't ask for caching" from "we asked and the

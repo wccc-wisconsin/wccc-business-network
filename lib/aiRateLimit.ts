@@ -1,6 +1,11 @@
 import "server-only";
 import { NextResponse } from "next/server";
-import { countAiCallsSince, recordAiCall } from "@/lib/appStore";
+import {
+  aiCallCountsSince,
+  recordAiCall,
+  recordAiSpend,
+  type AiSpend,
+} from "@/lib/appStore";
 
 /**
  * Per-member daily caps on the AI features.
@@ -54,14 +59,28 @@ const WINDOW_MS = 24 * 60 * 60 * 1000;
 const SUPPORT_EMAIL = "info@wisccc.org";
 
 /**
- * Checks a member against both caps and records the attempt.
+ * What a caller does next.
  *
- * Returns a ready-to-send 429 when either cap is hit, or null when the request
- * should proceed. Call it after validating the request but before calling the
- * model, and return its result directly:
+ * `limited` is a ready-to-send 429 when either cap is hit. Otherwise it is null
+ * and `usageId` identifies the row recording this attempt, so the token counts
+ * can be attached to it once the model has answered:
  *
- *     const limited = await enforceAiRateLimit(userId, "coach");
+ *     const { limited, usageId } = await enforceAiRateLimit(userId, "coach");
  *     if (limited) return limited;
+ *     ...
+ *     const result = await callClaude(...);
+ *     if (result.ok) await recordSpend(usageId, result.usage);
+ *
+ * `usageId` is null when the insert failed, which is not something the member
+ * should ever see — it just means this one call goes unaccounted.
+ */
+export type RateLimitVerdict = {
+  limited: NextResponse | null;
+  usageId: string | null;
+};
+
+/**
+ * Checks a member against both caps and records the attempt.
  *
  * Fails open. If the counts can't be read — Supabase down, table missing — the
  * request is allowed rather than denied. A member losing a working feature
@@ -70,37 +89,56 @@ const SUPPORT_EMAIL = "info@wisccc.org";
  *
  * The attempt is recorded even when it's about to be rejected for some later
  * reason, because the cap is about spend, and an attempt is what costs money.
+ *
+ * Two round trips, not three. It used to issue one count query per cap plus the
+ * insert; both counts now come from a single read — see aiCallCountsSince.
  */
 export async function enforceAiRateLimit(
   memberId: string,
   route: AiRoute,
-): Promise<NextResponse | null> {
+): Promise<RateLimitVerdict> {
   const since = new Date(Date.now() - WINDOW_MS);
-
-  const [routeCount, totalCount] = await Promise.all([
-    countAiCallsSince(memberId, since, route),
-    countAiCallsSince(memberId, since),
-  ]);
+  const counts = await aiCallCountsSince(memberId, since);
 
   const routeLimit = AI_ROUTE_LIMITS[route];
 
-  if (routeCount !== null && routeCount >= routeLimit) {
-    return tooMany(
-      `You've used this tool ${routeLimit} times in the last 24 hours. It'll free up shortly — or email ${SUPPORT_EMAIL} if you need more.`,
-    );
+  if (counts !== null && (counts.byRoute[route] ?? 0) >= routeLimit) {
+    return {
+      limited: tooMany(
+        `You've used this tool ${routeLimit} times in the last 24 hours. It'll free up shortly — or email ${SUPPORT_EMAIL} if you need more.`,
+      ),
+      usageId: null,
+    };
   }
 
-  if (totalCount !== null && totalCount >= AI_DAILY_TOTAL_LIMIT) {
-    return tooMany(
-      `You've made ${AI_DAILY_TOTAL_LIMIT} AI requests in the last 24 hours. It'll free up shortly — or email ${SUPPORT_EMAIL} if you need more.`,
-    );
+  if (counts !== null && counts.total >= AI_DAILY_TOTAL_LIMIT) {
+    return {
+      limited: tooMany(
+        `You've made ${AI_DAILY_TOTAL_LIMIT} AI requests in the last 24 hours. It'll free up shortly — or email ${SUPPORT_EMAIL} if you need more.`,
+      ),
+      usageId: null,
+    };
   }
 
   // Recorded only once the request is cleared to run, so a member who is
   // already blocked doesn't keep pushing their own window forward with
   // attempts that never reached the model.
-  await recordAiCall(memberId, route);
-  return null;
+  return { limited: null, usageId: await recordAiCall(memberId, route) };
+}
+
+/**
+ * Files what a call cost against the attempt the limiter recorded.
+ *
+ * A no-op when there is no id or no usage, so a caller never has to guard: an
+ * unrecorded attempt simply goes unaccounted, which is a better trade than
+ * making every route branch on an accounting detail.
+ */
+export async function recordSpend(
+  usageId: string | null,
+  spend: AiSpend | undefined,
+): Promise<void> {
+  if (!usageId || !spend) return;
+  await recordAiSpend(usageId, spend);
 }
 
 function tooMany(error: string): NextResponse {

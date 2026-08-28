@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
-import { enforceAiRateLimit } from "@/lib/aiRateLimit";
+import { enforceAiRateLimit, recordSpend } from "@/lib/aiRateLimit";
 import {
   getModuleProgress,
   saveMemberDocument,
@@ -35,7 +35,7 @@ export async function POST(request: NextRequest) {
   // and blind to generations that failed before saving. Now shares the
   // attempt-based limiter with every other AI route — see lib/aiRateLimit.ts,
   // where "document" keeps the same ceiling of 20 it had here.
-  const limited = await enforceAiRateLimit(userId, "document");
+  const { limited, usageId } = await enforceAiRateLimit(userId, "document");
   if (limited) return limited;
 
   const body = await request.json().catch(() => null);
@@ -115,6 +115,11 @@ Rules that override anything above:
     MAX_DOCUMENT_TOKENS,
     "document",
   );
+
+  // Files what this call cost against the attempt the limiter recorded. A
+  // failed call has no usage to report, so its row stays null — which is how a
+  // call that never came back is told apart from one that cost nothing.
+  await recordSpend(usageId, result.ok ? result.usage : undefined);
 
   if (!result.ok) {
     return NextResponse.json({ ok: false, error: result.error }, { status: 502 });
