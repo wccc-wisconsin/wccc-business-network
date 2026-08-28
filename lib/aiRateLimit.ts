@@ -43,6 +43,13 @@ export const AI_ROUTE_LIMITS = {
   opportunities: 20,
   /** Writes a module's summary artifact. Once per module in practice. */
   "summarize-module": 20,
+  /**
+   * Reads a finished conversation for candidate profile facts. Once per
+   * conversation the member chooses to save, so a low ceiling — and a member
+   * hitting it is pressing the button repeatedly on the same chat, which
+   * proposes the same facts every time.
+   */
+  "extract-facts": 20,
 } as const;
 
 export type AiRoute = keyof typeof AI_ROUTE_LIMITS;

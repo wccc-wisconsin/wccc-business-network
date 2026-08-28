@@ -620,6 +620,228 @@ export async function listMemberIndustries(): Promise<string[]> {
   }
 }
 
+/** How long a Coach transcript is kept before the nightly job removes it. */
+export const CONVERSATION_RETENTION_DAYS = 365;
+
+/** One stored Coach conversation, with its messages. */
+export type StoredConversation = {
+  id: string;
+  moduleKey: string | null;
+  transcript: ChatTurn[];
+  createdAt: string;
+  updatedAt: string;
+};
+
+/** A conversation in a list: enough to recognise it, without its contents. */
+export type ConversationSummary = {
+  id: string;
+  moduleKey: string | null;
+  /** The member's opening message, trimmed — what they came to ask about. */
+  opening: string;
+  messageCount: number;
+  updatedAt: string;
+};
+
+/** Longest opening line kept for a list entry. */
+const CONVERSATION_OPENING_CHARS = 140;
+
+function asTranscript(value: unknown): ChatTurn[] {
+  if (!Array.isArray(value)) return [];
+  return value.filter(
+    (turn): turn is ChatTurn =>
+      !!turn &&
+      typeof turn === "object" &&
+      ((turn as ChatTurn).role === "user" || (turn as ChatTurn).role === "assistant") &&
+      typeof (turn as ChatTurn).content === "string",
+  );
+}
+
+/**
+ * Creates or replaces one conversation, returning its id.
+ *
+ * Upsert on the id rather than appending turns: the client holds the whole
+ * transcript already, and sending it entire means a dropped save loses nothing
+ * — the next one carries everything. Appending would need the two sides to
+ * agree on what had already been stored, which is exactly the read-modify-write
+ * shape that broke guided-step saving before it was made a single upsert.
+ */
+export async function saveConversation(
+  memberId: string,
+  transcript: ChatTurn[],
+  moduleKey: string | null,
+  conversationId?: string | null,
+): Promise<{ ok: boolean; id: string | null }> {
+  if (transcript.length === 0) return { ok: true, id: conversationId ?? null };
+
+  try {
+    const now = new Date().toISOString();
+    const row: Record<string, unknown> = {
+      member_id: memberId,
+      surface: "coach",
+      module_key: moduleKey,
+      transcript,
+      updated_at: now,
+    };
+    // Only set on an update. Letting the database default it on insert keeps
+    // the creation time honest even if a client sends a wrong clock.
+    if (conversationId) row.id = conversationId;
+
+    const { data, error } = await db()
+      .from("conversations")
+      .upsert(row, { onConflict: "id" })
+      .select("id")
+      .single();
+
+    if (error) {
+      console.error("saveConversation: failed to write", error);
+      return { ok: false, id: null };
+    }
+    return { ok: true, id: (data as { id: string } | null)?.id ?? null };
+  } catch (error) {
+    console.error("saveConversation: Supabase unavailable", error);
+    return { ok: false, id: null };
+  }
+}
+
+/**
+ * One conversation, or null.
+ *
+ * Filtered by member as well as by id, always. There are no RLS policies on
+ * this table and the service role would bypass them if there were, so member
+ * isolation here is this line — see §0 of DIRECTORY-DESIGN.md. A conversation
+ * id is exposed to the client so members can delete their own; that only stays
+ * safe because guessing someone else's id gets you nothing.
+ */
+export async function getConversation(
+  memberId: string,
+  conversationId: string,
+): Promise<StoredConversation | null> {
+  try {
+    const { data, error } = await db()
+      .from("conversations")
+      .select("id, module_key, transcript, created_at, updated_at")
+      .eq("member_id", memberId)
+      .eq("id", conversationId)
+      .maybeSingle();
+
+    if (error) {
+      console.error("getConversation: failed to load", error);
+      return null;
+    }
+    if (!data) return null;
+
+    return {
+      id: data.id,
+      moduleKey: data.module_key ?? null,
+      transcript: asTranscript(data.transcript),
+      createdAt: data.created_at,
+      updatedAt: data.updated_at,
+    };
+  } catch (error) {
+    console.error("getConversation: Supabase unavailable", error);
+    return null;
+  }
+}
+
+/**
+ * The member's conversations, newest first, without their full contents.
+ *
+ * Transcripts are fetched because the opening line and the message count both
+ * come from them and Postgres cannot cheaply give either — but they are reduced
+ * here and never leave this function, so a list of twenty conversations does
+ * not put twenty full chats on the wire to the browser.
+ */
+export async function listConversations(
+  memberId: string,
+  limit = 20,
+): Promise<ConversationSummary[]> {
+  try {
+    const { data, error } = await db()
+      .from("conversations")
+      .select("id, module_key, transcript, updated_at")
+      .eq("member_id", memberId)
+      .order("updated_at", { ascending: false })
+      .limit(limit);
+
+    if (error) {
+      console.error("listConversations: failed to load", error);
+      return [];
+    }
+
+    return ((data ?? []) as { id: string; module_key: string | null; transcript: unknown; updated_at: string }[]).map(
+      (row) => {
+        const transcript = asTranscript(row.transcript);
+        const first = transcript.find((turn) => turn.role === "user");
+        return {
+          id: row.id,
+          moduleKey: row.module_key ?? null,
+          opening: (first?.content ?? "").slice(0, CONVERSATION_OPENING_CHARS),
+          messageCount: transcript.length,
+          updatedAt: row.updated_at,
+        };
+      },
+    );
+  } catch (error) {
+    console.error("listConversations: Supabase unavailable", error);
+    return [];
+  }
+}
+
+/**
+ * Deletes one of the member's own conversations.
+ *
+ * The member_id filter is the authorisation, not a convenience — see
+ * getConversation. Deleting by id alone would let any signed-in member remove
+ * any conversation whose id they could produce.
+ */
+export async function deleteConversation(
+  memberId: string,
+  conversationId: string,
+): Promise<{ ok: boolean }> {
+  try {
+    const { error } = await db()
+      .from("conversations")
+      .delete()
+      .eq("member_id", memberId)
+      .eq("id", conversationId);
+
+    if (error) {
+      console.error("deleteConversation: failed to delete", error);
+      return { ok: false };
+    }
+    return { ok: true };
+  } catch (error) {
+    console.error("deleteConversation: Supabase unavailable", error);
+    return { ok: false };
+  }
+}
+
+/**
+ * Removes conversations last touched before `cutoff`, for the nightly job.
+ *
+ * Deliberately not member-scoped — this is the only function here that is meant
+ * to act across everyone, which is why it takes a date rather than an id and is
+ * only ever called from the cron route.
+ */
+export async function deleteConversationsBefore(cutoff: Date): Promise<number | null> {
+  try {
+    const { data, error } = await db()
+      .from("conversations")
+      .delete()
+      .lt("updated_at", cutoff.toISOString())
+      .select("id");
+
+    if (error) {
+      console.error("deleteConversationsBefore: failed to prune", error);
+      return null;
+    }
+    return ((data ?? []) as unknown[]).length;
+  } catch (error) {
+    console.error("deleteConversationsBefore: Supabase unavailable", error);
+    return null;
+  }
+}
+
 export async function getCompletedStepsByModule(
   memberId: string,
 ): Promise<Record<string, string[]>> {

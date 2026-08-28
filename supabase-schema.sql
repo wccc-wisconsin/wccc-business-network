@@ -356,6 +356,51 @@ create table if not exists grants_cache (
 alter table grants_cache add column if not exists grants jsonb not null default '[]'::jsonb;
 alter table grants_cache add column if not exists fetched_at timestamptz not null default now();
 
+-- Coach conversations.
+--
+-- Until this table existed, a Coach chat lived in React state and died with the
+-- browser tab. A member could spend forty minutes explaining their margins,
+-- their staff and the contract they were chasing, and none of it survived —
+-- next visit, blank slate, explain it all again.
+--
+-- Two things need it. The fact-extraction pass (lib/factExtraction.ts) reads a
+-- transcript that has to outlive the request that produced it. And the Coach
+-- can open knowing what was last discussed instead of cold every time.
+--
+-- `transcript` is the same ChatTurn[] shape member_decisions.transcript already
+-- uses — the Decision Grill has stored its interviews since it shipped, and
+-- this generalises what was built there for one feature.
+--
+-- RETENTION: 12 months, enforced by the nightly job in
+-- /api/cron/refresh-grants, not by this schema. These transcripts contain what
+-- members say in confidence about money, staff and family, and there is no
+-- reason for the portal to hold five years of it. Twelve months covers a
+-- business's annual cycle — filings, seasons, "what did we decide about the
+-- lease last spring" — so a member who visits quarterly still gets continuity
+-- across their whole year. Shortening that later is easy; lengthening it is
+-- impossible, because deleted is deleted. Members can also delete their own
+-- conversations at any time, which is why `id` is exposed to the client and
+-- every read and delete is filtered by member_id as well.
+create table if not exists conversations (
+  id uuid primary key default gen_random_uuid(),
+  member_id text not null references members(id) on delete cascade,
+  surface text not null default 'coach',
+  module_key text,
+  transcript jsonb not null default '[]'::jsonb,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+-- Serves the member's own list (newest first) and the nightly prune, which
+-- scans by age. member_id leads because every member-facing query filters on it.
+create index if not exists conversations_member_updated_idx
+  on conversations (member_id, updated_at desc);
+
+-- The prune deletes across all members by age, so it needs its own index —
+-- without it that job degrades to a full scan every night as the table grows.
+create index if not exists conversations_updated_idx
+  on conversations (updated_at);
+
 -- Row Level Security: ENABLED on every table, with no policies attached.
 --
 -- This looks like it would lock the app out. It doesn't: the only Supabase
@@ -389,3 +434,4 @@ alter table member_documents enable row level security;
 alter table member_facts enable row level security;
 alter table ai_usage enable row level security;
 alter table grants_cache enable row level security;
+alter table conversations enable row level security;

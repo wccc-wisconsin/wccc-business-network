@@ -107,7 +107,14 @@ with expected(table_name, column_name) as (
     ('ai_usage', 'cache_write_tokens'),
     ('grants_cache', 'keyword'),
     ('grants_cache', 'grants'),
-    ('grants_cache', 'fetched_at')
+    ('grants_cache', 'fetched_at'),
+    ('conversations', 'id'),
+    ('conversations', 'member_id'),
+    ('conversations', 'surface'),
+    ('conversations', 'module_key'),
+    ('conversations', 'transcript'),
+    ('conversations', 'created_at'),
+    ('conversations', 'updated_at')
 )
 select
   e.table_name,

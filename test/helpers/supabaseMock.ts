@@ -73,6 +73,10 @@ export function createSupabaseMock(initialHandler: Handler = () => ({ data: null
         call.filters.push(["lte", column, value]);
         return chain;
       },
+      lt(column: string, value: unknown) {
+        call.filters.push(["lt", column, value]);
+        return chain;
+      },
       in(column: string, value: unknown) {
         call.filters.push(["in", column, value]);
         return chain;

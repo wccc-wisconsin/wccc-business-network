@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { refreshCachedGrants } from "@/lib/grantsCache";
+import { CONVERSATION_RETENTION_DAYS, deleteConversationsBefore } from "@/lib/appStore";
 
 // Daily Grants.gov refresh. Scheduled in vercel.json.
 //
@@ -60,6 +61,16 @@ export async function GET(request: NextRequest) {
   if (denied) return denied;
 
   const startedAt = Date.now();
+
+  // Conversation retention, enforced here rather than in its own cron route.
+  // Two reasons: hosting plans cap how many scheduled jobs a project may have,
+  // and this one is a single indexed delete that adds milliseconds. The path
+  // name predates it — renaming would mean re-registering the schedule and
+  // leaving a dead route behind, which is a worse trade than a name that
+  // undersells what the job does.
+  const cutoff = new Date(Date.now() - CONVERSATION_RETENTION_DAYS * 24 * 60 * 60 * 1000);
+  const pruned = await deleteConversationsBefore(cutoff);
+
   const report = await refreshCachedGrants(REFRESH_BUDGET_MS);
 
   const succeeded = report.refreshed.filter((entry) => entry.ok);
@@ -70,6 +81,10 @@ export async function GET(request: NextRequest) {
   // just see grants that stop moving.
   console.log("refresh-grants: run complete", {
     durationMs: Date.now() - startedAt,
+    // null means the delete failed — distinct from 0, which means there was
+    // nothing old enough to remove. A retention policy that has silently
+    // stopped running is the failure worth being able to see.
+    conversationsPruned: pruned,
     succeeded: succeeded.length,
     failed: failed.map((entry) => ({ keyword: entry.keyword, reason: entry.reason })),
     skipped: report.skipped,
@@ -80,6 +95,7 @@ export async function GET(request: NextRequest) {
   // keywords refreshed fine. The body carries the detail.
   return NextResponse.json({
     ok: true,
+    conversationsPruned: pruned,
     refreshed: succeeded.length,
     failed: failed.length,
     skipped: report.skipped.length,

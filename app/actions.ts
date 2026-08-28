@@ -15,6 +15,7 @@ import {
 import { findStep, stepProvenanceLabel } from "@/data/modules";
 import { assessmentQuestions, computeAssessment, profileQuestions } from "@/data/assessment";
 import { factDefinition, isValidFactValue } from "@/data/facts";
+import { isExtractableFact } from "@/lib/factExtraction";
 import { factWritesFromAnswers } from "@/lib/carryOver";
 
 // Shared result shape for the useActionState-driven forms below (Register,
@@ -186,5 +187,70 @@ export async function saveBusinessAssessmentAction(
     console.error("saveBusinessAssessmentAction: snapshot saved but facts did not");
   }
 
+  return { ok: true, error: null };
+}
+
+/**
+ * Saves the facts a member confirmed from a Coach conversation.
+ *
+ * The one place extraction is allowed to reach the profile, and it is reached
+ * only by a member tapping Save on a specific card. That is what keeps
+ * `confirmedAt` meaning a person confirmed it — see the header of
+ * lib/factExtraction.ts for why the whole design turns on that.
+ *
+ * Every candidate is re-validated here rather than trusted from the client.
+ * /api/ai/extract-facts already checked the same things, but this action is a
+ * separate entry point: it accepts whatever the browser posts, and a member's
+ * profile is not somewhere to take a caller's word for it. The eligibility
+ * check is repeated for the same reason — it is what stops a crafted request
+ * writing a free-text fact the extraction path is deliberately not allowed to
+ * touch yet.
+ */
+export async function saveExtractedFactsAction(
+  candidates: { key: string; value: string }[],
+): Promise<FormState> {
+  const { userId } = await auth();
+  if (!userId) return { ok: false, error: "Please sign in again." };
+
+  if (!Array.isArray(candidates) || candidates.length === 0) {
+    return { ok: false, error: "Nothing to save." };
+  }
+
+  const writes: FactWrite[] = [];
+  const seen = new Set<string>();
+
+  for (const candidate of candidates) {
+    if (!candidate || typeof candidate.key !== "string" || typeof candidate.value !== "string") {
+      continue;
+    }
+    if (seen.has(candidate.key)) continue;
+
+    const def = factDefinition(candidate.key);
+    if (!def || !isExtractableFact(def)) continue;
+
+    const value = candidate.value.trim();
+    if (!isValidFactValue(def, value)) continue;
+
+    seen.add(candidate.key);
+    writes.push({
+      key: candidate.key,
+      value,
+      source: "coach",
+      // Shown next to the value in the profile, so a member can always see that
+      // this one came from a conversation rather than a form they filled in.
+      sourceLabel: "Confirmed from an AI Coach conversation",
+    });
+  }
+
+  if (writes.length === 0) {
+    return { ok: false, error: "Nothing here could be saved to your profile." };
+  }
+
+  const result = await upsertMemberFacts(userId, writes);
+  if (!result.ok) {
+    return { ok: false, error: "Couldn't save those to your profile. Please try again." };
+  }
+
+  revalidatePath("/dashboard");
   return { ok: true, error: null };
 }
