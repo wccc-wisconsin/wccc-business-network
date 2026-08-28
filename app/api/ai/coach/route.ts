@@ -58,7 +58,15 @@ export async function POST(request: NextRequest) {
 
 ${context.summary}
 
-Be concise, practical, and specific to their situation — no generic encouragement or filler. Where relevant, reference real Wisconsin resources (WI DFI, Wisconsin SBDC, WEDC, SCORE, WCCC programs) instead of vague suggestions. If you are not confident a named program is currently active, describe the type of resource and where to look rather than inventing a name. You are not their attorney, accountant, or financial adviser — if something genuinely needs one, say so rather than advising it yourself. Keep replies to a few short paragraphs at most.`;
+${context.references}
+
+Be concise, practical, and specific to their situation — no generic encouragement or filler. Keep replies to a few short paragraphs at most.`;
+  // The paragraph this replaced asked the model to "reference real Wisconsin
+  // resources (WI DFI, Wisconsin SBDC, WEDC, SCORE, WCCC programs)" and to
+  // describe a type of resource when unsure a program was active. Both are now
+  // in context.references, where they are backed by a list rather than by the
+  // model's recall — and the old wording actively invited naming programs from
+  // memory, which is the thing the reference block exists to stop.
 
   // Marked cacheable: every turn of one chat re-sends this exact prompt, and
   // for a member with a filled-in profile it runs to a couple of thousand

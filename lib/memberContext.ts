@@ -20,6 +20,7 @@ import {
   isFactStale,
   type FactDefinition,
 } from "@/data/facts";
+import { referenceSection } from "@/lib/adviceCatalog";
 import {
   findModule,
   isModuleUnlocked,
@@ -60,6 +61,21 @@ export type MemberContext = {
   summary: string;
   /** The member's facts, for callers that need the values rather than prose. */
   facts: Record<string, MemberFact>;
+  /**
+   * Verified reference material plus the rules for using it — see
+   * lib/adviceCatalog.ts.
+   *
+   * Kept out of `summary` deliberately, even though every surface that answers
+   * a member's question wants both. `summary` describes who the member is; this
+   * describes what the assistant is allowed to assert. Merging them would mean
+   * the one surface that should NOT carry grounding rules — a route that only
+   * summarises what the member wrote — silently acquires them, and a future
+   * reader could not tell which half a line came from.
+   *
+   * Any new AI surface that answers questions rather than summarising should
+   * embed this.
+   */
+  references: string;
 };
 
 /**
@@ -273,6 +289,8 @@ export async function buildMemberContext(
     ? standings.find((s) => s.module.key === focusModuleKey)
     : undefined;
 
+  const now = new Date();
+
   const parts: string[] = [
     `You are helping ${member.name || "a WCCC member"}, who runs ${
       member.businessName || "a small business"
@@ -292,7 +310,7 @@ export async function buildMemberContext(
     );
   }
 
-  parts.push(factLines(facts, new Date()));
+  parts.push(factLines(facts, now));
 
   parts.push(roadmapLines(standings));
 
@@ -316,5 +334,7 @@ export async function buildMemberContext(
     "Everything above is what the member typed, not verified fact. Where a detail matters to your answer and isn't listed, ask for it instead of inventing it.",
   );
 
-  return { member, summary: parts.join("\n\n"), facts };
+  // `now` is read once above for staleness and reused here, so a deadline
+  // cannot be filtered against a different instant than the facts were.
+  return { member, summary: parts.join("\n\n"), facts, references: referenceSection(facts, now) };
 }

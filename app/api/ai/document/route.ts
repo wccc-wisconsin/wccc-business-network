@@ -96,14 +96,14 @@ export async function POST(request: NextRequest) {
 
 ${context.summary}
 
+${context.references}
+
 ${found.tool.brief}
 
 Rules that override anything above:
 - Use only what the member actually told you. Never invent figures, customer names, testimonials, credentials, or track record.
 - Where something needed is missing from their answers, say so in one short line rather than filling the gap with a plausible guess.
 - Plain language a busy owner reads once. No preamble, no restating the task, no closing encouragement.
-- Reference real Wisconsin resources (WI DFI, WEDC, Wisconsin SBDC, SCORE, WWBIC) only where you are confident they exist and are current; otherwise describe the type of organisation to look for.
-- You are not their attorney, accountant, or financial adviser. Where something genuinely needs one, name that instead of advising it yourself.
 - Output the document itself and nothing else.`;
 
   // Left as a plain string: one document per request, nothing re-sent inside

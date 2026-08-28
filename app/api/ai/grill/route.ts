@@ -111,14 +111,15 @@ export async function POST(request: NextRequest) {
   const context = `${memberContext.summary}\n\nThe decision on the table: "${topic}"`;
 
   return phase === "question"
-    ? askNextQuestion(context, messages, questionsAsked)
-    : writeBrief(userId, topic, context, messages);
+    ? askNextQuestion(context, memberContext.references, messages, questionsAsked)
+    : writeBrief(userId, topic, context, memberContext.references, messages);
 }
 
 // ---------------------------------------------------------------------------
 
 async function askNextQuestion(
   context: string,
+  references: string,
   messages: ChatMessage[],
   questionsAsked: number,
 ) {
@@ -136,6 +137,8 @@ async function askNextQuestion(
   const stablePrompt = `You are the WCCC Decision Grill, part of the Wisconsin Chinese Chamber of Commerce member portal. Your job is NOT to be supportive. Your job is to interrogate a business decision until its weak points are visible, the way a sharp mentor would — so the member decides with their eyes open.
 
 ${context}
+
+${references}
 
 Rules, all of them strict:
 - Ask exactly ONE question in this reply. Never two. Never a list.
@@ -169,11 +172,14 @@ async function writeBrief(
   memberId: string,
   topic: string,
   context: string,
+  references: string,
   messages: ChatMessage[],
 ) {
   const systemPrompt = `You are the WCCC Decision Grill, part of the Wisconsin Chinese Chamber of Commerce member portal. The interview is over. Write the member's decision brief.
 
 ${context}
+
+${references}
 
 Base the brief ONLY on what they actually told you in this conversation plus their profile. Do not invent facts, figures, or program names. Where you are drawing an inference rather than repeating something they said, say so plainly. Take a clear position — "it depends" is not a recommendation — but set the confidence honestly based on how much they were able to tell you. If the decision turns on law, tax, or financing terms, say which professional they should confirm it with instead of advising on it yourself.
 

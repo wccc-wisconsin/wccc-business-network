@@ -131,6 +131,29 @@ describe("the artifact section", () => {
   });
 });
 
+describe("the reference material", () => {
+  /**
+   * Wiring test. lib/adviceCatalog.ts is covered on its own; what this pins is
+   * that every surface built on buildMemberContext actually receives it, and
+   * that it is kept out of `summary` — a route that only summarises what the
+   * member wrote should not silently acquire grounding rules.
+   */
+  it("travels alongside the summary rather than inside it", async () => {
+    const context = await buildMemberContext("user_1");
+
+    expect(context!.references).toContain("Grounding, which overrides");
+    expect(context!.summary).not.toContain("Grounding, which overrides");
+  });
+
+  it("is filtered to this member's own filings", async () => {
+    const context = await buildMemberContext("user_1");
+
+    // No facts on file, so nothing is ruled out and nothing is asserted about
+    // them either.
+    expect(context!.references).toContain("May or may not apply");
+  });
+});
+
 describe("what the artifact reads cost", () => {
   /**
    * The whole reason getMemberDocumentTitles exists. member_documents rows
