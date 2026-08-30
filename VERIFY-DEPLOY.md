@@ -1,6 +1,6 @@
 # Post-deploy verification
 
-Six checks that can only be answered against the live site. Each one covers a
+Seven checks that can only be answered against the live site. Each one covers a
 mechanism that **fails silently** — the app looks fine either way, and the only
 difference is whether it is doing the thing it was built to do.
 
@@ -14,6 +14,12 @@ bilingual advice. Check 5 is the only one with no unit test behind it at all —
 the drawer is client state, and this repo has no browser test harness. Check 6
 is the only one that cannot be answered by a machine at all: it asks whether the
 writing is any good, which needs a person who reads the language.
+
+Check 6 is also the only one that is no longer runnable against master as it
+stands. Bilingual answers are switched off — `BILINGUAL_ENABLED` in
+`data/facts.ts` — precisely because this check has never been run, so the check
+is now what has to happen *before* the flag goes on rather than after. See its
+own section for how to run it against a preview.
 
 ---
 
@@ -200,14 +206,26 @@ answered — it is given opening lines only.
 **What it proves.** That a member who asks to be answered in their own language
 is, and that the rules protecting them survive the translation. This is the one
 check a machine cannot finish: the plumbing is unit-tested, but whether the
-output reads naturally needs someone who reads the language. **Until that
-person has read it, the feature is built, not verified — don't announce it.**
+output reads naturally needs someone who reads the language.
+
+**This check is now the gate on the feature, not a report on it.** Bilingual
+answers are off in production — `BILINGUAL_ENABLED` in `data/facts.ts` — because
+this had never been run and shipping unread Chinese to a Chinese chamber of
+commerce is the one audience most able to notice it being poor. Passing this
+check is what turns the flag on. Nothing else changes with it: the plumbing, the
+seven surfaces and their tests are all still in the repo, and the tests for what
+the directive says re-arm the moment the flag flips.
+
+**Run it on a preview, not on production.** Set `BILINGUAL_ENABLED = true` on a
+branch, deploy the preview, run the steps below on it, and only merge the flag
+flip if a person who reads the language passes step 2. Members never see the
+half-checked state that way.
 
 **Steps.**
 
 1. Dashboard → Business Snapshot → **Edit**. The last field is "Which language
-   would you like the AI features to answer in?" Pick one you or a colleague can
-   read. Save.
+   would you like the AI features to answer in?" — it appears only on a build
+   with the flag on. Pick one you or a colleague can read. Save.
 2. Ask the AI Coach a Wisconsin question — licensing, registration, a filing
    deadline. Something that should make it name an agency.
 3. Run a Decision Grill through to the brief.
@@ -237,7 +255,40 @@ Worth reporting with the language you chose — the fix is prompt wording.
 
 **Fail — the language is right but the writing is poor,** stilted, or reads as
 translated English: also a real failure, and the only one here that needs a
-human to see it. Note which surface, and keep the reply.
+human to see it. Note which surface, and keep the reply. Leave the flag off and
+fix the directive's wording — the failure is prompt quality, not plumbing, so
+there is nothing structural to repair and nothing to rush.
+
+---
+
+## Check 7 — a rating actually lands
+
+**What it proves.** That `ai_feedback` exists in the live database. The buttons
+are optimistic and the route answers 200 either way — deliberately, so a member
+doing us a favour is never shown an error — which means a missing table looks
+*exactly* like a working one from the outside. This is the only way to tell.
+
+**Steps.**
+
+1. Sign in, open the AI Coach, ask anything, wait for the reply.
+2. Under the reply, click **Yes** on "Was this useful?". It should switch to
+   "Thanks — noted."
+3. Supabase → **Table editor** → `ai_feedback`. (Or SQL editor:
+   `select route, rating, model, created_at from ai_feedback order by created_at desc limit 5;`)
+
+**Pass:** a row, with `route` = `coach`, `rating` = `helpful`, a `target_key`
+beginning `coach:`, and `model` filled in.
+
+**Fail — no row:** the table is missing or the write is being refused. Re-run
+`supabase-schema.sql`, then `supabase-verify.sql` — the `ai_feedback` row there
+should read `ok` and the whole report should show 17 tables. Vercel → Logs will
+carry a `saveAiFeedback: failed to write` line with the reason.
+
+**Also worth doing once:** click **No** on the *same* reply. There must still be
+exactly one row for that `target_key`, now reading `not-helpful`, with
+`created_at` unchanged and `updated_at` moved. Two rows means the unique index
+did not apply, and every count this table produces will be wrong in a way that
+looks plausible.
 
 ---
 
@@ -250,4 +301,7 @@ human to see it. Note which surface, and keep the reply.
 - Check 3 — the exact provenance line under the results.
 - Check 4 — the status code from step 1, and the `refresh-grants` log line if there is one.
 - Check 5 — which step, and what the drawer showed instead.
-- Check 6 — which language, which surface, and the reply itself.
+- Check 6 — which language, which surface, and the reply itself. A pass here is
+  also the approval to set `BILINGUAL_ENABLED = true`; say so explicitly.
+- Check 7 — how many rows appeared, and whether the second click made a second
+  row or updated the first.

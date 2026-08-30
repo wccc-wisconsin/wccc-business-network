@@ -1,8 +1,9 @@
 "use client";
 
-import { useCallback, useRef, useState, useTransition } from "react";
+import { useCallback, useId, useRef, useState, useTransition } from "react";
 import { saveExtractedFactsAction } from "@/app/actions";
 import type { ConversationSummary } from "@/lib/appStore";
+import AnswerFeedback from "@/components/AnswerFeedback";
 
 type Message = { role: "user" | "assistant"; content: string };
 
@@ -150,6 +151,22 @@ export default function AICoach({ moduleKey, moduleLabel }: Props) {
   // land after it, writing back the row the member just removed.
   const [conversationId, setConversationIdState] = useState<string | null>(null);
   const conversationIdRef = useRef<string | null>(null);
+
+  // Identifies replies for feedback before the conversation has an id of its
+  // own. The first save lands a moment after the first reply finishes, so a
+  // member who rates immediately would otherwise have nothing stable to key
+  // against. Once `conversationId` arrives the real id takes over, and a
+  // rating made under either key still upserts — the only cost is that a
+  // rating given in the first second and one given later count as two
+  // different answers, which is a rounding error against the alternative of
+  // showing no buttons until a network round trip finishes.
+  //
+  // `useId` rather than a random value in a ref. Both were tried; the ref
+  // broke two React rules at once — calling Math.random during render, and
+  // reading `.current` during render — and useId is the API that exists for
+  // exactly this: stable for the life of the component, unique per instance,
+  // and safe to read while rendering.
+  const feedbackNonce = useId();
 
   const adoptConversation = useCallback((id: string | null) => {
     conversationIdRef.current = id;
@@ -530,6 +547,15 @@ export default function AICoach({ moduleKey, moduleLabel }: Props) {
               {m.role === "user" ? "You" : "AI Coach"}
             </p>
             {m.content}
+            {/* Not offered on a reply that is still being written — asking
+                whether half an answer was useful is a question nobody can
+                answer, and the buttons would move as the text grows. */}
+            {m.role === "assistant" && !(isPending && i === messages.length - 1) && (
+              <AnswerFeedback
+                route="coach"
+                targetKey={`coach:${conversationId ?? feedbackNonce}:${i}`}
+              />
+            )}
           </div>
         ))}
         {/* Only until the first words land — after that the reply itself is

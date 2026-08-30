@@ -73,6 +73,36 @@ export const factGroupLabels: Record<FactGroup, string> = {
 const ONE_YEAR = 365;
 const TWO_YEARS = 730;
 
+/**
+ * Whether members are offered a language other than English for AI answers.
+ *
+ * Off, deliberately, and not because anything about it is broken. The plumbing
+ * is built and tested: the preference reaches all seven AI surfaces, agency
+ * names and form numbers and URLs survive untranslated inside the translated
+ * text, and JSON keys stay in English so the three parsing surfaces still
+ * parse. What has never happened is a person who reads Chinese looking at real
+ * output and saying it reads naturally — and this is a Chinese chamber of
+ * commerce, so the members most able to notice awkward Chinese are exactly the
+ * ones who would be reading it, about tax filings and legal deadlines. Wrong
+ * is not recoverable the way empty is.
+ *
+ * A flag rather than a deletion, and the same shape as TIER_GATING_ENABLED and
+ * PERSONAL_TRACK_ENABLED in data/modules.ts. Deleting it would have meant a
+ * diff across seven routes, this catalog, data/assessment.ts and their tests,
+ * to be written again from scratch the week someone does the review. Off, the
+ * feature costs one branch in buildLanguageDirective and one filter on
+ * profileQuestions; the tests for what the directive says are skipped rather
+ * than deleted, so they re-arm untouched when this flips.
+ *
+ * **To turn it back on:** have someone who reads the language read real output
+ * from the Coach, the Grill and a generated document — VERIFY-DEPLOY.md check
+ * 6 — then set this to `true`. Nothing else needs changing. Values already
+ * stored by members who chose a language before this went off are left alone
+ * and simply go unread meanwhile, so flipping it restores their choice rather
+ * than asking them again.
+ */
+export const BILINGUAL_ENABLED = false;
+
 export const factDefinitions: FactDefinition[] = [
   {
     key: "entity_structure",
@@ -364,6 +394,12 @@ export const factDefinitions: FactDefinition[] = [
    * be the worse trade. What it is *not* is a claim about the business, so
    * unlike every other fact it never reaches the "what they told us" block; it
    * is read by languageDirective in lib/memberContext.ts and nowhere else.
+   *
+   * Gated by BILINGUAL_ENABLED above: while that is off this question is not
+   * asked and the stored value is not read. The definition stays either way,
+   * because rows written before the flag went off still resolve through
+   * factDefinition, and a fact with no definition renders as a raw key/value
+   * pair rather than being skipped.
    *
    * `staleAfterDays: null` deliberately. Every other preference-shaped thing
    * here expires because the world moves on; the language someone reads in

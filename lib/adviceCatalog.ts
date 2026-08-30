@@ -1,6 +1,10 @@
 import { deadlinesForMember, type MemberDeadline } from "@/lib/deadlines";
 import { LAST_VERIFIED as COMPLIANCE_LAST_VERIFIED } from "@/data/compliance";
-import { activeWisconsinPrograms, wisconsinLastVerified } from "@/data/wisconsinPrograms";
+import {
+  activeWisconsinPrograms,
+  wisconsinCatalogState,
+  wisconsinLastVerified,
+} from "@/data/wisconsinPrograms";
 import type { MemberFact } from "@/lib/appStore";
 
 /**
@@ -83,8 +87,20 @@ function deadlineLines(deadlines: MemberDeadline[]): string[] {
   });
 }
 
-function programLines(): string[] {
-  return activeWisconsinPrograms().map(
+/**
+ * `now` is threaded through rather than defaulted, and that is load-bearing.
+ *
+ * This used to call `activeWisconsinPrograms()` with no argument, which falls
+ * back to wall-clock time. While every entry was unverified the list was empty
+ * either way and nothing showed; the moment entries were verified, one half of
+ * a reference block honoured the instant it was given and the other half used
+ * today's date. lib/memberContext.ts reads `now` exactly once so that a
+ * deadline cannot be filtered against a different instant than the facts were —
+ * the programs belong under the same guarantee, and a verification that has
+ * expired as of `now` must drop out as of `now`.
+ */
+function programLines(now: Date): string[] {
+  return activeWisconsinPrograms(now).map(
     (program, index) =>
       `[R${index + 1}] ${program.name} — ${program.type}. ${program.description} (${program.url})`,
   );
@@ -105,7 +121,7 @@ export function buildReferenceBlock(
 ): string | null {
   const { upcoming } = deadlinesForMember(facts, now);
   const deadlines = deadlineLines(upcoming);
-  const programs = programLines();
+  const programs = programLines(now);
 
   if (deadlines.length === 0 && programs.length === 0) return null;
 
@@ -120,7 +136,7 @@ export function buildReferenceBlock(
   }
 
   if (programs.length > 0) {
-    const verifiedOn = wisconsinLastVerified();
+    const verifiedOn = wisconsinLastVerified(now);
     sections.push(
       `Wisconsin resources someone at WCCC has confirmed${
         verifiedOn ? ` (most recent check ${verifiedOn})` : ""
@@ -130,8 +146,16 @@ export function buildReferenceBlock(
     // Said out loud rather than left as an absence. A model given a deadline
     // list and no program list will otherwise reach for the program names it
     // remembers, which is the exact failure this file exists to prevent.
+    //
+    // The instruction is identical either way — do not name programs — but the
+    // reason given has to be true. "Have not been verified yet" is simply
+    // false once a verified list has lapsed, and a prompt that states
+    // something false about its own contents is the wrong thing to be putting
+    // in front of a model, quite apart from anyone reading a log.
     sections.push(
-      "No Wisconsin support programs have been verified for this portal yet, so there is no approved list of them. Do not name specific state or local programs; describe the kind of organisation to look for, or point the member at info@wisccc.org.",
+      wisconsinCatalogState(now) === "expired"
+        ? "The verified list of Wisconsin support programs has expired and is awaiting a re-check, so there is no approved list of them right now. Do not name specific state or local programs; describe the kind of organisation to look for, or point the member at info@wisccc.org."
+        : "No Wisconsin support programs have been verified for this portal yet, so there is no approved list of them. Do not name specific state or local programs; describe the kind of organisation to look for, or point the member at info@wisccc.org.",
     );
   }
 

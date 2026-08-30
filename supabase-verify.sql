@@ -116,7 +116,16 @@ with expected(table_name, column_name) as (
     ('conversations', 'opening'),
     ('conversations', 'message_count'),
     ('conversations', 'created_at'),
-    ('conversations', 'updated_at')
+    ('conversations', 'updated_at'),
+    ('ai_feedback', 'id'),
+    ('ai_feedback', 'member_id'),
+    ('ai_feedback', 'route'),
+    ('ai_feedback', 'target_key'),
+    ('ai_feedback', 'rating'),
+    ('ai_feedback', 'note'),
+    ('ai_feedback', 'model'),
+    ('ai_feedback', 'created_at'),
+    ('ai_feedback', 'updated_at')
 )
 select
   e.table_name,

@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createSupabaseMock, type RecordedCall } from "./helpers/supabaseMock";
+import { BILINGUAL_ENABLED } from "@/data/facts";
 
 /**
  * buildMemberContext is the one description of a member that every AI surface
@@ -455,27 +456,46 @@ describe("conversation recall", () => {
 });
 
 
+const withLanguage = (value: string) =>
+  rowsFrom({ members: MEMBER_ROW, member_facts: [factRow("preferred_language", value)] });
+
+/**
+ * The content rules, which describe a directive that only exists when
+ * BILINGUAL_ENABLED (data/facts.ts) is on.
+ *
+ * Skipped rather than deleted while the flag is off. They are the specification
+ * of what the feature does the day someone who reads the language signs off on
+ * real output, and vitest prints them as skipped, so they stay visible in every
+ * run instead of quietly not existing. Flipping the flag re-arms all of them
+ * with no edit to this file, which is most of the argument for a flag over a
+ * deletion.
+ *
+ * The block below holds the rules that hold whichever way the flag is set;
+ * test/bilingualFlag.test.ts holds the ones that only hold while it is off.
+ */
+const describeWhenBilingual = BILINGUAL_ENABLED ? describe : describe.skip;
+
 /**
  * The language preference.
  *
  * This is the only fact that changes how the portal answers rather than what it
  * knows, and it reaches the model as an instruction rather than as a claim.
- * Four things have to hold, and each one fails quietly if it stops holding:
+ * Four things have to hold, and each one fails quietly if it stops holding.
+ * Two of them hold whichever way BILINGUAL_ENABLED is set, and they are the
+ * ones in this block:
  *
  *   - English and no-preference produce *nothing*, so a member who never
- *     touched this setting sends the exact prompt they always did,
- *   - a stored value naming no language we offer is treated as absent rather
- *     than pasted into the prompt,
- *   - names, numbers and URLs are ruled back into English inside the
- *     translated text — a translated agency name is a search that finds
- *     nothing, and
+ *     touched this setting sends the exact prompt they always did, and
  *   - the preference never appears in the block of things the member said
  *     about their business, because it is not one.
+ *
+ * The other two are statements about the text of a directive — that a stored
+ * value naming no language we offer is treated as absent rather than pasted
+ * into the prompt, and that names, numbers and URLs are ruled back into English
+ * inside the translated text. There is no directive to check them against while
+ * the flag is off, so they sit in describeWhenBilingual above.
  */
 describe("the language directive", () => {
-  const withLanguage = (value: string) =>
-    rowsFrom({ members: MEMBER_ROW, member_facts: [factRow("preferred_language", value)] });
-
   it("says nothing at all when the member has no preference", async () => {
     mock.reset(rowsFrom({ members: MEMBER_ROW }));
 
@@ -492,6 +512,21 @@ describe("the language directive", () => {
     expect(context!.languageDirective).toBe("");
   });
 
+  it("never states the preference as a fact about the business", async () => {
+    mock.reset(withLanguage("zh-Hans"));
+
+    const context = await buildMemberContext("user_1");
+
+    // The summary block is introduced as what the member said about their
+    // business. A language preference is not that, and listing it there would
+    // also put it in front of every surface as though it were.
+    expect(context!.summary).not.toContain("Preferred language");
+    expect(context!.summary).toContain("no saved details about this business");
+  });
+});
+
+
+describeWhenBilingual("the language directive's content", () => {
   it("names the language the member asked for", async () => {
     mock.reset(withLanguage("zh-Hant"));
 
@@ -545,18 +580,6 @@ describe("the language directive", () => {
     expect(buildLanguageDirective(stored("klingon"))).toBe("");
     expect(buildLanguageDirective(stored(""))).toBe("");
     expect(buildLanguageDirective({})).toBe("");
-  });
-
-  it("never states the preference as a fact about the business", async () => {
-    mock.reset(withLanguage("zh-Hans"));
-
-    const context = await buildMemberContext("user_1");
-
-    // The summary block is introduced as what the member said about their
-    // business. A language preference is not that, and listing it there would
-    // also put it in front of every surface as though it were.
-    expect(context!.summary).not.toContain("Preferred language");
-    expect(context!.summary).toContain("no saved details about this business");
   });
 
   it("reads the same preference for the surfaces that build no context", async () => {

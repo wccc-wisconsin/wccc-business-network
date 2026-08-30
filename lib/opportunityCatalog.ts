@@ -1,7 +1,9 @@
 import "server-only";
 
 import { getFederalGrants } from "@/lib/grantsCache";
-import { activeWisconsinPrograms, wisconsinLastVerified } from "@/data/wisconsinPrograms";
+import { wisconsinCatalogState, wisconsinLastVerified } from "@/data/wisconsinPrograms";
+import { wisconsinProgramsForMember } from "@/lib/wisconsinFit";
+import type { MemberFact } from "@/lib/appStore";
 
 /**
  * The catalog the AI selects from.
@@ -36,6 +38,17 @@ export type CatalogEntry = {
   /** One of the five types the panel styles: Grant/Loan/Certification/Program/Advising. */
   type: string;
   description: string;
+  /**
+   * Who the entry actually suits, for the Wisconsin half — see `fitNote` in
+   * data/wisconsinPrograms.ts. Null for federal grants, which have no
+   * equivalent: a Grants.gov posting states its own eligibility and nobody at
+   * WCCC has read it.
+   *
+   * Reaches the model and never the member. It is a judgement WCCC is making
+   * about suitability, not a fact about the organisation, and the two must not
+   * arrive on screen looking alike.
+   */
+  fitNote: string | null;
   url: string;
   /** ISO date for federal grants where known; always null for Wisconsin entries. */
   closeDate: string | null;
@@ -49,6 +62,15 @@ export type Catalog = {
   /** How many came from the curated file, after the verified + fresh filter. */
   wisconsinCount: number;
   /**
+   * How many verified Wisconsin entries this member's own facts ruled out.
+   *
+   * Carried to the panel so the member is told filtering happened rather than
+   * being shown a shorter list — see WisconsinFitView.filteredOut. It also
+   * separates two states the old provenance line could not tell apart: nothing
+   * has been verified yet, and nothing that is verified suits this member.
+   */
+  wisconsinFilteredOut: number;
+  /**
    * Set when the Grants.gov call failed. The catalog may still be usable from
    * verified Wisconsin entries alone, so this is reported rather than fatal —
    * but it must reach the member, because "no federal grants matched you" and
@@ -58,6 +80,14 @@ export type Catalog = {
   federalError: string | null;
   /** Most recent human verification date among the Wisconsin entries shown. */
   wisconsinLastVerified: string | null;
+  /**
+   * Why the Wisconsin half is empty, when it is — see wisconsinCatalogState.
+   *
+   * Carried out to the panel because "nobody has signed these off yet" and "the
+   * sign-off lapsed" need different people to do different things, and the one
+   * message that used to cover both told the second group the wrong story.
+   */
+  wisconsinState: "ok" | "expired" | "unreviewed";
   /**
    * When the federal half was last fetched from Grants.gov, or null when it
    * could not be established. Shown to the member: a list of deadlines is only
@@ -95,9 +125,21 @@ function trimTitle(title: string): string {
   return `${title.slice(0, MAX - 1).trimEnd()}…`;
 }
 
-export async function buildCatalog(industry: string): Promise<Catalog> {
+/**
+ * `facts` and `now` are required rather than optional.
+ *
+ * An optional `facts` would have made every existing call site compile
+ * unchanged and silently keep the old unfiltered behaviour, which is the bug
+ * this change exists to remove. Making it required means the compiler names
+ * every caller that has to decide what it knows about the member.
+ */
+export async function buildCatalog(
+  industry: string,
+  facts: Record<string, MemberFact>,
+  now = new Date(),
+): Promise<Catalog> {
   const federalResult = await getFederalGrants(industry);
-  const wisconsin = activeWisconsinPrograms();
+  const wisconsin = wisconsinProgramsForMember(facts, now);
 
   const entries: CatalogEntry[] = [];
   let federalError: string | null = null;
@@ -119,6 +161,7 @@ export async function buildCatalog(industry: string): Promise<Catalog> {
           grant.status.toLowerCase() === "forecasted"
             ? `${grant.agencyName}. Forecasted — not yet open for applications.`
             : `${grant.agencyName}. Open for applications.`,
+        fitNote: null,
         url: grant.url,
         closeDate: grant.closeDate,
         source: "federal",
@@ -128,12 +171,13 @@ export async function buildCatalog(industry: string): Promise<Catalog> {
     federalError = federalResult.reason;
   }
 
-  wisconsin.forEach((program, index) => {
+  wisconsin.programs.forEach((program, index) => {
     entries.push({
       ref: `W${index + 1}`,
       title: program.name,
       type: program.type,
       description: program.description,
+      fitNote: program.fitNote,
       url: program.url,
       // Curated entries describe standing services, not dated programs — see
       // rule 3 in data/wisconsinPrograms.ts. A deadline here would be a claim
@@ -147,8 +191,10 @@ export async function buildCatalog(industry: string): Promise<Catalog> {
     entries,
     federalCount: entries.filter((entry) => entry.source === "federal").length,
     wisconsinCount: entries.filter((entry) => entry.source === "wisconsin").length,
+    wisconsinFilteredOut: wisconsin.filteredOut,
     federalError,
-    wisconsinLastVerified: wisconsinLastVerified(),
+    wisconsinLastVerified: wisconsinLastVerified(now),
+    wisconsinState: wisconsinCatalogState(now),
     federalFetchedAt,
     federalStale,
   };
@@ -170,7 +216,13 @@ export function formatCatalogForPrompt(catalog: Catalog): string {
     .map((entry) => {
       const deadline = entry.closeDate ? ` | closes ${entry.closeDate}` : "";
       const scope = entry.source === "federal" ? "Federal" : "Wisconsin";
-      return `[${entry.ref}] ${entry.title} — ${scope} ${entry.type}${deadline}. ${entry.description}`;
+      // The fit note goes on its own labelled line rather than being run into
+      // the description. They are different kinds of claim — one is what the
+      // organisation does, the other is WCCC's judgement about who it suits —
+      // and a model handed them as one sentence will quote the judgement back
+      // to the member as though the organisation had said it.
+      const fit = entry.fitNote ? `\n     Suits: ${entry.fitNote}` : "";
+      return `[${entry.ref}] ${entry.title} — ${scope} ${entry.type}${deadline}. ${entry.description}${fit}`;
     })
     .join("\n");
 }

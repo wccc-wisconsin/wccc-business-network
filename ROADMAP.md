@@ -131,10 +131,10 @@ error. And the Grill's `confidence` is pinned to its three English words: the
 route matches on that value and silently falls back to "Medium", so a translated
 one would have shown a member a confidence level nobody chose.
 
-**Still unverified in the way that matters.** The plumbing is tested and
-mutation-tested; whether the Chinese reads naturally to a Chinese speaker is not
-something this repo can answer. House rule stands — do not claim the feature
-works until a speaker has read real output.
+**Still unverified in the way that matters, and therefore switched off.** The
+plumbing is tested and mutation-tested; whether the Chinese reads naturally to a
+Chinese speaker is not something this repo can answer, and nobody had read a
+line of real output. `BILINGUAL_ENABLED` in `data/facts.ts` — see 0.10.
 
 **An `opening` column on `conversations` (was in section 3).** `opening` and
 `message_count`, written by `saveConversation` on the same upsert as the
@@ -211,18 +211,266 @@ to a live call, returns perfectly good results, and silently undoes the reason
 
 ---
 
+## 0.10 Bilingual answers switched off behind a flag
+
+Built 2026-08-29. No schema change, and nothing about 0.7 was removed.
+
+`BILINGUAL_ENABLED` in `data/facts.ts`, third in the same family as
+`TIER_GATING_ENABLED` and `PERSONAL_TRACK_ENABLED`. Off, because the one check
+that matters had never been run: the plumbing was tested but no person who reads
+Chinese had read a line of the output, and this is a Chinese chamber of
+commerce — the members most able to notice awkward Chinese are exactly the ones
+who would be reading it, about tax filings and legal deadlines. Empty is
+recoverable; wrong is not.
+
+**Off means four specific things,** each of them a test in
+`test/bilingualFlag.test.ts`:
+
+- `buildLanguageDirective` returns `""` for every language the catalog offers.
+  The check sits in that function rather than in its two callers, so an eighth
+  AI surface written next year cannot switch the feature back on by accident.
+- The Business Snapshot does not ask the question. `profileQuestions` in
+  `data/assessment.ts` is both the rendered form and the set of keys
+  `saveBusinessAssessmentAction` will store, so dropping the key closes the
+  question and the write path together — hiding the field in the card alone
+  would have left a hand-made POST able to store a language nobody can see.
+- `memberLanguageDirective` answers without reading. It costs no latency where
+  it is used, but three routes issuing a query per request for a value they
+  cannot act on is exactly the kind of cost nobody finds later.
+- The fact definition stays. A value stored before the flag went off still
+  resolves to a label rather than rendering as a raw `zh-Hant`, and it is left
+  in the database untouched, so flipping the flag restores that member's choice
+  instead of asking them again.
+
+**Why a flag and not a deletion.** Removal was a diff across seven routes, the
+fact catalog, the assessment and their tests, to be written again from scratch
+the week someone spends twenty minutes reading output — and for this membership
+that review is a phone call. The tests for what the directive *says* are
+`describe.skip`ped rather than deleted, so vitest reports them in every run and
+they re-arm unedited when the flag flips. Verified by flipping it: 183 pass, 4
+skip, no test file touched.
+
+**To turn it on:** `VERIFY-DEPLOY.md` check 6, run on a preview deploy with the
+flag set true. A pass is the approval to merge the flip.
+
+---
+
+## 0.11 The Wisconsin entries went live
+
+2026-08-29. Eight of the nine signed off, the ninth dropped, no schema change.
+
+The catalog file's whole design is that a person decides, so the interesting
+part is what deciding turned up. Re-reading the eight against their own sites
+before writing the date in changed two of them:
+
+- **Supplier diversity had a wrong claim, twice confirmed.** The entry said the
+  5% bid preference is for DVB firms only — which is what the program's home
+  page says, and why two previous passes recorded it as correct. The State
+  Procurement Manual (PRO-606) has it as a *permissive* MBE/DVB preference with
+  the MBE half currently paused. The entry now points at the policy instead of
+  quoting a figure, because a number with a moving part in it is exactly what
+  rule 3 in `data/wisconsinPrograms.ts` exists to keep out.
+- **WEDC claimed something unverifiable.** "publishes which are currently open"
+  could not be checked — the programs directory renders client-side. Softened.
+
+**The ninth was dropped rather than verified.** "County and municipal revolving
+loan funds" is a category, not an organisation: no single page describes it, and
+it pointed at WEDC as a stand-in, so a member clicking it arrived at somewhere
+that does not run the thing they clicked. Per-county entries for the counties
+WCCC members are actually in are the useful replacement, and each needs its own
+confirmation.
+
+**One real bug fell out of it.** `programLines()` in `lib/adviceCatalog.ts`
+called `activeWisconsinPrograms()` with no argument, so it filtered against
+wall-clock time while the deadline half of the same reference block honoured the
+`now` it was passed. Invisible while every entry was unverified — the list was
+empty either way — and live the moment they were not. `now` is threaded through
+now, which is the guarantee `lib/memberContext.ts` already documents for
+deadlines: one instant per block, never two.
+
+**The tests moved with it.** Six in `test/wisconsinPrograms.test.ts` asserted,
+directly or by counting, that the file shipped with nothing verified, and one in
+`test/adviceCatalog.test.ts` was written as `if (!anyVerified)` — which passed
+by doing nothing the moment entries were verified. The filter is tested against
+a fixture now and the shipped rows are checked separately as data, including
+that no description contains a date, a dollar figure or a percentage that is not
+the statutory ownership test.
+
+**The expiry now warns before it happens.** `2027-02-25` is the last day the
+eight entries are shown; from the 26th the Wisconsin panel empties and the Coach
+goes back to refusing to name any Wisconsin program, silently, because that is
+what the filter is for. A diary entry was the only defence and diary entries get
+missed, so `test/wisconsinPrograms.test.ts` now fails **30 days out** with the
+date, what breaks, and the two-minute fix. A red test on an unrelated commit
+cannot be scrolled past, and the only way to silence it is to re-verify.
+
+`wisconsinVerificationExpiry` keeps the 180-day arithmetic in one place beside
+`STALE_AFTER_DAYS`, and its boundary is asserted against the filter's own
+boundary so the date printed for a person cannot drift a day from the date the
+entries actually vanish.
+
+**And an empty list now says which kind of empty it is.** `wisconsinCatalogState`
+answers `ok` / `expired` / `unreviewed`. The panel and the model's reference
+block used to say "awaiting review by WCCC" in both empty cases — true before
+anyone signed the list off, and misleading afterwards, because it reads as
+unfinished rather than out of date and sends the reader to the wrong person for
+the wrong task. Three states, three messages: filtered out is the member's own
+profile, lapsed is a re-check, unreviewed is a decision nobody has made yet.
+
+---
+
+## 0.12 The funding matcher stopped guessing who a program suits
+
+2026-08-29, straight after 0.11. No schema change.
+
+**The problem, stated plainly.** With the eight entries live, the matcher was
+handed all of them for every member and asked to judge fit from four columns —
+business name, industry, city, tier. Everything else the portal knows about that
+member (entity structure, Business Snapshot stage, employees, bank account,
+ownership basis, what they said they were working on, eleven more facts) existed
+in `lib/memberContext.ts` and reached the Coach, the Grill and the document
+generator, but not this route, which read the `members` row and stopped. It then
+wrote a confident *"why this fits you"* from the four — and a sentence written
+from four facts reads exactly like one written from sixteen. That is the failure
+mode this repo keeps finding: not a wrong answer, a *fluent* one.
+
+**Three changes, and the order matters.**
+
+**1. Entries say who they suit.** Two new fields in
+`data/wisconsinPrograms.ts`. `fitNote` is a sentence a person writes about who
+an organisation actually helps and who it wastes time for — that WHEDA is no use
+before you have a lender, that certification opens nothing on its own, that the
+SBDC is rarely a wrong referral. It is the part a chamber knows and a search
+result does not. It reaches the model on its own labelled `Suits:` line, never
+the member, because it is WCCC's judgement rather than something the
+organisation said, and the two must not arrive looking alike.
+
+`requirements` is the machine-checkable half, in the same shape as
+`ComplianceAudience` in `data/compliance.ts`. **Only two of the eight carry
+one** — WHEDA needs a lender relationship, Supplier Diversity needs qualifying
+ownership — and that restraint is deliberate, not unfinished. A requirement
+removes a member from help on the strength of one self-reported field. Anything
+softer than "this cannot work for you" belongs in `fitNote`, where the model
+weighs it, rather than in code, where it disqualifies. There is a test that
+fails if a third requirement appears without someone reading that reasoning.
+
+**2. The filter errs toward showing.** `lib/wisconsinFit.ts`, modelled directly
+on `audienceVerdict` in `lib/deadlines.ts`, down to the three-way
+applies/unknown/no. The interesting part is which way an unknown leans, and both
+files lean the same way for the same reason: a deadline hidden from someone it
+applies to costs a missed filing; a funding entry hidden from someone who
+qualifies costs them the money. So only an answer that *positively* rules a
+member out removes anything. An unanswered question, a blank, an unrecognised
+value and — specifically — "prefer not to say" all keep the entry. That last one
+has its own test: reading a declined answer as "none" would quietly withhold a
+certification from exactly the members most likely to decline the question.
+
+**3. The matcher gets the real member context.** `buildMemberContext` replaces
+`getMemberById` + `memberLanguageDirective` in the route. This *removes* a query
+rather than adding one — the language directive arrives on the context instead
+of being fetched beside it — and it is one `Promise.all` either way, so one round
+trip. The summary is larger than the five lines it replaced, but it goes in the
+user message, which was never the cached half, so prompt caching is untouched.
+
+**Filtering is stated, never silent.** `wisconsinFilteredOut` rides the catalog
+out to the panel, which now says "2 Wisconsin programs were left out because
+your Business Snapshot says they don't apply to you. Update it if that's
+changed." Same principle as `filteredOut` on `MemberDeadlineView`: this runs on
+self-reported facts that go stale, and the member is the only person who can fix
+it. It also separates two states the old provenance line could not tell apart —
+*nothing has been verified yet* (a job for WCCC) and *nothing verified suits you*
+(a job for the member's own profile). Telling someone the wrong one sends them
+to the wrong place.
+
+**A gap the mutation testing found.** Dropping `fitNote` on the way into the
+catalog changed nothing in the whole suite — the notes are the point of the
+feature and nothing checked they arrived. `test/opportunityCatalog.test.ts` is
+new and covers it, along with the catalog's other untested guarantees: that
+Wisconsin refs renumber contiguously after a filter (a gap would resolve `W2` to
+the wrong organisation), and that filtering still runs when Grants.gov is down —
+the state where the Wisconsin half *is* the whole catalog.
+
+**What this does not do.** It does not rank. For eight entries, ranking in code
+would be over-engineering, and the model is genuinely good at ordering once it
+can see who the member is. Selection is structural; ordering is judgement.
+
+---
+
+## 0.13 Something finally records whether an answer was any good
+
+2026-08-29. **Schema change — `supabase-schema.sql` must be re-run**, and
+`supabase-verify.sql` now expects 112 columns across 17 tables rather than 103.
+
+Was ROADMAP §2.1, and it was the item everything else was waiting on. Nothing in
+this portal recorded whether an AI answer helped anyone. Every prompt change,
+including all of this week's, was made on taste; a hallucination that slipped
+past the structural defences was invisible unless a member happened to mention
+it. There is now an `ai_feedback` table and a two-button row under Coach
+replies, decision briefs and step reviews.
+
+**`target_key` is the whole design.** A member who taps "yes" and then changes
+their mind must leave *one* row saying no, not two that cancel out in every
+count anyone ever runs. The client builds the key — `coach:<conversationId>:<i>`,
+`grill:<decisionId>`, `review-step:<moduleKey>:<stepKey>` — and a unique index
+on `(member_id, target_key)` turns the second opinion into an update. Dropping
+that index raises no error anywhere; it silently converts every change of mind
+into a second vote, which is why there is a test naming the conflict target.
+
+**It cannot break what it observes.** `saveAiFeedback` returns a boolean and
+never throws, the route answers 200 whether or not the row landed, and the
+buttons are optimistic and never roll back. A rating is a favour the member is
+doing us — the worst outcome is not a lost row, it is a member interrupted by an
+error message for having tried to help. Same posture as `logUsage`.
+
+**The route is under `/api/ai` but is not an AI route.** It calls no model and
+costs nothing, so it is deliberately exempt from `enforceAiRateLimit`: tapping
+thumbs-down twice must not spend a unit of the budget that lets a member ask
+another question.
+
+**The model is stamped server-side**, from the same constant `lib/ai.ts` calls
+with. A score that fell cannot otherwise be told apart from a prompt that got
+worse and a model that changed underneath it. The client neither knows it nor
+should — it is a fact about what answered, not about what the member thought.
+
+**What is deliberately not stored:** the prompt, and the answer. Both already
+live where the member can see and delete them (`conversations`,
+`member_decisions`); a second copy here would be one they did not know about and
+could not reach.
+
+**No note box.** The column exists and the route accepts one, but a second step
+in front of a one-tap action costs more ratings than the notes are worth.
+Revisit once there is a month of counts, not before.
+
+**Verified against a real Postgres 16, not just the mock.** The schema applied
+twice in a row (a redeploy is a re-run, and a bare `add constraint` would have
+failed the second time — hence the `do $$ ... $$` guard around the rating
+check), `supabase-verify.sql` reported ok on all 17 tables, a change of mind
+left one row with `created_at` preserved and `rating` updated, an unrecognised
+rating was refused by the constraint, and deleting a member took their ratings
+with them.
+
+**What it does not do yet: read the data back.** There is no dashboard, no
+weekly digest, nothing. That is deliberate — a reporting surface built before
+there is a month of real ratings would be designed against imagined data. The
+rows are there when someone wants to ask.
+
+---
+
 ## 1. Blockers to clear before new AI work
 
 None of these is a hard stop any more — the lockfile one was, and it landed
 in `c75f76c`, so PR #17 merged and master builds.
 
-**1.2 — Verify some Wisconsin entries.** All nine are `verified: false`, so the
-Wisconsin half of the funding panel is empty and Grants.gov is the feature's
-only source — if it is unreachable the panel goes dark. This is human
-confirmation, not research: `WISCONSIN-PROGRAMS-REVIEW.md` has the table, and
-every description was already machine-checked against its URL on 2026-08-23.
-Verifying two or three before launch is enough to remove the single-source risk.
-Row 9 needs a decision rather than a check.
+**1.2 — Verify some Wisconsin entries. Done, 2026-08-29.** Eight are
+`verified: true` and the ninth was dropped, so the Wisconsin half of the funding
+panel has content and Grants.gov is no longer the feature's only source. The
+re-read before sign-off corrected two descriptions — see §0.11 —
+which is the argument for having done it rather than trusting the pass before.
+
+**Diarise 2027-02-25.** `STALE_AFTER_DAYS` is 180, so on that date all eight
+drop out of the catalog on their own and the panel goes quiet again until
+someone re-checks them. That is the mechanism working, not a bug, but nothing
+announces it. `WISCONSIN-PROGRAMS-REVIEW.md` carries the date at the top.
 
 **1.3 — `npm audit`: 5 high-severity.** postcss and sharp via Next, plus
 js-yaml and nanoid. Build-chain, not request-path, so it is not urgent. Its own
@@ -241,26 +489,7 @@ if a member reports it hanging.
 Each item states the problem before the fix, because in six months the fix will
 be obvious and the reason for it will not.
 
-### 2.1 — A feedback loop on answer quality
-
-**Problem.** Nothing records whether any AI answer was useful. Prompt changes
-are therefore made on taste, and a hallucination that slips past the structural
-defences is invisible unless a member happens to mention it.
-
-**Fix.** One `ai_feedback` table — member, route, rating, optional note,
-timestamp — and a two-button row under Coach replies, Grill briefs and step
-reviews. No runtime cost beyond one insert, and the insert is fire-and-forget.
-
-**Watch for.** Add the `create table` and the matching `alter table ... add
-column if not exists` guards in `supabase-schema.sql` in the same PR, and
-regenerate `supabase-verify.sql`, or this joins the list of features that fail
-silently when the table is missing. Store the route and the model, so a rating
-can be read against what actually produced it. Do not store the full prompt.
-
-**Size.** Small, but it touches the schema, so it follows the schema rules in
-`README.md` exactly.
-
-### 2.2 — Tell the member what to do next, unprompted
+### 2.1 — Tell the member what to do next, unprompted
 
 **Problem.** Every surface waits to be asked. A member who does not know what to
 ask gets nothing, and those are the members the portal is most for.
@@ -295,6 +524,11 @@ is worth a release on its own.
   two counts into one, leaving a count and an insert before the model is called
   at all. A single Postgres function returning the counts *and* recording the
   attempt would make it one. Keep the fail-open behaviour exactly as it is.
+- **The opportunities route's extra read is gone.** It fetched the language
+  directive beside the member row; it now takes both off the member context it
+  needed anyway. Listed here because it is the shape the other two items want:
+  the saving came from a route asking for the right thing once, not from
+  optimising the query it already had.
 - **Six `select("*")` calls in `lib/appStore.ts`.** Considered and skipped
   twice now: naming columns by hand without a live database to test against
   risks a runtime break on the dashboard for a small win. Worth doing with a

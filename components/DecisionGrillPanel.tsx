@@ -10,6 +10,7 @@ import {
   SAVED_DECISIONS_LIMIT,
   decisionStarters,
 } from "@/data/decisions";
+import AnswerFeedback from "@/components/AnswerFeedback";
 
 type Message = { role: "user" | "assistant"; content: string };
 
@@ -30,6 +31,11 @@ export default function DecisionGrillPanel({ initialDecisions }: Props) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [brief, setBrief] = useState<DecisionBrief | null>(null);
+  // The saved row's id, kept alongside the brief so feedback has something
+  // stable to key against. The route returns `unsaved-<timestamp>` when the
+  // write failed, which is still unique per brief and still worth a rating —
+  // the answer was generated either way, and that is what is being judged.
+  const [briefId, setBriefId] = useState<string | null>(null);
   const [history, setHistory] = useState<SavedDecision[]>(initialDecisions);
   const [unsaved, setUnsaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -117,6 +123,7 @@ export default function DecisionGrillPanel({ initialDecisions }: Props) {
           return;
         }
         setBrief(data.decision.brief);
+        setBriefId(typeof data.decision.id === "string" ? data.decision.id : null);
         setUnsaved(!data.saved);
         // Prepend rather than re-fetching the dashboard — the server already
         // handed back the saved row's id and timestamp.
@@ -135,6 +142,9 @@ export default function DecisionGrillPanel({ initialDecisions }: Props) {
     setMessages([]);
     setInput("");
     setBrief(null);
+    // Cleared with the brief it belongs to. A stale id here would attach the
+    // next brief's rating to the previous brief's row.
+    setBriefId(null);
     setUnsaved(false);
     setError(null);
   }
@@ -269,6 +279,7 @@ export default function DecisionGrillPanel({ initialDecisions }: Props) {
       {brief && (
         <div className="mt-5">
           <BriefCard brief={brief} />
+          {briefId && <AnswerFeedback route="grill" targetKey={`grill:${briefId}`} />}
           {unsaved && (
             <p className="mt-3 text-xs text-white/45">
               Shown here for now — saving isn&apos;t switched on yet, so copy anything you want

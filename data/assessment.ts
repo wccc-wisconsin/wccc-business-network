@@ -1,5 +1,5 @@
 import { businessModules } from "@/data/modules";
-import { factDefinition } from "@/data/facts";
+import { BILINGUAL_ENABLED, factDefinition } from "@/data/facts";
 
 // The "Business Snapshot" — a short onboarding-style questionnaire that
 // classifies where a member's business actually is (not just which
@@ -160,7 +160,15 @@ export const profileQuestions: string[] = [
   // portal answers rather than what it knows. It lives on this form because the
   // form is the one place a member can revisit and change a stored answer — see
   // the note on preferred_language in data/facts.ts.
-  "preferred_language",
+  //
+  // Off the list entirely while BILINGUAL_ENABLED is off, rather than hidden in
+  // the component. This one list is both the form and the write path — the card
+  // maps it to render the fields (components/BusinessAssessmentCard.tsx) and
+  // saveBusinessAssessmentAction iterates it to decide which submitted values
+  // to store (app/actions.ts) — so filtering here closes both at once. Hiding
+  // the field in the card alone would have left a hand-made POST able to store
+  // a language nobody can see or change.
+  ...(BILINGUAL_ENABLED ? ["preferred_language"] : []),
 ];
 
 // Same guard as the priority question above: a profile key that names no real

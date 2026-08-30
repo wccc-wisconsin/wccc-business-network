@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import { enforceAiRateLimit, recordSpend } from "@/lib/aiRateLimit";
-import { getMemberById, saveMemberOpportunities, type Opportunity } from "@/lib/appStore";
-import { memberLanguageDirective } from "@/lib/memberContext";
+import { saveMemberOpportunities, type Opportunity } from "@/lib/appStore";
+import { buildMemberContext } from "@/lib/memberContext";
 import { callClaude, parseClaudeJson } from "@/lib/ai";
 import { buildCatalog, formatCatalogForPrompt, type CatalogEntry } from "@/lib/opportunityCatalog";
 
@@ -65,17 +65,19 @@ const SELECTION_RULES = `You help small-business owners in Wisconsin choose whic
 
 You will be given one member's profile and a numbered catalog of real opportunities. Every catalog entry has been either retrieved live from Grants.gov or verified by a person at WCCC.
 
+Some catalog entries carry a "Suits:" line. That is WCCC's own judgement about who the entry helps and who it wastes time for, written by a person who knows these organisations. Weigh it above your own impression of the description — it is there because a one-line summary does not tell you who an organisation is actually useful to. Never quote it to the member or present it as something the organisation said.
+
 Your job is SELECTION, not recall. Choose the entries that genuinely fit this member and explain the fit. Follow these rules exactly:
 
 1. Only ever cite a reference that appears in the catalog you are given. Never invent an opportunity, a program name, an agency, a deadline, or a web address. If the catalog is short, return fewer results — returning three good matches is correct, and padding to five with poor ones is not.
 2. Choose at most ${MAX_RESULTS}, best fit first. Do not cite the same reference twice.
-3. Prefer opportunities the member could realistically pursue given their industry, city and stage. A grant closing in three days is a worse match for a member who has never applied for one than a standing advising service is.
+3. Prefer opportunities the member could realistically pursue right now, judged against everything in their profile — stage, entity structure, whether they have employees or a bank account, what they said they are working on — not just their industry and city. Entries whose conditions the member clearly fails have already been removed before you see the catalog, so your job is ranking and honesty about fit, not eligibility screening. A grant closing in three days is a worse match for a member who has never applied for one than a standing advising service is.
 4. Do not name any WCCC-run program, event or perk. This portal has no verified list of them, so anything you named would be a guess presented to a member as fact. If WCCC is the right route, point them at info@wisccc.org.
 5. Do not add generic encouragement, praise, or filler.
 
 Return ONLY a strict JSON array, no text outside it. Each object has exactly these three string keys:
   "ref"        — the catalog reference exactly as written, e.g. "F3" or "W1"
-  "whyItFits"  — one sentence on why this fits THIS member's industry, city or stage. Be specific to them; do not restate the description.
+  "whyItFits"  — one sentence on why this fits THIS member, naming the specific thing about them that makes it fit — their stage, their structure, what they told you they are working on. Do not restate the description, and do not write a sentence that would be equally true of any other member.
   "nextStep"   — one concrete action to take next: what to read, what to prepare, or who to contact.`;
 
 type Selection = { ref: string; whyItFits: string; nextStep: string };
@@ -163,16 +165,27 @@ export async function POST() {
   const { limited, usageId } = await enforceAiRateLimit(userId, "opportunities");
   if (limited) return limited;
 
-  // Two reads issued together, so the language preference costs no latency at
-  // all — see memberLanguageDirective in lib/memberContext.ts for why this
-  // surface has to fetch it rather than receive it in a member context.
-  const [member, languageDirective] = await Promise.all([
-    getMemberById(userId),
-    memberLanguageDirective(userId),
-  ]);
-  if (!member) {
+  // The full member context, not the members row.
+  //
+  // This route used to read `members` and the language preference and nothing
+  // else, so the matcher was choosing funding from four columns — business
+  // name, industry, city, tier — while the portal already knew the entity
+  // structure, the Business Snapshot stage, whether there are employees, a
+  // bank account, what the member said they were working on, and eleven other
+  // facts. It wrote a confident "why this fits you" from the four, which reads
+  // exactly like one written from all sixteen.
+  //
+  // Cost: this is one Promise.all of member-scoped reads instead of two, so it
+  // is one round trip either way, and it *removes* a query — the language
+  // directive arrives on the context rather than being fetched beside it. The
+  // summary is larger than the five lines it replaces, but it goes in the user
+  // message, which was never the cached half, so prompt caching is unaffected.
+  const context = await buildMemberContext(userId);
+  if (!context) {
     return NextResponse.json({ ok: false, error: "Member profile not found." }, { status: 404 });
   }
+
+  const { member, facts, languageDirective } = context;
 
   if (!member.industry) {
     return NextResponse.json(
@@ -181,7 +194,12 @@ export async function POST() {
     );
   }
 
-  const catalog = await buildCatalog(member.industry);
+  // One instant for the whole request: the Wisconsin entries' expiry and their
+  // fit against the member's facts are both judged against it, and so is the
+  // "last checked" date the panel prints. See lib/adviceCatalog.ts for what
+  // went wrong when one half used wall-clock time instead.
+  const now = new Date();
+  const catalog = await buildCatalog(member.industry, facts, now);
 
   // No catalog, no opportunities. This is where the old behaviour would have
   // been to let the model answer from memory — exactly the failure this
@@ -193,18 +211,19 @@ export async function POST() {
       {
         ok: false,
         error: catalog.federalError
-          ? `Couldn't load funding opportunities right now (${catalog.federalError}) and no Wisconsin programs have been verified yet. Please try again shortly.`
+          ? `Couldn't load funding opportunities right now (${catalog.federalError}) and no Wisconsin programs are available to you${
+              catalog.wisconsinState === "expired"
+                ? " — their verification has lapsed and is due to be re-checked"
+                : ""
+            }. Please try again shortly.`
           : "No current funding opportunities matched your industry. Try again in a few days — federal listings change weekly.",
       },
       { status: 503 },
     );
   }
 
-  const userPrompt = `Member business: ${member.businessName || "(not provided)"}
-Industry: ${member.industry}
-City: ${member.city || "(not provided)"}, WI
-Membership tier: ${member.membershipTier}
-Journey: ${member.journey === "personal" ? "Personal growth" : member.journey === "both" ? "Business + personal growth" : "Business growth"}
+  const userPrompt = `MEMBER
+${context.summary}
 
 CATALOG — choose only from these:
 ${formatCatalogForPrompt(catalog)}`;
@@ -252,7 +271,7 @@ ${formatCatalogForPrompt(catalog)}`;
   }
 
   const saveResult = await saveMemberOpportunities(userId, items);
-  const generatedAt = new Date().toISOString();
+  const generatedAt = now.toISOString();
 
   // Still return the generated list even if saving failed, so the member sees
   // it — it just won't persist across a page reload until saving works.
@@ -266,6 +285,8 @@ ${formatCatalogForPrompt(catalog)}`;
     sources: {
       federalCount: catalog.federalCount,
       wisconsinCount: catalog.wisconsinCount,
+      wisconsinFilteredOut: catalog.wisconsinFilteredOut,
+      wisconsinState: catalog.wisconsinState,
       federalError: catalog.federalError,
       wisconsinLastVerified: catalog.wisconsinLastVerified,
       federalFetchedAt: catalog.federalFetchedAt,

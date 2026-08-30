@@ -440,6 +440,82 @@ create index if not exists conversations_member_updated_idx
 create index if not exists conversations_updated_idx
   on conversations (updated_at);
 
+-- Was any of this useful? — one row per answer a member rated.
+--
+-- Nothing in this portal recorded whether an AI answer helped. Every prompt
+-- change was therefore made on taste, and a hallucination that got past the
+-- structural defences was invisible unless a member happened to mention it.
+-- This is the smallest thing that changes that.
+--
+-- `target_key` is what an answer is, from the client's point of view, and it
+-- carries the whole de-duplication story. A member who clicks "helpful" and
+-- then changes their mind must leave one row saying "not helpful", not two
+-- rows that cancel each other out in every count anyone ever runs. The client
+-- builds it — `coach:<conversationId>:<messageIndex>`,
+-- `grill:<decisionId>`, `review-step:<moduleKey>:<stepKey>` — and the unique
+-- index below turns a second opinion into an update.
+--
+-- `note` is nullable and expected to be null most of the time. A rating is one
+-- tap; a note is a favour, and asking for one before accepting the tap would
+-- cost more ratings than the notes are worth.
+--
+-- `model` is written server-side from the same constant that made the call, so
+-- a rating can be read against what actually produced it — a prompt that got
+-- worse and a model that changed underneath it look identical in a bare score.
+-- It records what the app is configured to use at the moment of the rating,
+-- which is seconds after the answer in every real case, and is the closest
+-- honest answer available without threading a model name through the client.
+--
+-- What is deliberately NOT here: the prompt, the answer, and anything the
+-- member typed beyond their own note. The answer is already stored where the
+-- member can see and delete it (conversations, member_decisions), and a second
+-- copy here would be one they did not know about and could not reach.
+create table if not exists ai_feedback (
+  id uuid primary key default gen_random_uuid(),
+  member_id text not null references members(id) on delete cascade,
+  route text not null,
+  target_key text not null,
+  rating text not null,
+  note text,
+  model text,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+-- The rating vocabulary, enforced by the database rather than only by the route.
+--
+-- Wrapped in a DO block because Postgres has no `add constraint if not exists`,
+-- and this script is re-run on every deploy — a bare `add constraint` would
+-- fail the second time and take the rest of the file down with it. The lookup
+-- against pg_constraint is the re-runnable equivalent of the `if not exists`
+-- every other statement here uses.
+--
+-- Worth a constraint rather than trusting the API route: a third rating value
+-- introduced by a later change would not error anywhere, it would just quietly
+-- land in a column nobody is grouping by, and the counts would stay plausible.
+do $$
+begin
+  if not exists (
+    select 1 from pg_constraint where conname = 'ai_feedback_rating_check'
+  ) then
+    alter table ai_feedback
+      add constraint ai_feedback_rating_check
+      check (rating in ('helpful', 'not-helpful'));
+  end if;
+end $$;
+
+-- One opinion per member per answer. This is what `upsert(..., { onConflict:
+-- "member_id,target_key" })` in lib/appStore.ts conflicts against, so removing
+-- it does not raise an error — it silently turns every change of mind into a
+-- second row.
+create unique index if not exists ai_feedback_member_target_idx
+  on ai_feedback (member_id, target_key);
+
+-- The read this table exists for: "how is the coach doing this month". Route
+-- leads because every such question is asked one surface at a time.
+create index if not exists ai_feedback_route_created_idx
+  on ai_feedback (route, created_at desc);
+
 -- Row Level Security: ENABLED on every table, with no policies attached.
 --
 -- This looks like it would lock the app out. It doesn't: the only Supabase
@@ -474,3 +550,4 @@ alter table member_facts enable row level security;
 alter table ai_usage enable row level security;
 alter table grants_cache enable row level security;
 alter table conversations enable row level security;
+alter table ai_feedback enable row level security;

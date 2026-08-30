@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import { buildReferenceBlock, GROUNDING_RULES, referenceSection } from "@/lib/adviceCatalog";
 import { complianceItems } from "@/data/compliance";
 import { wisconsinPrograms } from "@/data/wisconsinPrograms";
@@ -107,28 +107,94 @@ describe("what reaches the model", () => {
   });
 });
 
+/**
+ * What the model is handed when the Wisconsin list is empty, and when it is not.
+ *
+ * These two states produce contradictory instructions — one lists programs the
+ * model may name, the other forbids naming any — so exactly one may ever
+ * appear. Both used to be tested against whatever the shipped file happened to
+ * contain, with an `if (!anyVerified)` guard that made the first test pass by
+ * doing nothing the moment entries were verified on 2026-08-29. The array is
+ * driven directly now, so each state is checked whichever way the file ships.
+ */
 describe("unverified material", () => {
-  /**
-   * Every entry in data/wisconsinPrograms.ts currently ships `verified: false`,
-   * and the runtime filter hides them. If that ever stops being enforced here,
-   * the model would be handed nine unchecked programs as approved fact.
-   */
+  const snapshot = wisconsinPrograms.map((program) => ({ ...program }));
+
+  afterEach(() => {
+    wisconsinPrograms.splice(0, wisconsinPrograms.length, ...snapshot.map((p) => ({ ...p })));
+  });
+
+  function unverifyEverything() {
+    for (const program of wisconsinPrograms) {
+      program.verified = false;
+      program.lastVerified = null;
+    }
+  }
+
   it("names no Wisconsin program while none has been verified", () => {
-    const anyVerified = wisconsinPrograms.some((program) => program.verified);
+    unverifyEverything();
+
     const block = buildReferenceBlock(facts({}), EARLY) ?? "";
 
-    if (!anyVerified) {
-      for (const program of wisconsinPrograms) {
-        expect(block).not.toContain(program.name);
-      }
-      expect(block).toContain("No Wisconsin support programs have been verified");
+    for (const program of wisconsinPrograms) {
+      expect(block).not.toContain(program.name);
     }
+    expect(block).toContain("No Wisconsin support programs have been verified");
   });
 
   it("tells the model the absence is deliberate, not an omission to fill", () => {
+    unverifyEverything();
+
     const block = buildReferenceBlock(facts({}), EARLY) ?? "";
 
     expect(block).toContain("Do not name specific state or local programs");
+  });
+
+  it("drops that instruction once entries are verified, rather than sending both", () => {
+    // The shipped file, unmodified. "Here are eight programs you may name" and
+    // "do not name any state or local program" in one prompt is a contradiction
+    // the model resolves however it likes.
+    const block = buildReferenceBlock(facts({}), EARLY) ?? "";
+
+    expect(block).toContain("Wisconsin Small Business Development Center");
+    expect(block).not.toContain("Do not name specific state or local programs");
+  });
+
+  it("tells the model a lapsed list has lapsed, not that it was never checked", () => {
+    // The instruction is the same either way. The reason given is not, and a
+    // prompt that states something false about its own contents is the wrong
+    // thing to be handing a model — quite apart from anyone reading a log.
+    const pastExpiry = new Date("2027-06-01T00:00:00.000Z");
+
+    const block = buildReferenceBlock(facts({}), pastExpiry) ?? "";
+
+    expect(block).toContain("has expired and is awaiting a re-check");
+    expect(block).not.toContain("have been verified for this portal yet");
+    // Whatever the wording, the rule it protects is unchanged.
+    expect(block).toContain("Do not name specific state or local programs");
+  });
+
+  it("says never-checked when nothing has ever been signed off", () => {
+    unverifyEverything();
+
+    const block = buildReferenceBlock(facts({}), EARLY) ?? "";
+
+    expect(block).toContain("No Wisconsin support programs have been verified");
+    expect(block).not.toContain("has expired and is awaiting a re-check");
+  });
+
+  it("filters programs against the instant it was given, not wall-clock time", () => {
+    // programLines() used to call activeWisconsinPrograms() with no argument.
+    // While nothing was verified the list was empty either way; once entries
+    // were verified, the deadline half of a block honoured `now` and the
+    // program half used today's date. An expired verification has to disappear
+    // as of the instant being asked about — that is the whole point of
+    // STALE_AFTER_DAYS.
+    const pastExpiry = new Date("2027-06-01T00:00:00.000Z");
+
+    const block = buildReferenceBlock(facts({}), pastExpiry) ?? "";
+
+    expect(block).not.toContain("Wisconsin Small Business Development Center");
   });
 });
 

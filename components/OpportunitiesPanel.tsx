@@ -14,6 +14,10 @@ type Matches = { items: Opportunity[]; generatedAt: string } | null;
 type Sources = {
   federalCount: number;
   wisconsinCount: number;
+  /** Verified Wisconsin entries the member's own facts ruled out. */
+  wisconsinFilteredOut?: number;
+  /** Why the Wisconsin half is empty, when it is. */
+  wisconsinState?: "ok" | "expired" | "unreviewed";
   federalError: string | null;
   wisconsinLastVerified: string | null;
   /** When the federal half was last fetched from Grants.gov. */
@@ -170,12 +174,44 @@ export default function OpportunitiesPanel({ initialOpportunities }: Props) {
               results below don&rsquo;t include them.
             </p>
           )}
-          {sources.wisconsinCount === 0 && (
+          {/* Filtering is stated, never silent. This runs on self-reported
+              facts that can be stale or mistyped, so a member who can't see it
+              happened has no way to notice when it's wrong — and the fix is a
+              field they can edit themselves. */}
+          {(sources.wisconsinFilteredOut ?? 0) > 0 && (
             <p>
-              Wisconsin state and local programs aren&rsquo;t included yet — they&rsquo;re awaiting
-              review by WCCC, and nothing is listed here until someone has confirmed it.
+              {sources.wisconsinFilteredOut}{" "}
+              {sources.wisconsinFilteredOut === 1 ? "Wisconsin program" : "Wisconsin programs"}{" "}
+              {sources.wisconsinFilteredOut === 1 ? "was" : "were"} left out because your
+              Business Snapshot says {sources.wisconsinFilteredOut === 1 ? "it doesn" : "they don"}
+              &rsquo;t apply to you. Update it if that&rsquo;s changed.
             </p>
           )}
+          {/* Three different states, and they used to share one message.
+              Filtered out is a job for the member's own profile; never
+              reviewed is a job for WCCC; lapsed is a job for whoever maintains
+              the list. "Awaiting review by WCCC" told the last group the wrong
+              story — it reads as unfinished rather than out of date, and sends
+              the reader to the wrong person. */}
+          {sources.wisconsinCount === 0 &&
+            ((sources.wisconsinFilteredOut ?? 0) > 0 ? (
+              <p>
+                None of the verified Wisconsin programs matched your Business Snapshot this
+                time, so the results above are federal only.
+              </p>
+            ) : sources.wisconsinState === "expired" ? (
+              <p>
+                Our checks on the Wisconsin state and local programs have expired, so
+                they&rsquo;re held back until someone re-confirms them. Federal listings above
+                are unaffected.
+              </p>
+            ) : (
+              <p>
+                Wisconsin state and local programs aren&rsquo;t included yet — they&rsquo;re
+                awaiting review by WCCC, and nothing is listed here until someone has confirmed
+                it.
+              </p>
+            ))}
           <p>Always confirm details on the program&rsquo;s own site before applying.</p>
         </div>
       )}

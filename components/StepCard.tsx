@@ -5,6 +5,7 @@ import type { ModuleStep } from "@/data/modules";
 import type { QuestionCarryOver } from "@/lib/carryOver";
 import type { FormState } from "@/app/actions";
 import { saveStepProgressAction } from "@/app/actions";
+import AnswerFeedback from "@/components/AnswerFeedback";
 
 type ReviewResult =
   | { kind: "structured"; strongestPoint: string; gap: string; wisconsinTip: string }
@@ -245,6 +246,15 @@ export default function StepCard({
               ) : (
                 <p className="text-white/80">{review.text}</p>
               )}
+              {/* Keyed on the step, not on this particular review. Re-reviewing
+                  after an edit replaces the rating, which is right: there is
+                  only ever one review on screen for a step, and it is the one
+                  being judged. */}
+              <AnswerFeedback
+                route="review-step"
+                targetKey={`review-step:${moduleKey}:${step.key}`}
+                tone="light"
+              />
             </div>
           )}
         </div>

@@ -15,7 +15,15 @@ const ANTHROPIC_API_URL = "https://api.anthropic.com/v1/messages";
 // dashboard without a code change and redeploy — useful if a key turns out not
 // to have access to the default, which surfaces as an API error rather than
 // anything obvious in the UI.
-const MODEL = process.env.ANTHROPIC_MODEL || "claude-sonnet-5";
+/**
+ * The model every call in this file uses.
+ *
+ * Exported so lib/appStore.ts can stamp it onto a rating — a score that fell
+ * cannot otherwise be told apart from a prompt that got worse and a model that
+ * changed underneath it. Read at call time rather than captured, so a change to
+ * the env var takes effect on the next request either way.
+ */
+export const MODEL = process.env.ANTHROPIC_MODEL || "claude-sonnet-5";
 
 export type ChatMessage = { role: "user" | "assistant"; content: string };
 

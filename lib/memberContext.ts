@@ -17,6 +17,7 @@ import {
   type SavedDecision,
 } from "@/lib/appStore";
 import {
+  BILINGUAL_ENABLED,
   displayFactValue,
   factDefinition,
   isFactStale,
@@ -65,7 +66,8 @@ export type MemberContext = {
   facts: Record<string, MemberFact>;
   /**
    * How to answer, when the member has asked for a language other than English.
-   * Empty string otherwise — see buildLanguageDirective.
+   * Empty string otherwise, and empty for everyone while BILINGUAL_ENABLED is
+   * off — see buildLanguageDirective.
    *
    * A third thing again, kept out of both `summary` and `references` for the
    * same reason those two are kept apart: `summary` is who the member is,
@@ -112,8 +114,9 @@ const languageNames: Record<string, string> = {
 /**
  * How to answer, for a member who asked for something other than English.
  *
- * Returns "" for English, for no preference, and for a stored value that names
- * no language we offer — all three mean "answer the way you always have", and
+ * Returns "" whenever BILINGUAL_ENABLED (data/facts.ts) is off — which it is —
+ * and, when it is on, for English, for no preference, and for a stored value
+ * that names no language we offer — all three mean "answer the way you always have", and
  * an empty string appended to a prompt changes nothing. A value that is not in
  * the table is treated as absent rather than passed through: handing the model
  * a language name taken from the database would be the one place in this file
@@ -138,6 +141,19 @@ const languageNames: Record<string, string> = {
  * prompt that is cached anyway.
  */
 export function buildLanguageDirective(facts: Record<string, MemberFact>): string {
+  // The feature switch, checked here rather than at the two call sites.
+  //
+  // This function is the only route a stored language takes into a prompt, so
+  // one branch here turns the feature off everywhere, including on a surface
+  // written after this comment. Gating the callers instead would have worked
+  // today and failed the first time someone added an eighth AI surface and
+  // called this directly — they would get a working translator that nobody
+  // decided to switch on.
+  //
+  // Off is exactly the no-preference path below, which every surface already
+  // handles: an empty string appended to a prompt changes nothing.
+  if (!BILINGUAL_ENABLED) return "";
+
   const choice = facts[LANGUAGE_FACT_KEY]?.value ?? "";
   const name = languageNames[choice];
   if (!name) return "";
@@ -160,11 +176,20 @@ If you cannot write reliably in ${name}, answer in English and say plainly, in E
  * asked for Chinese — a half-shipped feature, which is worse than none, because
  * the member cannot tell a missing surface from a broken one.
  *
+ * While BILINGUAL_ENABLED is off this answers "" without reading anything. The
+ * read is cheap and costs no latency where it is used — it is folded into a
+ * Promise.all the route already awaits — but it is a Supabase round trip on
+ * every request to three routes to fetch facts that cannot be acted on, and
+ * the alternative to this one line is the same check written into all three
+ * callers. buildLanguageDirective would return "" anyway; this only stops the
+ * query that feeds it.
+ *
  * One small member_id-filtered read. Issue it inside whatever `Promise.all` the
  * route already has and it costs no latency at all; awaited on its own it costs
  * one round trip, which is still nothing beside the model call after it.
  */
 export async function memberLanguageDirective(memberId: string): Promise<string> {
+  if (!BILINGUAL_ENABLED) return "";
   return buildLanguageDirective(await getMemberFacts(memberId));
 }
 

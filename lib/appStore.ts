@@ -769,6 +769,68 @@ export async function saveConversation(
   }
 }
 
+/** The two things a member can say about an answer. */
+export const AI_FEEDBACK_RATINGS = ["helpful", "not-helpful"] as const;
+export type AiFeedbackRating = (typeof AI_FEEDBACK_RATINGS)[number];
+
+/** The surfaces that can be rated. Matches the `route` column. */
+export const AI_FEEDBACK_ROUTES = ["coach", "grill", "review-step"] as const;
+export type AiFeedbackRoute = (typeof AI_FEEDBACK_ROUTES)[number];
+
+/** Longest note kept. Past this the member is writing a support ticket. */
+export const AI_FEEDBACK_NOTE_CHARS = 500;
+
+/**
+ * Records what a member thought of one AI answer.
+ *
+ * Upserts on (member_id, target_key), so a member who changes their mind
+ * replaces their rating rather than adding a second one. Both rows would
+ * otherwise be counted, and a member toggling between the two buttons would
+ * quietly inflate every total this table exists to produce.
+ *
+ * Returns a boolean and never throws. A rating is a courtesy the member is
+ * doing us, and it is not worth interrupting them over — the caller shows the
+ * button as unrated and moves on. This is the same failure posture as
+ * `logUsage`: the feature it serves is observation, so it must never be able
+ * to break the thing being observed.
+ */
+export async function saveAiFeedback(
+  memberId: string,
+  route: AiFeedbackRoute,
+  targetKey: string,
+  rating: AiFeedbackRating,
+  note: string | null,
+  model: string | null,
+): Promise<boolean> {
+  try {
+    const { error } = await db()
+      .from("ai_feedback")
+      .upsert(
+        {
+          member_id: memberId,
+          route,
+          target_key: targetKey,
+          rating,
+          // An empty note is stored as null rather than "". Two spellings of
+          // "no note" would mean every later query needs to know about both.
+          note: note && note.trim() ? note.trim().slice(0, AI_FEEDBACK_NOTE_CHARS) : null,
+          model,
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: "member_id,target_key" },
+      );
+
+    if (error) {
+      console.error("saveAiFeedback: failed to write", error);
+      return false;
+    }
+    return true;
+  } catch (error) {
+    console.error("saveAiFeedback: Supabase unavailable", error);
+    return false;
+  }
+}
+
 /**
  * One conversation, or null.
  *
