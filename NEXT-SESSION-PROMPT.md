@@ -1,142 +1,129 @@
 # Next session — WCCC Business Network
 
-Written 2026-08-28, updated 2026-08-29. The previous version of this file was
-about merging `feature/memory-loop`; that is done and its contents have moved
-into `ROADMAP.md` §0.4.
+Written 2026-08-30, end of session. `ROADMAP.md` is the standing plan; this file
+is what a fresh session needs to pick up tomorrow.
 
-`ROADMAP.md` is the standing plan. This file is what a fresh session needs to
-pick up tomorrow.
+**Status in one line: it is deployed and a member can use it, one feature is
+broken with the fix written but not yet pushed, and one is unverified.**
 
 ---
 
-## Read this first: everything shipped, one thing then switched off
+## Do this first
 
-`fa36515` is on `origin/master` and deployed. `supabase-schema.sql` and
-`supabase-verify.sql` were both run on 2026-08-28 — 103 columns, every row `ok`,
-`conversations` at 9/9, so the two new columns are live. Nothing is half-applied
-and there is no schema step waiting.
-
-The demo seed landed after it as `d239f3c`.
-
-**Uncommitted, from the 2026-08-29 session — bilingual answers switched off
-behind a flag:**
-
-**Two separable pieces. They do not depend on each other — commit them
-separately if you would rather review them apart.**
-
-*Bilingual answers switched off behind a flag:*
-
-```
-A test/bilingualFlag.test.ts   what "off" means, from both sides
-M data/facts.ts                BILINGUAL_ENABLED, and why
-M data/assessment.ts           the Snapshot stops asking while it is off
-M lib/memberContext.ts         the directive and the read it feeds on
-M test/memberContext.test.ts   content rules skipped, not deleted
-M VERIFY-DEPLOY.md             check 6 is now the gate on the flag
-```
-
-*The Wisconsin entries live:*
-
-```
-M data/wisconsinPrograms.ts    eight verified, ninth dropped, two descriptions corrected
-                               + wisconsinVerificationExpiry / wisconsinCatalogState
-M lib/adviceCatalog.ts         programs filtered against `now`, not wall-clock time
-M test/wisconsinPrograms.test.ts   filter on a fixture; shipped rows checked as data;
-                               fails 30 days before the verifications lapse
-M test/adviceCatalog.test.ts   the two states driven, not guessed from shipped data
-M WISCONSIN-PROGRAMS-REVIEW.md signed off, with the evidence quoted
-```
-
-*The matcher stopped guessing who a program suits (ROADMAP §0.12):*
-
-```
-A lib/wisconsinFit.ts              applies/unknown/no per entry, erring toward showing
-A test/wisconsinFit.test.ts        which way the filter errs, which is the whole design
-A test/opportunityCatalog.test.ts  the catalog's first tests — fit notes reach the prompt
-M data/wisconsinPrograms.ts        fitNote on all eight; requirements on exactly two
-M lib/opportunityCatalog.ts        buildCatalog takes the member's facts and an instant
-M app/api/ai/opportunities/route.ts  buildMemberContext, one query fewer
-M components/OpportunitiesPanel.tsx  says what it filtered out and why, and tells a
-                               lapsed list apart from one never reviewed
-```
-
-*Both:* `M ROADMAP.md` (§0.10, §0.11, §1.2)  `M WEEK-REVIEW.md`  `M NEXT-SESSION-PROMPT.md`
-
-*A feedback loop on answer quality (ROADMAP §0.13) — **this one has a schema
-step**:*
-
-```
-A app/api/ai/feedback/route.ts   records a rating; no model call, no rate limit
-A components/AnswerFeedback.tsx  the two buttons, optimistic and quiet
-A test/aiFeedback.test.ts        one row per opinion; never breaks what it rates
-M supabase-schema.sql            ai_feedback + unique index + rating constraint
-M supabase-verify.sql            112 columns across 17 tables, was 103 across 16
-M lib/appStore.ts                saveAiFeedback, upserting on (member, target)
-M lib/ai.ts                      MODEL exported so a rating records what answered
-M components/AICoach.tsx  M components/DecisionGrillPanel.tsx  M components/StepCard.tsx
-M VERIFY-DEPLOY.md               check 7
-```
-
-> **Run `supabase-schema.sql` then `supabase-verify.sql` after deploying.**
-> Until you do, every rating is silently discarded — the buttons still say
-> "Thanks — noted", because they are optimistic by design. `supabase-verify.sql`
-> should report **17 tables, every row `ok`**. Both scripts were applied twice
-> against a real Postgres 16 in a container, so the re-run is known safe.
+### 1. Push the fix sitting uncommitted
 
 ```
 git add -A
-git commit -m "Switch bilingual answers off behind a flag; put the Wisconsin entries live"
+git commit -m "Report a truncated reply as truncated, and give the funding matcher room to finish"
 git push
 ```
 
-Verified in a clean Linux container: typecheck, lint, 232 tests (8 skipped) and
-`next build`, all green — plus, for the schema, a real Postgres 16: applied
-twice, verify script clean on all 17 tables, and the upsert, the rating
-constraint and the member cascade each exercised against actual rows. Then
-mutation-tested, twenty-nine rules broken one at a time. The first ten:
-both flag checks, the Snapshot question, the fact definition, `programLines`
-ignoring `now`, a future `lastVerified`, a silently unverified entry, and three
-shapes of dated claim in a description. Every one caught by the test written for
-it — **except the first attempt at the "no dated figures" rule, which passed
-against `5%` because a group-wide `\b` after an alternation ending in `%` can
-never match.** That is the second time mutation testing has caught a test
-passing for the wrong reason. The flag was also flipped to `true` to confirm the
-bilingual reversal needs no test edits (183 pass, 4 skip, nothing touched).
+Verified in a clean Linux container — typecheck, lint, 244 tests (8 skipped),
+`next build`, then four mutations. **No schema step.** Details under "The
+funding bug" below.
 
-The other ten covered the matcher: a declined ownership answer read as a no, an
-unanswered question read as a no, unknown treated as disqualifying, fit judged
-before freshness, the filtered-out count zeroed, a fit note emptied, a third
-requirement added, the fit note dropped on the way into the catalog, the fit
-note merged into the description, and the filter removed entirely. **Two of
-those found nothing the first time** — dropping `fitNote` changed no test at
-all, which is what `test/opportunityCatalog.test.ts` was written for.
+### 2. Answer two open questions from the live walkthrough
 
-The last five covered the feedback write: the conflict target dropped (which
-turns every change of mind into a second vote), an empty note stored as `""`,
-the note cap removed, the write throwing instead of reporting failure, and
-`created_at` written by hand over the moment the member first said something.
+Both need the user or the deployed site; neither can be settled from the repo.
 
-The last four covered the expiry warning: an already-lapsed list, a lapsed list
-reported as never-reviewed, the model told the old story unconditionally, and
-the reason dropped on the way into the catalog. The warning was also proved by
-winding the dates forward until it fired, and its message read back.
+**a. Was the funding failure truncation?** Vercel → Logs → filter
+`callClaude usage` → find `route: "opportunities"`. If `outputTokens` reads
+**700** — exactly the old cap — truncation is confirmed and the pushed fix
+lands it. If it reads well under 700, the reply was malformed for some other
+reason and the salvage path in `parseClaudeJson` is the thing to look at
+instead.
 
-> **Sandbox git is unreliable in this repo.** `git show HEAD:<file>` returns
-> empty and `git diff` under-reports, because git cannot get write access to its
-> own index through the folder mount. Read-only git commands also leave
-> `.git/index.lock` behind; it cannot be deleted but it *can* be renamed within
-> the mount — `mv .git/index.lock .git/_stale_locks/index.lock.<date>` is what
-> this session did, and that directory is where earlier ones went. Trust
-> `git status` run on the user's own machine, never the sandbox's.
+**b. Does the AI Coach reply at all?** On 2026-08-30 a screenshot showed a
+member message with nothing under it. That is a different code path from
+funding — `streamClaude`, no JSON parsing — so it is either a screenshot taken
+mid-stream or a second, unrelated failure. **Ask the user to retry one Coach
+message before assuming anything.** If it genuinely returns nothing, start at
+`lib/ai.ts` `streamClaude` and the SSE parsing, and check Vercel logs for
+`callClaude` errors on `route: "coach"`.
 
 ---
 
+## Where it actually stands, as of 2026-08-30
+
+**Live.** `7399204` is on `origin/master` and deployed to
+`wccc-business-network.vercel.app`. All six environment variables are set in
+Vercel including `CRON_SECRET`, which had been outstanding for weeks.
+
+**Schema applied.** `supabase-schema.sql` and `supabase-verify.sql` were both
+run against the live database. 17 tables, every row `ok`, RLS `ok — protected`
+on all of them, and `ai_feedback` confirmed at 9 of 9 columns. Nothing is
+half-applied.
+
+**Seeded.** `seed-demo-member.sql` was run against the user's own account, which
+is now Golden Lotus Catering. Note for tomorrow: **that account holds demo data,
+not real data** — the teardown at the bottom of that file removes it.
+
+### What was verified working on the live site
+
+**The deadline filter, exactly as predicted.** Golden Lotus sees one row —
+*Wisconsin annual report, LLCs and corporations formed April–June, June 30
+2027* — and the line *"9 filings hidden because your profile says they don't
+apply to you."* Predicted 1 shown / 9 removed before looking; got 1 / 9. The
+whole fact → filter → screen path is real and works.
+
+### What is broken or unknown
+
+| | |
+| --- | --- |
+| **Funding & Programs** | Was returning *"Couldn't generate matches in the right format."* Fix written and tested, **not yet pushed**. See below. |
+| **AI Coach** | Unknown — no reply visible in one screenshot. Retry before investigating. |
+| **Decision Grill** | Never exercised on the live site. |
+| **Module Toolkit** | Never exercised on the live site. |
+| **Rating buttons** | Never clicked on the live site. `VERIFY-DEPLOY.md` check 7. |
+
+---
+
+## The funding bug, and what it should teach the next session
+
+Worth reading even though the fix is written, because the *shape* of it will
+recur.
+
+**What happened.** Giving the matcher the full member context (§0.12) came with
+a prompt telling it to write more specific sentences — and `max_tokens` stayed
+at **700**, a budget sized when the profile was four lines and the instruction
+was "one sentence on why this fits". Five results stopped fitting. The JSON was
+cut off mid-string, did not parse, and the panel reported a **formatting**
+error.
+
+**The part that made it worse.** `callClaude` only checked `stop_reason ===
+"max_tokens"` when there was *no text at all*. A reply that started fine and ran
+out came back `ok: true` with unparseable text, so the member was told to try
+again — and trying again truncated identically. The error message sent everyone
+to look at the schema, which was never wrong.
+
+**Three fixes, all pushed together:**
+
+- `max_tokens` on `opportunities` raised 700 → 1200, sized to roughly double
+  what five full results need.
+- `ClaudeResult` now carries `truncated`, so a JSON route can say *"the list ran
+  long and got cut off"* rather than blaming the format. Prose routes still get
+  the partial text, because a cut-off answer beats nothing there.
+- `parseClaudeJson` walks the text for the first *balanced* JSON value, so a
+  model that prefaces its JSON with a sentence no longer loses everything. A
+  **truncated** reply still returns null deliberately — half an array is not a
+  shorter answer, it is three matches presented as though they were all of them.
+
+**The lesson, stated plainly:** changing a prompt to ask for more output is a
+change to the token budget. They are the same decision and were treated as two.
+
+**And mutation testing earned itself a third time this session.** The first
+version of the "bracket inside a quoted value" test passed against a greedy
+regex as well as against the balanced scan — it did not actually test what it
+claimed. The case that separates them is *trailing prose containing a bracket*.
+Two other tests this session were also found passing for the wrong reason. Keep
+doing this.
+
 ## Done since: the Wisconsin entries went live
 
-2026-08-29. Eight signed off with `lastVerified: "2026-08-29"`, the ninth
-(`county-revolving-loan-funds`) dropped as a category rather than an
-organisation. `ROADMAP.md` §0.11 has the full account. Three things a fresh
-session should carry forward:
+2026-08-29, pushed as part of `7399204`. Eight signed off with
+`lastVerified: "2026-08-29"`, the ninth (`county-revolving-loan-funds`) dropped
+as a category rather than an organisation. `ROADMAP.md` §0.11 has the full
+account. Three things a fresh session should carry forward:
 
 **The re-read before sign-off found a wrong claim that two previous passes had
 confirmed.** Supplier diversity's 5% bid preference is not DVB-only — PRO-606
@@ -149,12 +136,13 @@ programs against wall-clock time while the deadlines in the same block honoured
 the `now` they were given. Invisible while nothing was verified. Fixed by
 threading `now`; there is a test named for it.
 
-**2027-02-25 is the last day the eight are shown**, and the repo now tells you
-before that rather than after. A test fails 30 days out naming the date and the
-fix; `wisconsinVerificationExpiry` holds the arithmetic. If you are reading this
-because that test is red, the answer is: re-read the eight URLs, confirm each
-description, set `lastVerified` to today. Two minutes.
-`WISCONSIN-PROGRAMS-REVIEW.md` has the checklist and last time's evidence.
+**2027-02-25 is the last day the eight are shown**, and the repo now warns
+before that rather than after. `test/wisconsinPrograms.test.ts` fails 30 days
+out — so the next `npm test` after **2027-01-26** says so, with the date and the
+fix in the failure message. If you are reading this because that test is red:
+re-read the eight URLs, confirm each description, set `lastVerified` to today.
+Two minutes. `WISCONSIN-PROGRAMS-REVIEW.md` has the checklist and last time's
+evidence.
 
 ### While you are in there: why this half is not automated
 
@@ -180,141 +168,44 @@ handling, not folded into this list.
 
 ---
 
-## What was built
+## What was built, and where to read about it
 
-**Committed already (`35e2745`):** the Coach's history drawer and conversation
-recall — items 1 and 2 of the previous handoff, which were the two halves of the
-same thing: the portal had started keeping transcripts that members could not
-see, and was not reading them back either.
+All of the below is on `master` in `7399204`. `ROADMAP.md` is the long-form
+account — the section numbers point there.
 
-**1. A history drawer in the Coach.** "Past chats" beside the heading. Lists
-what is stored — opening line, module, message count, date — and reopens or
-deletes any of it. It lives inside `AICoach.tsx` rather than in its own panel or
-page because that component already owns the transcript, so reopening is a
-`setMessages`, and it comes along free on module pages as well as the dashboard.
+| | What | Where |
+| --- | --- | --- |
+| §0.10 | Bilingual answers switched off behind `BILINGUAL_ENABLED`, tests skipped rather than deleted | `data/facts.ts` |
+| §0.11 | Eight Wisconsin entries live, ninth dropped, expiry now warns 30 days out | `data/wisconsinPrograms.ts` |
+| §0.12 | Funding matched to the member — fit notes, a code-side filter, the full member context | `lib/wisconsinFit.ts` |
+| §0.13 | `ai_feedback` — a rating under Coach replies, Grill briefs and step reviews | `app/api/ai/feedback/` |
 
-Three details in there are load-bearing and are commented as such:
-
-- **Deleting the open chat detaches its id.** `saveConversation` upserts on
-  whatever id it is handed, so a Coach still holding a deleted row's id would
-  recreate that row on the next message.
-- **A delete waits for any save in flight.** Same failure by a different route:
-  a save that started before the delete would land after it.
-- **The conversation id is read from a ref, not from state,** because `persist`
-  runs from a closure created before the reply streamed.
-
-**2. The Coach opens warm.** `conversationLines` in `lib/memberContext.ts` puts
-the openings of up to three earlier conversations into the shared context, and
-tells the model plainly that openings are all it has — it may pick a thread back
-up, never claim to remember how the exchange went. The chat in progress is
-excluded by id (the client sends `conversationId`; the route passes it through),
-which stops the coach reminding a member of the sentence they just typed *and*
-keeps the cached prompt prefix identical across the turns of one chat.
-
-**Uncommitted, built after that:**
-
-**3. Onboarding cut to four questions, and tier gating switched off** (ROADMAP
-§0.8), on WCCC's direction to give every member everything.
-
-The journey question had one possible answer and was already hiding itself. The
-membership picker decided which stages opened, on the honour system, with no
-payment anywhere in the flow — it asked someone to price themselves before they
-had seen anything. Both are gone; `completeProfileAction` sets the business
-track and the network tier itself and reads neither from the form.
-
-`TIER_GATING_ENABLED` in `data/modules.ts` is a flag, not a deletion: every
-module keeps its `minTier`, `tierMeetsMinimum` still answers honestly, and paid
-stages return with one line. The public site still sells memberships and the
-tier column is still stored — it now records what WCCC has actually been paid
-rather than what someone claimed, and the dashboard badges it only for members
-who hold one.
-
-The knock-on worth knowing about: the Business Snapshot's priority answer
-existed only to unlock a module free, so it would have become a stored value
-nothing read, behind a card still promising an unlock. It goes into the member
-context instead — *"asked which part of their business matters most right now,
-they chose Revenue"* — which is the use it was always better at. In code it is
-`priorityModuleKey`; the column stays `free_module_key`, because renaming it
-would need an `alter table ... rename`, and that is not safe in a script re-run
-on every deploy.
-
-**4. A member can change their own answers** (ROADMAP §0.9), which cutting
-onboarding down made urgent: those four answers were frozen for the life of an
-account, and `/onboarding` cannot be reopened even by typing the URL.
-
-A Profile card on the dashboard, above the Business Snapshot and shaped like it.
-Its write path is a new `updateMemberProfile` rather than `upsertMember`, which
-is wrong for an edit in three silent ways — it rewrites `journey` and
-`membership_tier` from its input (so an edit would reset a paying member to the
-free tier), it treats blank as "keep what is there" (so a business name could
-never be cleared), and it ignores the error it gets back. Each is a test now.
-
-`data/industries.ts` is the one list both forms render, and each option carries
-a `grantsKeyword`, because the industry was doing two jobs badly: it is handed
-to Grants.gov as the funding search term, so "Finance & Accounting" searched for
-a string with an ampersand in it and "Other" searched for the word *other*. The
-mapping lives in `normalizeKeyword`, which the nightly refresh now goes through
-as well — if those two ever disagree, every search misses the cache, falls back
-to a live call, and returns good results while quietly undoing the reason the
-cache exists.
-
-**5. Bilingual advice** (was ROADMAP 2.1), **now switched off behind
-`BILINGUAL_ENABLED` — see ROADMAP §0.10.** What follows is what is built and
-what comes back the day the flag flips; none of it was removed. A
-`preferred_language` fact —
-English, Simplified Chinese, Traditional Chinese, Spanish, Hmong — on the
-Business Snapshot, which is the one form a member can reopen and change. One
-directive built in `lib/memberContext.ts` reaches all seven surfaces: three take
-it off the member context, three fetch it beside the member read they already
-do, so nothing is left answering in English to a member who asked otherwise.
-
-Three rules in that directive are load-bearing, and each protects against a
-failure you would not see in a test run:
-
-- **Agency names, form numbers and URLs stay in English** inside the translated
-  text. A translated agency name is a search that finds nothing, for a member
-  standing at a government form.
-- **JSON keys stay in English.** Three surfaces parse the reply; a translated
-  key fails as a blank panel, not as an error.
-- **The Grill's `confidence` stays one of its three English words.** The route
-  matches on that value and falls back to "Medium" when it does not recognise
-  it — a translated one shows a confidence level nobody chose.
-
-**It is not verified in the way that matters, which is why it is now off.** The
-plumbing is tested; whether the Chinese reads well to a Chinese speaker is not
-something this repo can answer, and nobody had read a line of it.
-`VERIFY-DEPLOY.md` check 6 is that job, and it is now the gate on the flag
-rather than a report on live behaviour: run it on a preview with the flag set
-true, and merge the flip only on a pass.
-
-**6. An `opening` column on `conversations`** (was ROADMAP §3), with
-`message_count` beside it, both written by `saveConversation` on the same upsert
-as the transcript. The drawer and the recall now read five short columns instead
-of whole stored chats — twenty of them to draw a list, three more on every AI
-request. Safe to denormalise because there is exactly one writer and it replaces
-the whole row; if anything ever starts appending turns to an existing row, these
-two go stale first.
-
-**Verified:** typecheck, lint, 176 tests and `next build`, all in a clean Linux
-container. Then mutation-tested at each stage — twenty-five rules broken one at
-a time, every one caught by the test written for it, named in the run. Two things
-have no automated test and are `VERIFY-DEPLOY.md` checks 5 and 6 instead: the
-drawer, because this repo has no browser harness, and whether the translated
-writing is any good, because that needs a person who reads the language.
-
----
+Two reference pages were also written for the user and live outside the repo, as
+Claude artifacts. They are worth asking the user for if the architecture is
+unclear: one traces the write paths, the shared member context and the
+difference between the two caches and the memory loop; the other maps what a
+member gets back for each answer they give, with the filter counts measured
+rather than estimated.
 
 ## Still open, in the order I would take them
 
-The Wisconsin entries are done. What is left, in the order I would take it:
+Everything above "Do this first" comes before any of these.
 
-**1. `npm audit` — 5 high severity.** Build-chain, not request-path. Its own PR:
-`npm audit fix`, then test, lint and build, commit only if all three stay green.
+**1. Walk the rest of the live site.** Deadlines passed; the Decision Grill, the
+Module Toolkit and the rating buttons have never been exercised against the
+deployment at all, and the Coach is unknown. This is the cheapest way left to
+find real problems, and today it found two in one sitting. The demo account is
+already seeded, so it costs ten minutes.
 
 **2. `VERIFY-DEPLOY.md` — seven checks, none run.** Two have been open since PR
-#16. All six exist because the mechanism they test fails silently. Checks 5 and
-6 cover this session's work and are the only parts of it with nothing automated
-behind them — and 6 needs someone who reads the language, not a session.
+#16. Every one exists because the mechanism it tests fails silently. Check 7
+(a rating actually lands) is the newest and takes a minute.
+
+**3. `npm audit` — 5 high severity.** Build-chain, not request-path. **The fix
+is already known-good:** `npm audit fix` is lockfile-only, changes no
+`package.json`, takes it to 0 vulnerabilities, and the full suite plus
+`next build` were run against the patched lockfile on 2026-08-30. Its own
+commit — never folded into a feature.
 
 **3. Read the feedback back.** The `ai_feedback` table is live (§0.13) and
 nothing looks at it. Deliberately — a dashboard built before there is a month of
@@ -354,6 +245,13 @@ exists, and the only symptom is a dashboard that shows nothing.
 ---
 
 ## Still needs a person, not a session
+
+**Ten minutes on the live site.** Everything the tests cannot answer is here:
+whether the Coach's answers are any good, whether the Grill asks sharp
+questions, whether a generated document is worth having. 244 automated tests say
+the mechanisms work; not one of them says the portal is useful.
+`GOLDEN-LOTUS-PERSONA.md` ends with a "judging the output" section — good signs
+versus red flags — so this is an evaluation rather than a vibe check.
 
 **Which counties WCCC members are actually in** — the only input needed to
 rebuild the dropped ninth entry as something useful. See "Still open" above.

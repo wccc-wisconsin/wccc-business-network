@@ -27,7 +27,7 @@
 do $$
 declare
   -- EDIT THIS — the email you signed in with.
-  v_email text := 'you@example.com';
+  v_email text := 'sylsch310@gmail.com';
   v_member text;
 begin
   select id into v_member from members where lower(email) = lower(v_email);

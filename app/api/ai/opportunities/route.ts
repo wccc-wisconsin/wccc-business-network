@@ -228,10 +228,21 @@ ${context.summary}
 CATALOG — choose only from these:
 ${formatCatalogForPrompt(catalog)}`;
 
-  // 700 rather than the old 900: the model now returns a reference and two
-  // sentences per result instead of a full description, so the output is
-  // roughly half the size. Worth sizing to the work, since max_tokens is also
-  // the ceiling on what a runaway generation can cost.
+  // 1200, raised from 700 after that cap started truncating replies.
+  //
+  // 700 was sized when `whyItFits` was "one sentence on why this fits" and the
+  // member profile was four lines. Both grew: the model now sees the whole
+  // member context and is asked to name the specific thing about them that
+  // makes an entry fit, which is a longer sentence by design. Five results ×
+  // (a reference + two specific sentences + JSON overhead) does not reliably
+  // fit in 700, and a JSON array cut off mid-string does not parse — so the
+  // member was told the reply was in the wrong *format*, which sent everyone
+  // looking at the schema instead of at the budget.
+  //
+  // Sized to roughly double what five full results need, because the failure
+  // mode of too small is a dead feature and the failure mode of too large is a
+  // few tenths of a cent. max_tokens is a ceiling, not a target — a shorter
+  // reply costs less regardless of what this says.
   // Appended rather than folded in: for an English-speaking member the stable
   // half stays byte-identical to what every other member sends, which is one
   // shared cache entry across the whole membership. A language preference
@@ -239,7 +250,7 @@ ${formatCatalogForPrompt(catalog)}`;
   const result = await callClaude(
     { stable: languageDirective ? `${SELECTION_RULES}\n\n${languageDirective}` : SELECTION_RULES },
     [{ role: "user", content: userPrompt }],
-    700,
+    1200,
     "opportunities",
   );
 
@@ -253,8 +264,26 @@ ${formatCatalogForPrompt(catalog)}`;
 
   const parsed = parseClaudeJson<unknown>(result.text);
   if (!isSelectionList(parsed)) {
+    // Truncation and malformedness reach this line looking identical — both
+    // are just text that will not parse — so they are told apart by the
+    // model's own stop reason rather than by inspecting the wreckage. They
+    // need different messages because they need different actions: one is
+    // worth retrying, the other is a budget to raise, and telling a member to
+    // "try again" on a reply that ran out of room produces the same failure a
+    // second time.
+    console.error("opportunities: reply did not parse", {
+      truncated: result.truncated,
+      outputTokens: result.usage.outputTokens,
+      textLength: result.text.length,
+    });
+
     return NextResponse.json(
-      { ok: false, error: "Couldn't generate matches in the right format. Please try again." },
+      {
+        ok: false,
+        error: result.truncated
+          ? "The list ran long and got cut off before it was finished. This is on us — please try again, and tell WCCC if it keeps happening."
+          : "Couldn't generate matches in the right format. Please try again.",
+      },
       { status: 502 },
     );
   }

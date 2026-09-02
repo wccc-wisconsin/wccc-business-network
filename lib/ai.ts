@@ -28,7 +28,28 @@ export const MODEL = process.env.ANTHROPIC_MODEL || "claude-sonnet-5";
 export type ChatMessage = { role: "user" | "assistant"; content: string };
 
 export type ClaudeResult =
-  | { ok: true; text: string; usage: AiSpend }
+  | {
+      ok: true;
+      text: string;
+      usage: AiSpend;
+      /**
+       * The reply hit `max_tokens` and stopped mid-sentence.
+       *
+       * Reported rather than acted on here, because what it means depends
+       * entirely on the caller. For a prose route a truncated answer is still
+       * mostly useful and showing it beats showing nothing. For a route that
+       * parses the reply, truncated text is not a formatting problem — it is a
+       * budget problem, and the two need different messages and different
+       * fixes.
+       *
+       * This used to be checked only when there was *no* text at all, which
+       * meant the common case — a reply that started fine and ran out of room —
+       * reached the caller as `ok: true` with unparseable text, and the member
+       * was told the AI "couldn't generate matches in the right format" and
+       * invited to try again. Trying again produced the same truncation.
+       */
+      truncated: boolean;
+    }
   | { ok: false; error: string };
 
 /**
@@ -177,7 +198,7 @@ export async function callClaude(
       return { ok: false, error: "The AI assistant didn't return a response. Please try again." };
     }
 
-    return { ok: true, text, usage };
+    return { ok: true, text, usage, truncated: data?.stop_reason === "max_tokens" };
   } catch (error) {
     console.error("callClaude: request failed", error);
     return { ok: false, error: "Couldn't reach the AI assistant. Please try again shortly." };
@@ -473,6 +494,62 @@ export function parseClaudeJson<T>(text: string): T | null {
   try {
     return JSON.parse(cleaned) as T;
   } catch {
-    return null;
+    // Fall through to the salvage below.
   }
+
+  // A model that prefaces its JSON with a sentence — "Here are the matches:" —
+  // used to fail exactly like a model that returned nothing usable, and both
+  // reached the member as "couldn't generate matches in the right format".
+  // Pulling the first balanced JSON value out of the text separates the two.
+  //
+  // Deliberately balanced-scanned rather than regex-matched: a regex for the
+  // outermost brackets either stops at the first closing one (truncating a
+  // nested object) or runs to the last one in the whole reply (swallowing
+  // trailing prose). This walks the string once, tracking string literals and
+  // escapes so a bracket inside a quoted value cannot end the scan.
+  //
+  // A *truncated* reply stays unparseable here, and that is correct — half an
+  // array is not a shorter answer, it is a wrong one. Truncation is reported
+  // separately by `truncated` on ClaudeResult, which is the signal that tells
+  // a caller to say so rather than blaming the format.
+  const start = cleaned.search(/[[{]/);
+  if (start === -1) return null;
+
+  const open = cleaned[start];
+  const close = open === "[" ? "]" : "}";
+  let depth = 0;
+  let inString = false;
+  let escaped = false;
+
+  for (let i = start; i < cleaned.length; i += 1) {
+    const char = cleaned[i];
+
+    if (escaped) {
+      escaped = false;
+      continue;
+    }
+    if (char === "\\" && inString) {
+      escaped = true;
+      continue;
+    }
+    if (char === '"') {
+      inString = !inString;
+      continue;
+    }
+    if (inString) continue;
+
+    if (char === open) depth += 1;
+    else if (char === close) {
+      depth -= 1;
+      if (depth === 0) {
+        try {
+          return JSON.parse(cleaned.slice(start, i + 1)) as T;
+        } catch {
+          return null;
+        }
+      }
+    }
+  }
+
+  return null;
 }
