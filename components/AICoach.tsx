@@ -4,8 +4,12 @@ import { useCallback, useId, useRef, useState, useTransition } from "react";
 import { saveExtractedFactsAction } from "@/app/actions";
 import type { ConversationSummary } from "@/lib/appStore";
 import AnswerFeedback from "@/components/AnswerFeedback";
+import { consumeStream, type CoachMessage } from "@/lib/coachStream";
 
-type Message = { role: "user" | "assistant"; content: string };
+// The shape lives with the stream reader that produces it — see
+// lib/coachStream.ts. Aliased rather than renamed throughout because `Message`
+// is what every line in this file already calls it.
+type Message = CoachMessage;
 
 /** A fact the coach thinks the member stated, waiting for them to confirm it. */
 type Candidate = {
@@ -56,83 +60,6 @@ type Props = {
 // under the header is the other half of that bargain: a portal that keeps
 // transcripts a member can neither see nor remove would be the wrong trade,
 // however useful those transcripts are to the coach.
-/**
- * Reads the NDJSON event stream, appending text to the reply as it arrives.
- *
- * The assistant message is created on the first `text` event and grown in place
- * after that, so nothing appears until there is something to show and the reply
- * is never briefly blank.
- *
- * An `error` can arrive after text has already rendered — the response was a
- * 200 long before the failure happened. Whatever arrived stays on screen and
- * the error is shown beneath it: a half-answer a member can read beats an empty
- * box, as long as they are told it is a half-answer.
- */
-async function consumeStream(
-  body: ReadableStream<Uint8Array>,
-  setMessages: React.Dispatch<React.SetStateAction<Message[]>>,
-  setError: (message: string) => void,
-): Promise<string> {
-  const reader = body.getReader();
-  const decoder = new TextDecoder();
-  let buffer = "";
-  let started = false;
-  // Accumulated alongside the React state so the caller can store the finished
-  // reply without reading state it has not re-rendered with yet.
-  let full = "";
-
-  const handle = (line: string) => {
-    if (!line.trim()) return;
-    let event: { type?: string; value?: string; message?: string };
-    try {
-      event = JSON.parse(line);
-    } catch {
-      // A truncated trailing line. Nothing to show, nothing worth failing over.
-      return;
-    }
-
-    if (event.type === "text" && typeof event.value === "string") {
-      const text = event.value;
-      full += text;
-      if (!started) {
-        started = true;
-        setMessages((m) => [...m, { role: "assistant", content: text }]);
-        return;
-      }
-      setMessages((m) => {
-        const last = m[m.length - 1];
-        if (!last || last.role !== "assistant") return m;
-        return [...m.slice(0, -1), { role: "assistant", content: last.content + text }];
-      });
-      return;
-    }
-
-    if (event.type === "error") {
-      setError(event.message || "Something went wrong.");
-    }
-  };
-
-  try {
-    for (;;) {
-      const { done, value } = await reader.read();
-      if (done) break;
-
-      buffer += decoder.decode(value, { stream: true });
-
-      let newline = buffer.indexOf("\n");
-      while (newline !== -1) {
-        handle(buffer.slice(0, newline));
-        buffer = buffer.slice(newline + 1);
-        newline = buffer.indexOf("\n");
-      }
-    }
-    handle(buffer);
-  } finally {
-    reader.releaseLock();
-  }
-
-  return full;
-}
 
 export default function AICoach({ moduleKey, moduleLabel }: Props) {
   const [messages, setMessages] = useState<Message[]>([]);

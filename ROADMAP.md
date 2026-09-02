@@ -456,6 +456,97 @@ rows are there when someone wants to ask.
 
 ---
 
+## 0.14 It went live, and the walkthrough found two bugs
+
+2026-08-30. Deployed as `7399204`; schema applied and verified against the live
+database (17 tables, `ai_feedback` at 9 of 9); demo account seeded.
+
+**The deadline filter was confirmed end to end on the live site.** Golden Lotus
+sees one filing and the line "9 filings hidden because your profile says they
+don't apply to you". Predicted 1-of-9 from the code before looking; got 1 of 9.
+That is the first time any of this has been checked against a deployment rather
+than a test.
+
+**The funding matcher was broken by §0.12, and the error message lied about
+it.** `max_tokens` on `opportunities` stayed at 700 while the same change told
+the model to write longer, more specific sentences — so replies truncated, the
+JSON did not parse, and the panel reported a *formatting* error. Worse,
+`callClaude` only recognised truncation when there was no text at all, so a
+reply that started fine and ran out reached the caller as a successful one. The
+member was told to try again; trying again truncated identically.
+
+Fixed three ways: the budget raised to 1200, `truncated` added to
+`ClaudeResult` so a JSON route can say what actually happened, and
+`parseClaudeJson` given a balanced-scan salvage so a model that prefaces its
+JSON with a sentence no longer loses everything. A truncated reply still
+refuses to parse, deliberately — half an array is three matches presented as
+though they were all of them.
+
+**Two rules worth carrying forward:**
+
+- **Changing a prompt to ask for more output is a change to the token budget.**
+  They are one decision. §0.12 treated them as two and shipped a dead feature.
+- **A failure message that names the wrong cause is worse than a vague one.**
+  "Wrong format" sent everyone to inspect a schema that was never wrong. Where
+  two causes produce identical wreckage, carry the signal that distinguishes
+  them rather than guessing from the debris — the same move as
+  `wisconsinCatalogState` in §0.11.
+
+**And mutation testing caught a bad test for the third time in two days.** The
+first "bracket inside a quoted value" test passed against a greedy regex as well
+as against the balanced scan, so it was not testing what it claimed. Trailing
+prose containing a bracket is the case that separates them.
+
+---
+
+## 0.15 The Coach could fail without saying anything
+
+2026-09-02. Reported from the live site: a question is asked, and nothing comes
+back. No reply, no error, no clue. Funding & Programs was failing at the same
+time with the §0.14 message, which is a separate bug whose fix was written then
+and is only now deployed.
+
+**The Coach is the one streamed surface, and streaming has a failure mode the
+whole-response routes do not have.** Every path in `streamClaude` yields either
+text or an error, so the panel is covered for anything that goes wrong *inside*
+the generator. What was not covered is the stream that ends having yielded
+neither: a generation cut off before its first token, or frames carrying no
+content. `consumeStream` returned "", the caller stored nothing because there
+was nothing to store, and no branch anywhere said a word. The member sees the
+question they asked and blank space under it.
+
+**Why this one is worse than an error.** An error names a cause and can be put
+in a bug report. Blank space is indistinguishable from a message that was never
+sent — a member cannot tell it apart from their own mis-click, and neither can
+anyone they report it to. It is the failure that destroys the evidence of
+itself, which is why it went a week without being diagnosed.
+
+**The fix is one rule:** a stream that produced no text and reported no error
+now says so. Guarded on both halves, because a stream that errored before
+producing text has already told the member something specific, and replacing
+that with "didn't send anything back" would be a downgrade.
+
+**`consumeStream` moved to `lib/coachStream.ts`** so it could be tested at all.
+It was a module-local function inside a .tsx component, and the suite runs on
+plain modules — the rule was untestable where it lived. No behaviour changed in
+the move; the component imports it and its message type.
+
+**Mutation-tested, and the first attempt was wrong.** Breaking the rule with
+`!started || (!full && !sawError)` was supposed to fail the "stays silent when a
+reply did arrive" test and did not — `started` is true whenever text arrived, so
+that mutation never fires on the case it claimed to test. The honest mutation is
+dropping the `!full` guard, and that fails the test as intended. Three rules,
+three mutations, each caught by the test named for it. That is the fourth bad
+mutation caught in three days by insisting on this step.
+
+**What this does not do is explain the blank reply.** It makes the next one
+report a cause instead of nothing. The cause itself is still unknown, and the
+Vercel logs held nothing because their 24-hour window had lapsed since the last
+use. The next Coach message on the deployed site either answers or names its
+own failure.
+
+---
+
 ## 1. Blockers to clear before new AI work
 
 None of these is a hard stop any more — the lockfile one was, and it landed
