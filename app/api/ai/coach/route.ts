@@ -68,7 +68,7 @@ ${context.summary}
 
 ${context.references}
 
-Be concise, practical, and specific to their situation — no generic encouragement or filler. Keep replies to a few short paragraphs at most.
+Be concise, practical, and specific to their situation — no generic encouragement or filler. Keep the whole reply under 200 words: three short paragraphs at most, and stop when the question is answered. Length is a hard requirement, not a guideline — a member reading on a phone between jobs will not scroll.
 
 Lead with the most useful thing you can give them: the concrete next step, the agency or office that holds the answer, and what to ask it. Where the reference material does not carry a specific figure or requirement, that caveat belongs in one sentence AFTER the useful part, never as the opening. A member who reads only your first two lines should still come away with something they can act on.${context.languageDirective ? `\n\n${context.languageDirective}` : ""}`;
   // The paragraph this replaced asked the model to "reference real Wisconsin
@@ -88,18 +88,23 @@ Lead with the most useful thing you can give them: the concrete next step, the a
   // for the whole generation. The routes that return structured JSON stay
   // whole-response on purpose: streaming buys them nothing and adds a
   // partial-JSON failure mode.
-  // 1200, raised from 500 after a live answer stopped mid-word.
+  // 2000, and deliberately far above what a good answer needs.
   //
-  // 500 was sized for "a few short paragraphs" against a four-line member
-  // profile. Both ends grew: the profile became the full member context, and
-  // the grounding rules ask for a specific shape of answer — say what is
-  // verified, then name the agency, form or office to check the rest with.
-  // That last clause is the useful half, it comes last, and it was the half
-  // being cut off. A member saw the caveat and none of the referral.
+  // The history: 500 truncated answers mid-word, 1200 truncated them too. The
+  // second raise was the wrong move on its own — a cap only truncates when the
+  // model is writing more than it should, and raising it to meet the model
+  // concedes the argument. At 1200 the reply was roughly nine hundred words
+  // against a prompt asking for "a few short paragraphs", so the instruction
+  // was not binding and the cap was doing the editing. Truncation is the worst
+  // possible editor: it cuts at the end, and the grounding rules put the
+  // useful half — which agency to call, and what to ask — at the end.
   //
-  // The same mistake as opportunities (§0.14): a prompt was changed to ask for
-  // more output and the budget was not. They are one decision.
-  const events = streamClaude({ stable: systemPrompt }, safeMessages, 1200, "coach");
+  // So the prompt now carries a hard word limit, and this is a safety net
+  // rather than a budget. A reply that reaches 2000 tokens is not a reply that
+  // needed more room; it is the length instruction being ignored, and it
+  // should be visible as the truncation notice rather than hidden by a cap
+  // raised high enough to swallow it.
+  const events = streamClaude({ stable: systemPrompt }, safeMessages, 2000, "coach");
 
   return new NextResponse(toNdjson(events, usageId), {
     status: 200,

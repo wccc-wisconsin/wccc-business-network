@@ -5,6 +5,7 @@ import { saveMemberOpportunities, type Opportunity } from "@/lib/appStore";
 import { buildMemberContext } from "@/lib/memberContext";
 import { callClaude, parseClaudeJson } from "@/lib/ai";
 import { buildCatalog, formatCatalogForPrompt, type CatalogEntry } from "@/lib/opportunityCatalog";
+import { validSelections, type Selection } from "@/lib/opportunitySelections";
 
 // "Find funding & programs" — a short, personalized list of grants, loans,
 // certifications and support programs for one member.
@@ -80,19 +81,7 @@ Return ONLY a strict JSON array, no text outside it. Each object has exactly the
   "whyItFits"  — one sentence on why this fits THIS member, naming the specific thing about them that makes it fit — their stage, their structure, what they told you they are working on. Do not restate the description, and do not write a sentence that would be equally true of any other member.
   "nextStep"   — one concrete action to take next: what to read, what to prepare, or who to contact.`;
 
-type Selection = { ref: string; whyItFits: string; nextStep: string };
 
-function isSelectionList(value: unknown): value is Selection[] {
-  if (!Array.isArray(value) || value.length === 0) return false;
-  return value.every(
-    (item) =>
-      item &&
-      typeof item === "object" &&
-      typeof (item as Record<string, unknown>).ref === "string" &&
-      typeof (item as Record<string, unknown>).whyItFits === "string" &&
-      typeof (item as Record<string, unknown>).nextStep === "string",
-  );
-}
 
 /**
  * Turns the model's references into opportunities, using the catalog as the
@@ -263,7 +252,20 @@ ${formatCatalogForPrompt(catalog)}`;
   }
 
   const parsed = parseClaudeJson<unknown>(result.text);
-  if (!isSelectionList(parsed)) {
+  const selections = validSelections(parsed);
+
+  // A malformed entry beside good ones is dropped, not fatal — see
+  // validSelections. Logged when it happens, because a model quietly losing a
+  // field on one match in five is a prompt problem that would otherwise only
+  // show up as a slightly shorter list.
+  if (selections && Array.isArray(parsed) && selections.length < parsed.length) {
+    console.warn("opportunities: dropped malformed entries", {
+      returned: parsed.length,
+      kept: selections.length,
+    });
+  }
+
+  if (!selections || selections.length === 0) {
     // Truncation and malformedness reach this line looking identical — both
     // are just text that will not parse — so they are told apart by the
     // model's own stop reason rather than by inspecting the wreckage. They
@@ -275,6 +277,8 @@ ${formatCatalogForPrompt(catalog)}`;
       truncated: result.truncated,
       outputTokens: result.usage.outputTokens,
       textLength: result.text.length,
+      wasArray: Array.isArray(parsed),
+      entriesReturned: Array.isArray(parsed) ? parsed.length : 0,
     });
 
     return NextResponse.json(
@@ -288,7 +292,7 @@ ${formatCatalogForPrompt(catalog)}`;
     );
   }
 
-  const items = resolveSelections(parsed, catalog.entries);
+  const items = resolveSelections(selections, catalog.entries);
   if (items.length === 0) {
     // Every reference the model gave was unknown. Rare, and worth its own
     // message: unlike the errors above, retrying here is genuinely likely to

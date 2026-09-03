@@ -587,6 +587,48 @@ every reply: each failed the test named for it, and the third also failed "ends
 with exactly one terminal event", which is the guard that stops a warning being
 attached to answers that are fine.
 
+
+---
+
+## 0.17 One bad field was throwing away four good matches
+
+2026-09-03, from a second live pass. Funding & Programs returned matches once
+and then failed again on a retry with the same profile — and the Coach hit the
+raised 1200-token ceiling too.
+
+**The funding panel was all-or-nothing, and that was the intermittency.**
+`isSelectionList` was `value.every(...)`: five matches with one missing
+`nextStep` rejected the whole reply and told the member the format was wrong.
+Which field a model fumbles varies run to run, so the same question worked one
+minute and failed the next. That is the worst shape a bug can take — it reads as
+the feature being unreliable rather than as something with a cause.
+
+Replaced by `validSelections` in `lib/opportunitySelections.ts`: judge each
+entry on its own, drop the bad one, keep the rest, and fail only when nothing
+usable arrived. This is the rule `resolveSelections` already applied to
+references missing from the catalog — an entry that cannot be trusted does not
+become an opportunity, and the ones beside it are untouched. The two halves now
+agree instead of contradicting each other. Moved to `lib/` because a helper
+inside a route file cannot be tested; `null` still means "not a list at all",
+which is a different message from a list that came back empty.
+
+**Raising the Coach cap a second time would have been the wrong fix.** At 1200
+the reply ran to roughly nine hundred words against a prompt asking for "a few
+short paragraphs" — so the instruction was not binding and the cap was doing the
+editing. Truncation is the worst possible editor: it cuts at the end, and the
+grounding rules put the useful half at the end. The prompt now carries a hard
+200-word limit and the cap is 2000 as a safety net. A reply that still reaches
+2000 is the instruction being ignored, and it should surface as the truncation
+notice rather than be hidden by a cap raised to swallow it.
+
+**Mutation-tested.** All-or-nothing restored, empty list collapsed into null,
+empty ref accepted: each failed the test named for it.
+
+**What is still unmeasured** is whether the answers are any good once they
+arrive whole. Two rounds of "the site gives nothing useful" have both turned out
+to be truncation and brittle parsing rather than the model or the reference
+material. The third round is the one that will actually test the content.
+
 ---
 
 ## 1. Blockers to clear before new AI work
