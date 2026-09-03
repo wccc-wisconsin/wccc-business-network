@@ -624,10 +624,24 @@ notice rather than be hidden by a cap raised to swallow it.
 **Mutation-tested.** All-or-nothing restored, empty list collapsed into null,
 empty ref accepted: each failed the test named for it.
 
-**What is still unmeasured** is whether the answers are any good once they
-arrive whole. Two rounds of "the site gives nothing useful" have both turned out
-to be truncation and brittle parsing rather than the model or the reference
-material. The third round is the one that will actually test the content.
+**The third round passed.** Asked the Milwaukee catering licensing question
+against the deployed fixes, the Coach named the county and city health
+departments, the Wisconsin Department of Revenue and SBDC [R3], picked up that
+the member had flagged their seller's permit as "not sure", supplied the
+sentence to say on the phone, and declined to invent a fee. That is every item
+on the "good signs" list in DEMO-SCRIPT.md, and the first complete answer this
+project has seen on the live site.
+
+So the content was never the problem. Three rounds of "this gives nothing
+useful" were all mechanical, and the reference material and prompts had been
+doing their job the whole time behind a cap that cut them off.
+
+**Length tightened 200 → 120 words afterwards.** The passing reply ran to about
+220, and the two things eating the budget are now named in the prompt rather
+than left to inference: do not open by restating what the member already told
+you, and keep a missing figure to a clause rather than a sentence of its own.
+Both were costing roughly forty words each in an answer whose useful core was
+about a hundred.
 
 ---
 

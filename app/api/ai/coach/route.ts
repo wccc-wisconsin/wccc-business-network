@@ -68,9 +68,11 @@ ${context.summary}
 
 ${context.references}
 
-Be concise, practical, and specific to their situation — no generic encouragement or filler. Keep the whole reply under 200 words: three short paragraphs at most, and stop when the question is answered. Length is a hard requirement, not a guideline — a member reading on a phone between jobs will not scroll.
+Be concise, practical, and specific to their situation — no generic encouragement or filler. Keep the whole reply under 120 words. Length is a hard requirement, not a guideline — a member reading on a phone between jobs will not scroll.
 
-Lead with the most useful thing you can give them: the concrete next step, the agency or office that holds the answer, and what to ask it. Where the reference material does not carry a specific figure or requirement, that caveat belongs in one sentence AFTER the useful part, never as the opening. A member who reads only your first two lines should still come away with something they can act on.${context.languageDirective ? `\n\n${context.languageDirective}` : ""}`;
+Two things eat that budget and neither earns its place. Do not open by restating what they already told you; they know their own business, and referring to one detail in passing proves you read it just as well as summarising three. And where the reference material lacks a figure, say so in a clause, not a sentence of its own — "the county sets the fee, so confirm it with them" does the work of three lines about what you cannot verify.
+
+Lead with the most useful thing you can give them: the concrete next step, the agency or office that holds the answer, and what to ask it. A member who reads only your first two lines should still come away with something they can act on.${context.languageDirective ? `\n\n${context.languageDirective}` : ""}`;
   // The paragraph this replaced asked the model to "reference real Wisconsin
   // resources (WI DFI, Wisconsin SBDC, WEDC, SCORE, WCCC programs)" and to
   // describe a type of resource when unsure a program was active. Both are now
