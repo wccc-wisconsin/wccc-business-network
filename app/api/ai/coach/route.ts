@@ -68,7 +68,9 @@ ${context.summary}
 
 ${context.references}
 
-Be concise, practical, and specific to their situation — no generic encouragement or filler. Keep replies to a few short paragraphs at most.${context.languageDirective ? `\n\n${context.languageDirective}` : ""}`;
+Be concise, practical, and specific to their situation — no generic encouragement or filler. Keep replies to a few short paragraphs at most.
+
+Lead with the most useful thing you can give them: the concrete next step, the agency or office that holds the answer, and what to ask it. Where the reference material does not carry a specific figure or requirement, that caveat belongs in one sentence AFTER the useful part, never as the opening. A member who reads only your first two lines should still come away with something they can act on.${context.languageDirective ? `\n\n${context.languageDirective}` : ""}`;
   // The paragraph this replaced asked the model to "reference real Wisconsin
   // resources (WI DFI, Wisconsin SBDC, WEDC, SCORE, WCCC programs)" and to
   // describe a type of resource when unsure a program was active. Both are now
@@ -86,7 +88,18 @@ Be concise, practical, and specific to their situation — no generic encouragem
   // for the whole generation. The routes that return structured JSON stay
   // whole-response on purpose: streaming buys them nothing and adds a
   // partial-JSON failure mode.
-  const events = streamClaude({ stable: systemPrompt }, safeMessages, 500, "coach");
+  // 1200, raised from 500 after a live answer stopped mid-word.
+  //
+  // 500 was sized for "a few short paragraphs" against a four-line member
+  // profile. Both ends grew: the profile became the full member context, and
+  // the grounding rules ask for a specific shape of answer — say what is
+  // verified, then name the agency, form or office to check the rest with.
+  // That last clause is the useful half, it comes last, and it was the half
+  // being cut off. A member saw the caveat and none of the referral.
+  //
+  // The same mistake as opportunities (§0.14): a prompt was changed to ask for
+  // more output and the budget was not. They are one decision.
+  const events = streamClaude({ stable: systemPrompt }, safeMessages, 1200, "coach");
 
   return new NextResponse(toNdjson(events, usageId), {
     status: 200,

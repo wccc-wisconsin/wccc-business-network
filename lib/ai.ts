@@ -215,6 +215,16 @@ export async function callClaude(
  * one has already sent a 200 and some words by the time it finds out. The
  * member has to be told inside the stream or not at all.
  */
+/**
+ * Shown under a streamed answer that hit its token ceiling.
+ *
+ * Worded as a fact about the answer rather than an apology, because the member
+ * can act on it: the reply on screen is real and usually still useful, and
+ * asking something narrower gets the rest.
+ */
+export const TRUNCATED_REPLY_NOTICE =
+  "That answer hit its length limit and stops mid-thought. Ask a narrower question to get the rest.";
+
 export type ClaudeStreamEvent =
   | { type: "text"; value: string }
   | { type: "error"; message: string }
@@ -223,7 +233,7 @@ export type ClaudeStreamEvent =
 /** Anthropic's SSE frames, narrowed to the fields this cares about. */
 type StreamFrame = {
   type?: unknown;
-  delta?: { type?: unknown; text?: unknown };
+  delta?: { type?: unknown; text?: unknown; stop_reason?: unknown };
   message?: { usage?: unknown };
   usage?: unknown;
   error?: { message?: unknown };
@@ -237,7 +247,10 @@ type StreamFrame = {
  * differs is only when the member sees the words.
  *
  * Always ends with exactly one terminal event, `done` or `error`, so a consumer
- * never has to guess whether a stream that stopped was finished or broken.
+ * never has to guess whether a stream that stopped was finished or broken. One
+ * `error` may also arrive immediately *before* `done`: that is the reply having
+ * hit its token ceiling, which is a complete stream carrying an incomplete
+ * answer, and the member needs to be told which they are looking at.
  *
  * Usage arrives in two halves: input and cache counts in `message_start`,
  * output in the final `message_delta`. Both are accumulated and reported on
@@ -303,6 +316,11 @@ export async function* streamClaude(
     cacheWriteTokens: 0,
   };
   let sawText = false;
+  // Why the model stopped, from the final message_delta. Only ever read to
+  // tell a finished answer from one that ran out of room — the two are
+  // identical on the wire otherwise, which is how a reply cut off mid-word
+  // reached members looking like a considered one.
+  let stopReason: unknown = null;
 
   try {
     for await (const frame of readSseFrames(response.body)) {
@@ -324,6 +342,7 @@ export async function* streamClaude(
       }
       if (frame.type === "message_delta") {
         Object.assign(usage, mergeSpend(usage, readSpend(frame.usage)));
+        if (frame.delta?.stop_reason != null) stopReason = frame.delta.stop_reason;
         continue;
       }
       if (frame.type === "error") {
@@ -348,6 +367,19 @@ export async function* streamClaude(
         : "Couldn't reach the AI assistant. Please try again shortly.",
     };
     return;
+  }
+
+  // A ceiling hit is not a failure — the call succeeded, the text is real, and
+  // it cost money that still has to be accounted for. So this is reported and
+  // then the stream ends normally, rather than returning early the way a
+  // genuine error does: `done` stays the terminal event and the spend is still
+  // filed against it.
+  //
+  // Reported at all because the alternative is what shipped: an answer that
+  // stops mid-word, with nothing on screen to say why, read as the assistant
+  // having nothing more to offer.
+  if (stopReason === "max_tokens") {
+    yield { type: "error", message: TRUNCATED_REPLY_NOTICE };
   }
 
   logUsage(label, typeof systemPrompt !== "string", usage);

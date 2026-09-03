@@ -545,6 +545,48 @@ Vercel logs held nothing because their 24-hour window had lapsed since the last
 use. The next Coach message on the deployed site either answers or names its
 own failure.
 
+
+---
+
+## 0.16 The Coach was being cut off mid-word
+
+2026-09-02, from a live screenshot. Asked what licences a caterer needs in
+Milwaukee County, the Coach answered *"…you already have a Milwauk"* and
+stopped. Reported as "the coach gives no useful information", which is what it
+looks like, and is not what it was.
+
+**It was the token ceiling, again, in the other route.** `coach` streamed with
+`max_tokens` at 500 — sized when the prompt said "a few short paragraphs" and
+the member profile was four lines. Both ends grew. §0.14 drew the lesson from
+`opportunities` and the same cap was left standing here: **a prompt changed to
+ask for more output is a change to the token budget.** Twice now.
+
+**The cruelty of where it cut.** GROUNDING_RULES tell the model to say plainly
+when the reference material does not answer, *and then name the agency, form or
+office to check with* — the second clause is the useful half, and it comes last
+in the sentence. So the truncation reliably delivered the caveat and ate the
+referral. The member got the disclaimer and none of the help, from a prompt
+written specifically to make sure they got the help.
+
+**Truncation was invisible to the stream.** `streamClaude` read `usage` off the
+final `message_delta` and ignored `delta.stop_reason` sitting beside it. A
+completed stream and an exhausted one were byte-identical to the consumer: 200,
+ordinary totals, terminal `done`. Now `stop_reason: "max_tokens"` yields an
+error event carrying TRUNCATED_REPLY_NOTICE, after the text and before `done` —
+reported rather than returned early, because a ceiling hit is not a failure: the
+call succeeded, the text is real, and the spend still has to be filed.
+
+**500 → 1200**, sized as `opportunities` was, and the prompt now asks for the
+useful part first: the next step, the agency, what to ask it, with any caveat in
+one sentence after it. A member who reads two lines should still have something
+to act on. Whether that reads better is a judgement only the live site settles —
+the mechanism is what is tested here, not the taste.
+
+**Mutation-tested.** Notice deleted, stop reason never read, notice fired on
+every reply: each failed the test named for it, and the third also failed "ends
+with exactly one terminal event", which is the guard that stops a warning being
+attached to answers that are fine.
+
 ---
 
 ## 1. Blockers to clear before new AI work

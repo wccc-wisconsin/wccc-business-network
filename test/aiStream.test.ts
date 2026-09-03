@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { streamClaude, type ClaudeStreamEvent } from "@/lib/ai";
+import { streamClaude, TRUNCATED_REPLY_NOTICE, type ClaudeStreamEvent } from "@/lib/ai";
 
 /**
  * Streaming changes one thing that is easy to get wrong: a failure can arrive
@@ -30,6 +30,13 @@ const START = frame({
 });
 
 const END = frame({ type: "message_delta", usage: { output_tokens: 120 } });
+
+/** The same closing frame, but reporting that the reply hit the token ceiling. */
+const END_TRUNCATED = frame({
+  type: "message_delta",
+  delta: { stop_reason: "max_tokens" },
+  usage: { output_tokens: 120 },
+});
 
 /** A body that emits the given strings as separate chunks. */
 function bodyOf(chunks: string[]): ReadableStream<Uint8Array> {
@@ -195,5 +202,54 @@ describe("failures", () => {
     const events = await collect();
     expect(events).toHaveLength(1);
     expect(events[0].type).toBe("error");
+  });
+});
+
+/**
+ * A reply that hits max_tokens is the failure that does not look like one. The
+ * stream completes, the status is 200, the usage totals are ordinary — and the
+ * text stops mid-word. On screen that reads as the assistant having nothing
+ * further to say, which is why it went a week on the live site being described
+ * as "the coach gives nothing useful" rather than as a bug.
+ */
+describe("a reply that ran out of room", () => {
+  it("says so, after the text and before the terminal event", async () => {
+    respondWith([START, TEXT("You already have a Milwauk"), END_TRUNCATED]);
+
+    const events = await collect();
+    const notice = events.find((e) => e.type === "error");
+
+    expect(textOf(events)).toBe("You already have a Milwauk");
+    expect(notice).toEqual({ type: "error", message: TRUNCATED_REPLY_NOTICE });
+    expect(events[events.length - 1].type).toBe("done");
+  });
+
+  it("still files the spend, because the call happened and cost money", async () => {
+    respondWith([START, TEXT("cut off"), END_TRUNCATED]);
+
+    const done = (await collect()).at(-1);
+
+    expect(done).toMatchObject({ type: "done", usage: { outputTokens: 120, inputTokens: 30 } });
+  });
+
+  it("says nothing when the reply ended on its own", async () => {
+    // The guard that matters. A notice on every complete answer would be worse
+    // than no notice at all — members learn to ignore a warning that is always
+    // there, and the one that means something goes with it.
+    respondWith([START, TEXT("A complete answer."), END]);
+
+    const events = await collect();
+
+    expect(events.filter((e) => e.type === "error")).toEqual([]);
+  });
+
+  it("says nothing for a stop reason that is not the ceiling", async () => {
+    respondWith([
+      START,
+      TEXT("Done properly."),
+      frame({ type: "message_delta", delta: { stop_reason: "end_turn" }, usage: { output_tokens: 9 } }),
+    ]);
+
+    expect((await collect()).filter((e) => e.type === "error")).toEqual([]);
   });
 });
