@@ -183,6 +183,18 @@ Rules, all of them strict:
     return NextResponse.json({ ok: false, error: result.error }, { status: 502 });
   }
 
+  // A question that hits the ceiling reaches the member as a sentence that
+  // stops. Logged rather than shown: the reply is a single question and 350
+  // tokens is roughly triple what the 80-word rule needs, so this firing means
+  // the prompt is being ignored, not that the budget is tight. That is a
+  // prompt problem to fix here, not something to ask the member to work around.
+  if (result.truncated) {
+    console.warn("grill: question hit the token ceiling", {
+      outputTokens: result.usage.outputTokens,
+      questionsAsked,
+    });
+  }
+
   return NextResponse.json({
     ok: true,
     reply: result.text.trim(),
@@ -243,8 +255,26 @@ Use 2-4 risks and 3-5 nextSteps. Every string is plain prose with no markdown.${
 
   const brief = normalizeBrief(parseClaudeJson<unknown>(result.text));
   if (!brief) {
+    // Truncation and malformedness arrive here looking identical — both are
+    // just text that will not parse — so they are told apart by the model's own
+    // stop reason rather than by inspecting the wreckage. Same reasoning as
+    // app/api/ai/opportunities/route.ts, and the same reason it is logged: the
+    // member's message cannot carry what is needed to diagnose it, and this
+    // one costs them a whole interview to reach.
+    console.error("grill: brief did not parse", {
+      truncated: result.truncated,
+      outputTokens: result.usage.outputTokens,
+      textLength: result.text.length,
+      answersGiven: messages.filter((m) => m.role === "user").length - 1,
+    });
+
     return NextResponse.json(
-      { ok: false, error: "Couldn't put the brief together. Please try again." },
+      {
+        ok: false,
+        error: result.truncated
+          ? "Your brief ran out of room before it was finished. This is on us — get the brief again, and tell WCCC if it happens twice."
+          : "Couldn't put the brief together. Please try again.",
+      },
       { status: 502 },
     );
   }

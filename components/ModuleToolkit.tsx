@@ -11,7 +11,14 @@ type Props = {
   initialDocuments: MemberDocument[];
 };
 
-type Generated = { title: string; content: string; createdAt: string; saved: boolean };
+type Generated = {
+  title: string;
+  content: string;
+  createdAt: string;
+  saved: boolean;
+  /** The reply hit its token ceiling, so the document stops mid-sentence. */
+  truncated: boolean;
+};
 
 // Renders a module's document generators. Each button produces a real
 // document written from the member's saved guided-step answers — see
@@ -47,7 +54,14 @@ export default function ModuleToolkit({ moduleKey, tools, initialDocuments }: Pr
           return;
         }
 
-        const doc: Generated = { ...data.document, saved: data.saved };
+        const doc: Generated = {
+          ...data.document,
+          saved: data.saved,
+          // Defaulted rather than trusted: an older deploy of the route does
+          // not send this field, and `undefined` would render the warning as
+          // absent — which is the right answer, but only by accident.
+          truncated: data.truncated === true,
+        };
         setGenerated(doc);
 
         if (data.saved) {
@@ -129,6 +143,13 @@ export default function ModuleToolkit({ moduleKey, tools, initialDocuments }: Pr
           <p className="mt-4 whitespace-pre-wrap text-sm leading-7 text-white/85">
             {generated.content}
           </p>
+
+          {generated.truncated && (
+            <p className="mt-4 text-xs text-amber-300">
+              This ran to its length limit and stops mid-sentence — generate it again
+              before you hand it to anyone.
+            </p>
+          )}
 
           {!generated.saved && (
             <p className="mt-4 text-xs text-amber-300">

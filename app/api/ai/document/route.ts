@@ -125,6 +125,21 @@ Rules that override anything above:
     return NextResponse.json({ ok: false, error: result.error }, { status: 502 });
   }
 
+  // A prose document that hit the ceiling is still worth having — most of it
+  // is written, and the member waited for it — so it is shown and saved rather
+  // than thrown away. But it ends mid-sentence, and a member who is about to
+  // hand this to WCCC has to know that before they do. Reported alongside
+  // `saved` rather than appended to the body: the note is about the document,
+  // not part of it, and the body is what gets copied out.
+  if (result.truncated) {
+    console.warn("document: reply hit the token ceiling", {
+      moduleKey,
+      toolKey,
+      outputTokens: result.usage.outputTokens,
+      textLength: result.text.length,
+    });
+  }
+
   const saved = await saveMemberDocument(
     userId,
     moduleKey,
@@ -143,5 +158,6 @@ Rules that override anything above:
       createdAt: new Date().toISOString(),
     },
     saved: saved.ok,
+    truncated: result.truncated,
   });
 }
