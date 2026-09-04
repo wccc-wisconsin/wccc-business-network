@@ -168,10 +168,21 @@ Rules, all of them strict:
 
   const volatilePrompt = `\n- You have ${remaining} question${remaining === 1 ? "" : "s"} left. Spend them on what matters most.`;
 
+  // 700, not 350. Raised after the first real interview on the deployed site
+  // produced a fourth question that stopped mid-word ("...have you actually
+  // talked to a"). 350 looked like triple what an 80-word question needs, which
+  // is why it was chosen — but the model spends the budget on the question AND
+  // the "Suggested answer:" line, and a question that quotes the member's own
+  // figures back at them runs far longer than the rule implies.
+  //
+  // A ceiling, not a target: a shorter reply costs less whatever this says, so
+  // the failure mode of too small (a question that stops mid-word, in front of
+  // the member) is strictly worse than the failure mode of too large (a few
+  // hundredths of a cent). Same reasoning as app/api/ai/opportunities/route.ts.
   const result = await callClaude(
     { stable: stablePrompt, volatile: volatilePrompt },
     messages,
-    350,
+    700,
     "grill",
   );
 
@@ -238,10 +249,19 @@ Use 2-4 risks and 3-5 nextSteps. Every string is plain prose with no markdown.${
   // Not cached: the brief is written once at the end of an interview, and its
   // prompt differs from askNextQuestion's from the first line, so there is no
   // shared prefix to hit anyway.
+  // 2200, not 1100. The first real brief on the deployed site ran out of room
+  // and the member got nothing back for a three-answer interview.
+  //
+  // 1100 was sized against the prose in the brief. What it missed is that this
+  // reply is JSON carrying up to 5 key factors, 4 blind spots, 4 risk/mitigation
+  // pairs and 5 step/timeframe pairs — roughly twenty strings plus their keys,
+  // braces and quoting — and that a bilingual member's brief is longer again.
+  // A brief cut off mid-string does not parse, so the member loses the whole
+  // interview rather than getting a shorter brief.
   const result = await callClaude(
     systemPrompt,
     appendUserTurn(messages, "That's everything. Write my decision brief now."),
-    1100,
+    2200,
     "grill-brief",
   );
 
