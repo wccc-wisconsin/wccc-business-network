@@ -232,6 +232,14 @@ ${formatCatalogForPrompt(catalog)}`;
   // mode of too small is a dead feature and the failure mode of too large is a
   // few tenths of a cent. max_tokens is a ceiling, not a target — a shorter
   // reply costs less regardless of what this says.
+  //
+  // 2400, not 1200. Refresh was run on the deployed site on 2026-09-04 and hit
+  // the ceiling again: the member saw "the list ran long and got cut off". The
+  // arithmetic above was right about the shape and wrong about the size — the
+  // prompt asks for "one sentence" per field and the model writes 40-50 words,
+  // so five results run roughly double the estimate this was built on. Raised
+  // on the same reasoning that set it the first time, with the measurement
+  // instead of the estimate.
   // Appended rather than folded in: for an English-speaking member the stable
   // half stays byte-identical to what every other member sends, which is one
   // shared cache entry across the whole membership. A language preference
@@ -239,7 +247,7 @@ ${formatCatalogForPrompt(catalog)}`;
   const result = await callClaude(
     { stable: languageDirective ? `${SELECTION_RULES}\n\n${languageDirective}` : SELECTION_RULES },
     [{ role: "user", content: userPrompt }],
-    1200,
+    2400,
     "opportunities",
   );
 
