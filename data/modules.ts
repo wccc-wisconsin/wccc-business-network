@@ -80,6 +80,56 @@ export type ModuleTool = {
   brief: string;
 };
 
+/**
+ * The one tool every guided module carries.
+ *
+ * Defined once and shared rather than copied into seven `tools` arrays: the
+ * brief is the whole behaviour, and seven copies would drift the first time one
+ * was edited. `findTool` resolves by module *and* key, so the same key on every
+ * module is unambiguous, and documents are already stored per module — a member
+ * working through Capital produces a brief about Capital.
+ *
+ * Why it exists: a member's situation is already in the portal — their
+ * snapshot, their confirmed facts, the steps they have written, the decisions
+ * they have worked through. Asking them to retype all of that into an email
+ * before WCCC can help contradicts the thing the whole portal is for. This
+ * turns what is already known into a page a staff member can act on.
+ *
+ * It deliberately does NOT name a WCCC program, event or partner as the answer.
+ * Nothing in the reference material lists what WCCC currently offers, and a
+ * brief telling a member to "ask about the mentorship program" would be
+ * inventing a perk for staff to then disappoint them about. It describes the
+ * kind of help needed and leaves matching it to the person reading.
+ */
+const SUPPORT_BRIEF_TOOL: ModuleTool = {
+  key: "wccc-support-brief",
+  title: "Your WCCC Support Brief",
+  description: "A one-page summary of where you are and what you need — to hand to WCCC.",
+  brief: `Write a one-page brief this member can hand to a WCCC staff member, so that person can help them without an hour of questions first. Write it in the member's own first person ("I run...", "I need..."), because they are the one handing it over.
+
+Use these headings exactly, each a short paragraph or a few bullets:
+
+**Where I am** - the business, how long it has been running, its stage, and the priority they chose.
+
+**What I am working on right now** - drawn from the guided steps they have actually answered in this module.
+
+**What I already have in place** - only things they stated. This section exists so nobody wastes their time re-advising them on something already done.
+
+**Where I am stuck** - the specific blockers, in their own words. This is the most important section: be concrete, and do not soften it into vagueness.
+
+**Open questions I still need answered** - anything they flagged as unsure, and anything they were told to confirm with an agency. Name the agency where the reference material carries it.
+
+**How WCCC could help** - describe the KIND of help that would move them forward: an introduction, a referral to a named public body, help preparing something, someone to review a document. Do NOT name a WCCC program, event, perk or partner - you do not have a list of what WCCC currently runs, and inventing one sets up a disappointment. Say what would help; let the reader match it.
+
+Rules for this document specifically:
+- Every line must trace to something the member actually said. If a section has nothing behind it, write one line saying they have not covered it yet rather than filling it.
+- No invented figures, dates, credentials or history.
+- Do not flatter the business or add encouragement. A staff member reading twenty of these needs signal, not warmth.
+- End with one line saying this was generated from their own answers in the portal, and that they should edit anything that no longer reflects their situation before sending it.
+
+Under 450 words.`,
+};
+
 export type BusinessModule = {
   key: string;
   icon: string;
@@ -216,6 +266,7 @@ export const businessModules: BusinessModule[] = [
         description: "The terms you should be putting in front of customers, in plain language.",
         brief: `Draft a plain-language terms sheet this owner could attach to a quote or invoice, built from how they said they get paid and what they sell. Cover: what is included and excluded, payment timing and method, deposit, cancellation and rescheduling, and what happens if the customer changes the scope. Write it in short numbered clauses a customer will actually read, not legal boilerplate. Where their answers show a gap that has probably already cost them money — no deposit, no cancellation window — flag it in one sentence before the clause. End with a single line stating this is a starting point to have reviewed, not legal advice, and that a Wisconsin attorney should see it before it's used on anything substantial. Under 450 words.`,
       },
+      SUPPORT_BRIEF_TOOL,
     ],
     phases: [
       {
@@ -363,6 +414,7 @@ export const businessModules: BusinessModule[] = [
         description: "A simple cadence so quotes and enquiries stop falling through the cracks.",
         brief: `Design a lightweight follow-up system for this business, based on how they said they currently track sales and get paid. Give a numbered sequence of contact points after an initial enquiry or quote (timing plus what to say at each), sized to a working owner rather than a sales team. Then give a 3-line description of the simplest way to track it given the tools they already mentioned — if they said spreadsheet, build it around a spreadsheet, don't sell them software. Note plainly if their current setup would lose track of a lead. Under 400 words.`,
       },
+      SUPPORT_BRIEF_TOOL,
     ],
     // Second full guided-steps template after Launch — same shape (3
     // phases, 6 steps), scoped to Revenue's actual job: get found, get the
@@ -504,6 +556,7 @@ export const businessModules: BusinessModule[] = [
         description: "The three numbers you named, turned into a review you can actually hold.",
         brief: `Design a monthly numbers review for this owner around the metrics they said they'd want to see. For each metric: where the figure comes from given the tools they already use, what a healthy direction looks like for a business like theirs, and the one decision it should inform. If they named a metric they currently can't pull, say plainly what would have to change to make it available, and give an interim proxy they can get today. Then give a 30-minute agenda for the review itself, sized for one person. Do not invent benchmark figures for their industry — if a healthy range depends on data you don't have, say what to compare against instead. Under 450 words.`,
       },
+      SUPPORT_BRIEF_TOOL,
     ],
     phases: [
       {
@@ -650,6 +703,7 @@ export const businessModules: BusinessModule[] = [
         description: "Your ask, written the way a lender reads it.",
         brief: `Write a one-page funding request for this business using the amount, use of funds, and repayment capacity they described. Structure: the ask in one sentence with the figure; what the money buys, itemised; what it changes about the business; how it gets repaid, referencing what they said the business could absorb monthly; and why this owner specifically. Use only figures the member gave you — if a number needed to make the case is missing, leave a clearly marked blank like [monthly revenue] rather than estimating it. Write it in the register of a person who runs the business, not a consultant. End with the two questions a lender is most likely to ask given the gaps in what they've told you. Under 450 words.`,
       },
+      SUPPORT_BRIEF_TOOL,
     ],
     phases: [
       {
@@ -767,6 +821,7 @@ export const businessModules: BusinessModule[] = [
         description: "A rule for deciding which bids are worth your time — before you start writing.",
         brief: `Build a go/no-go scorecard this owner can apply to a solicitation in fifteen minutes, using the capacity, cash position and certifications they described. Give 8-10 criteria as questions with a clear pass/fail or scored answer — capacity against the contract size, payment terms against their float, certification and insurance requirements against what they hold, whether they know the buyer, whether the incumbent is beatable. Weight the ones that should be automatic disqualifiers and say so. Then give the decision rule: what score means bid, what means partner or subcontract instead, what means walk away. Reference their own stated limits — the largest job they said they could take, the float they said they could cover — rather than generic thresholds. Under 450 words.`,
       },
+      SUPPORT_BRIEF_TOOL,
     ],
     phases: [
       {
@@ -873,6 +928,7 @@ export const businessModules: BusinessModule[] = [
         description: "The case for and against the move you're considering, on one page.",
         brief: `Write a feasibility brief for the specific expansion this member is weighing. Sections: what they're proposing, in their own terms; what has to be true for it to work, as a list of testable conditions rather than hopes; what the evidence they gave actually supports and where it runs out; the money — start-up cost, months to break even, and where the funding comes from, using only figures they provided; and what they'd give up by doing it, including their own time. Close with the three cheapest tests they could run in the next 60 days to reduce the biggest unknown before committing capital. Be direct where their own answers undercut the case — an expansion built on a base they described as unprofitable or undocumented should hear that plainly. Under 550 words.`,
       },
+      SUPPORT_BRIEF_TOOL,
     ],
     phases: [
       {
@@ -981,6 +1037,7 @@ export const businessModules: BusinessModule[] = [
         description: "What has to be true before you can hand this over, in sequence.",
         brief: `Write a succession outline for this business from what the member described about their timeline, their preferred path and their successor. Cover: where the business is dependent on them personally and what would have to be transferred or documented for each; the state of the records and what a buyer or successor would need to see; the relationships that sit with them rather than the business, and how those move; and a rough sequence with timeframes working back from the timeline they named. Where they've said family is involved but conversations haven't happened, put that first — it determines everything after it. Name the advisers this needs (attorney, accountant, valuation professional) and what each one is for. Be clear that valuation, tax treatment and the structure of any transfer are decisions for those professionals, not this document. Under 550 words.`,
       },
+      SUPPORT_BRIEF_TOOL,
     ],
     phases: [
       {
