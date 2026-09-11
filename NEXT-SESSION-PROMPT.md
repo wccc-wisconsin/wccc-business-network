@@ -11,8 +11,10 @@ budgets were found to be too small, and the fixes are pushed.**
 
 ## 2026-09-11 — pre-meeting run, read this before the section below
 
-Ran the demo pre-flight on the live site before a WCCC board meeting. Fixed and
-handed to the user to push:
+Ran the demo pre-flight on the live site before a WCCC board meeting. Fixed,
+pushed as `cec4d87`, and **confirmed on the live site** the same afternoon: a
+four-answer grill brief finished (~32s), the Licences & Permits Action List
+finished (~25s), and the Coach, documents and Support Brief show no markdown.
 
 - **Markdown shown literally** — `**` and `#` in Coach replies and toolkit
   documents, not only the Support Brief. Resolved the open choice below by
