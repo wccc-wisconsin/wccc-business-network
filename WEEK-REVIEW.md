@@ -216,3 +216,75 @@ invent what was said.
    rebuilt as real per-county loan funds
 
 Full technical detail is in `ROADMAP.md` and `NEXT-SESSION-PROMPT.md`.
+
+---
+
+# Since then — 29 August to 4 September 2026
+
+**In one line:** we used the portal the way a member would, for the first time,
+and found that three of its newest features had never actually worked.
+
+## What happened
+
+The three tools built most recently — the Decision Grill, the WCCC Support
+Brief, and the answer ratings — had been written, tested and deployed, but not
+once used on the live site by a person. On 4 September we sat down and used
+them.
+
+The Decision Grill failed. A member names a decision, answers three questions,
+and asks for the written brief they came for. The questioning worked. The brief
+did not: it came back as an error, and the member lost the whole conversation.
+
+## The cause, in three places
+
+The assistant is given a budget for how long an answer may run. In three
+separate features that budget had been guessed rather than measured, and all
+three guesses were too low:
+
+- **The Decision Grill's questions** stopped mid-word. The fourth question read
+  "...have you actually talked to a" and simply ended.
+- **The Decision Grill's brief** ran past its limit and was cut off. Because the
+  brief arrives in a structured format, a cut-off one cannot be read at all — so
+  the member got nothing rather than a shorter brief.
+- **Funding & Programs** did the same thing when a member pressed "Refresh
+  matches", which is how we found the third one.
+
+All three limits have been raised. They are ceilings, not targets — a shorter
+answer still costs less — so the extra room costs fractions of a cent and buys
+features that finish what they start.
+
+## What a member notices
+
+- Ask the Decision Grill for a brief and you get one: a recommendation, what
+  decides it, the blind spots the questioning surfaced, the risks with something
+  to do about each, and dated next steps. It saves to the account and is there
+  on the next visit.
+- Press "Refresh matches" on funding and the list comes back instead of an
+  apology.
+- Rate an answer and it records. That had never been done before either.
+
+## The uncomfortable part, said plainly
+
+None of this was caught by our tests. There are 272 of them, they were green
+before these failures and green after, and they would have stayed green while a
+member sat looking at an error. They pass because they use stand-ins rather than
+calling the AI for real.
+
+Six failures now, across two months, and a person looking at a screen found
+every single one. None were the AI being wrong, and none were the reference
+material. All six were the plumbing around it: an answer cut off, a reply left
+blank, good results thrown away over one bad field.
+
+The practical consequence, and the thing to hold us to: **before anything is
+shown to a member or an audience, someone has to have used it.** Not reviewed
+it, not tested it — used it.
+
+## Still open
+
+- The Support Brief prints its headings with stray `**` marks around them. The
+  writing underneath is right; the formatting is not, and it shows on the one
+  page a member is meant to hand to WCCC.
+- The remaining document generators and the AI Coach still have not been run on
+  the live site.
+- How a finished Support Brief actually reaches WCCC is still undecided. There
+  is no email anywhere in the portal today.
