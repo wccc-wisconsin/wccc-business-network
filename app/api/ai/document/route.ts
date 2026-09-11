@@ -19,10 +19,22 @@ import { callClaude } from "@/lib/ai";
 
 /**
  * Bounded so generation reliably finishes inside the serverless function
- * timeout. The briefs in data/modules.ts all cap their output well below this;
- * this is the backstop, not the target.
+ * timeout. The briefs in data/modules.ts ask for 400-600 words; this is the
+ * backstop, not the target.
+ *
+ * 3000, not 1400. The first document generated on the live site, the Licences
+ * & Permits Action List on 2026-09-11, stopped at item five of an "under 450
+ * words" brief after only 310 words. Whatever the reason 1400 tokens bought so
+ * few words, 1400 was sized for the words and not for what the call actually
+ * spends, and the 600-word briefs were further over it still.
+ *
+ * On the timeout: that request took about 20 seconds and succeeded with no
+ * maxDuration set, so the deployed default is evidently longer than the 10
+ * seconds app/api/ai/opportunities/route.ts assumes. A reply twice as long
+ * should still fit. If one ever hangs, this route is still the first place to
+ * look — see ROADMAP.md §1.4.
  */
-const MAX_DOCUMENT_TOKENS = 1400;
+const MAX_DOCUMENT_TOKENS = 3000;
 
 export async function POST(request: NextRequest) {
   const { userId } = await auth();

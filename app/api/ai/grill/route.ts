@@ -258,10 +258,20 @@ Use 2-4 risks and 3-5 nextSteps. Every string is plain prose with no markdown.${
   // braces and quoting — and that a bilingual member's brief is longer again.
   // A brief cut off mid-string does not parse, so the member loses the whole
   // interview rather than getting a shorter brief.
+  //
+  // 4000, not 2200. On 2026-09-11 a four-answer interview on the kitchen-lease
+  // decision ran out of room at 2200 twice in a row, for a member whose profile
+  // also carries a saved decision brief. The brief grows with the number of
+  // answers and with the member context, and the model fills every list to its
+  // maximum, so a limit sized against a three-answer interview was never going
+  // to hold. The same run showed a 310-word document stopping at a 1400-token
+  // limit — more output tokens per visible word than plain prose needs — so
+  // these limits have less headroom than a word count suggests. Still a
+  // ceiling, not a target: a brief that finishes early costs no more.
   const result = await callClaude(
     systemPrompt,
     appendUserTurn(messages, "That's everything. Write my decision brief now."),
-    2200,
+    4000,
     "grill-brief",
   );
 

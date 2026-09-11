@@ -5,6 +5,7 @@ import { saveExtractedFactsAction } from "@/app/actions";
 import type { ConversationSummary } from "@/lib/appStore";
 import AnswerFeedback from "@/components/AnswerFeedback";
 import { consumeStream, type CoachMessage } from "@/lib/coachStream";
+import { toPlainText } from "@/lib/plainText";
 
 // The shape lives with the stream reader that produces it — see
 // lib/coachStream.ts. Aliased rather than renamed throughout because `Message`
@@ -473,7 +474,13 @@ export default function AICoach({ moduleKey, moduleLabel }: Props) {
             <p className="mb-1 text-[10px] font-bold uppercase tracking-[0.15em] text-white/40">
               {m.role === "user" ? "You" : "AI Coach"}
             </p>
-            {m.content}
+            {/* Line breaks kept, so a numbered list in a reply stays a list
+                rather than running together into one paragraph. Only the
+                Coach's text is cleaned of markdown — what a member typed is
+                shown exactly as they typed it. See lib/plainText.ts. */}
+            <p className="whitespace-pre-wrap">
+              {m.role === "assistant" ? toPlainText(m.content) : m.content}
+            </p>
             {/* Not offered on a reply that is still being written — asking
                 whether half an answer was useful is a question nobody can
                 answer, and the buttons would move as the text grows. */}

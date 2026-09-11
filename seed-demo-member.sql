@@ -97,12 +97,17 @@ begin
   -- Every choice value below is one the picker actually offers — a value that
   -- is not in data/facts.ts is stored happily and then ignored everywhere.
   --
+  -- The persona is a single-member LLC, not a sole proprietorship. Sole
+  -- proprietors don't file a Wisconsin annual report, but lib/deadlines.ts
+  -- doesn't check entity structure yet, so a sole-prop persona was shown one
+  -- that didn't apply to her. Changed 2026-09-11; the code fix is still open.
+  --
   -- `preferred_language` is deliberately NOT seeded. Set it yourself in the
   -- Business Snapshot to watch the bilingual feature work.
   ------------------------------------------------------------------
   insert into member_facts (member_id, fact_key, value, source, source_label, updated_at, confirmed_at)
   values
-    (v_member, 'entity_structure',   'sole-prop',                                                        'seed', 'Demo seed', now(), now()),
+    (v_member, 'entity_structure',   'single-llc',                                                       'seed', 'Demo seed', now(), now()),
     (v_member, 'formation_date',     '2025-06-15',                                                       'seed', 'Demo seed', now(), now()),
     (v_member, 'formation_state',    'wi',                                                               'seed', 'Demo seed', now(), now()),
     (v_member, 'has_employees',      'none',                                                             'seed', 'Demo seed', now(), now()),
@@ -142,8 +147,8 @@ begin
       'test',    'I ran two pop-up lunches and sold out both without advertising.'), now()),
 
     (v_member, 'launch', 'register-ein', true, jsonb_build_object(
-      'structure',  'Sole proprietor right now. I keep meaning to look at an LLC.',
-      'dfi-status', 'Not registered with WI DFI — operating under my own name.',
+      'structure',  'Single-member LLC. I switched from a sole proprietorship when I formed it in June 2025.',
+      'dfi-status', 'Yes, registered with WI DFI as an LLC in June 2025.',
       'ein-status', 'No EIN yet. I use my SSN on the few forms anyone has asked for.'), now()),
 
     (v_member, 'launch', 'licenses-permits', true, jsonb_build_object(

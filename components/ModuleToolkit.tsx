@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import type { ModuleTool } from "@/data/modules";
 import type { MemberDocument } from "@/lib/appStore";
+import { toPlainText } from "@/lib/plainText";
 
 type Props = {
   moduleKey: string;
@@ -133,7 +134,9 @@ export default function ModuleToolkit({ moduleKey, tools, initialDocuments }: Pr
             <h3 className="font-serif text-lg font-bold text-white">{generated.title}</h3>
             <button
               type="button"
-              onClick={() => copy(generated.content)}
+              // The cleaned text, not the stored one: the clipboard copy is the
+              // one that gets handed to WCCC. See lib/plainText.ts.
+              onClick={() => copy(toPlainText(generated.content))}
               className="rounded-full border border-[#d7a84d]/40 px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.12em] text-[#d7a84d] transition hover:bg-[#d7a84d]/10"
             >
               {copied ? "Copied" : "Copy"}
@@ -141,7 +144,7 @@ export default function ModuleToolkit({ moduleKey, tools, initialDocuments }: Pr
           </div>
 
           <p className="mt-4 whitespace-pre-wrap text-sm leading-7 text-white/85">
-            {generated.content}
+            {toPlainText(generated.content)}
           </p>
 
           {generated.truncated && (
@@ -179,7 +182,7 @@ export default function ModuleToolkit({ moduleKey, tools, initialDocuments }: Pr
                   </span>
                 </div>
                 <p className="mt-2 whitespace-pre-wrap text-xs leading-6 text-white/70">
-                  {doc.content}
+                  {toPlainText(doc.content)}
                 </p>
               </div>
             ))}

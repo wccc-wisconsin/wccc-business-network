@@ -11,6 +11,7 @@ import {
   decisionStarters,
 } from "@/data/decisions";
 import AnswerFeedback from "@/components/AnswerFeedback";
+import { toPlainText } from "@/lib/plainText";
 
 type Message = { role: "user" | "assistant"; content: string };
 
@@ -205,7 +206,7 @@ export default function DecisionGrillPanel({ initialDecisions }: Props) {
               <p className="mb-1 text-[10px] font-bold uppercase tracking-[0.15em] text-white/40">
                 {m.role === "user" ? (i === 0 ? "Your decision" : "You") : "The Grill"}
               </p>
-              {m.content}
+              {m.role === "assistant" ? toPlainText(m.content) : m.content}
             </div>
           ))}
           {pendingPhase === "question" && <p className="text-xs text-white/40">Thinking…</p>}

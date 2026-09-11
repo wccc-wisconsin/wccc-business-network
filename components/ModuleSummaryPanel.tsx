@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { toPlainText } from "@/lib/plainText";
 
 type Summary = { title: string; content: string; updatedAt: string } | null;
 
@@ -59,7 +60,7 @@ export default function ModuleSummaryPanel({ moduleKey, defaultTitle, initialSum
       {error && <p className="mt-3 text-xs font-semibold text-red-400">{error}</p>}
 
       {summary ? (
-        <p className="mt-4 whitespace-pre-line text-sm leading-6 text-white/80">{summary.content}</p>
+        <p className="mt-4 whitespace-pre-line text-sm leading-6 text-white/80">{toPlainText(summary.content)}</p>
       ) : (
         <p className="mt-4 text-sm text-white/50">
           Answer at least one step above, then generate a short saved summary from what you&apos;ve written.
