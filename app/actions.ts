@@ -17,6 +17,7 @@ import { assessmentQuestions, computeAssessment, profileQuestions } from "@/data
 import { factDefinition, isValidFactValue } from "@/data/facts";
 import { isExtractableFact } from "@/lib/factExtraction";
 import { factWritesFromAnswers } from "@/lib/carryOver";
+import { promptFactKeys, promptFactWrites, type PromptSurface } from "@/lib/pointOfNeed";
 
 // Shared result shape for the useActionState-driven forms below (Register,
 // Enroll, Check in) so a failed Supabase write can show the member an actual
@@ -292,6 +293,55 @@ export async function saveExtractedFactsAction(
     return { ok: false, error: "Couldn't save those to your profile. Please try again." };
   }
 
+  revalidatePath("/dashboard");
+  return { ok: true, error: null };
+}
+
+/**
+ * Saves the facts a member answered inline on the Deadlines list or under
+ * Funding & Programs (components/FactPrompt.tsx).
+ *
+ * Same store and same keys as the Snapshot — `upsertMemberFacts` and the
+ * catalog in data/facts.ts — so an answer given here is the answer everywhere
+ * facts are read, and the Snapshot shows it filled in the next time it opens.
+ * What differs is only the provenance label, which names where the member was
+ * when they answered.
+ *
+ * The surface decides which keys are read: lib/pointOfNeed.ts lists them, and
+ * anything else on the form is ignored. Blanks are skipped, not rejected, so a
+ * member who answers one of three questions keeps that one and is asked the
+ * other two next time. A submission with nothing valid on it is told so
+ * rather than silently doing nothing, which is what an empty Save otherwise
+ * looks like.
+ */
+export async function saveFactsAtPointOfNeedAction(
+  _prevState: FormState,
+  formData: FormData,
+): Promise<FormState> {
+  const { userId } = await auth();
+  if (!userId) redirect("/login");
+
+  const surface = fieldValue(formData, "surface");
+  if (!(surface in promptFactKeys)) {
+    return { ok: false, error: "Something went wrong. Refresh the page and try again." };
+  }
+
+  const answers: Record<string, string> = {};
+  for (const key of promptFactKeys[surface as PromptSurface]) {
+    answers[key] = fieldValue(formData, `fact_${key}`);
+  }
+
+  const writes = promptFactWrites(surface as PromptSurface, answers);
+  if (writes.length === 0) {
+    return { ok: false, error: "Pick an answer first, or skip for now." };
+  }
+
+  const result = await upsertMemberFacts(userId, writes);
+  if (!result.ok) {
+    return { ok: false, error: "Couldn't save that — please try again in a moment." };
+  }
+
+  // Both lists read facts at render, so the dashboard is what has to refresh.
   revalidatePath("/dashboard");
   return { ok: true, error: null };
 }

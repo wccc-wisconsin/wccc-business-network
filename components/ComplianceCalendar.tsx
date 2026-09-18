@@ -1,6 +1,8 @@
 import { LAST_VERIFIED, complianceItems, daysUntil } from "@/data/compliance";
 import { deadlinesForMember, type MemberDeadline } from "@/lib/deadlines";
+import { deadlineNarrowing, missingPromptFacts } from "@/lib/pointOfNeed";
 import type { MemberFact } from "@/lib/appStore";
+import FactPrompt from "@/components/FactPrompt";
 
 /**
  * Upcoming deadlines for one member — the shared Wisconsin/federal filing
@@ -19,6 +21,11 @@ import type { MemberFact } from "@/lib/appStore";
  * Rows the member's facts couldn't settle are still shown, carrying the same
  * "who this is for" line they always had. See lib/deadlines.ts for why the
  * uncertain case errs toward showing.
+ *
+ * The facts that do the narrowing are asked for here, at the top of the list,
+ * when they are missing — not on the Snapshot form a member may never reach.
+ * Only the missing ones are asked, and answering (or skipping) never hides a
+ * row that would otherwise show. See lib/pointOfNeed.ts.
  */
 
 /** Below this many remaining items, the data needs another year added. */
@@ -86,8 +93,8 @@ function DeadlineRow({ item, days }: { item: MemberDeadline; days: number }) {
           ignore the hedge. */}
       {item.certainty === "unknown" && (
         <p className="mt-2 text-xs leading-5 text-slate-500">
-          Shown because we don&apos;t yet know whether this one is yours. Fill in your Business
-          Snapshot and it&apos;ll drop off if it isn&apos;t.
+          Shown because we don&apos;t yet know whether this one is yours. Answer the questions
+          above, or update your Business Snapshot, and it&apos;ll drop off if it isn&apos;t.
         </p>
       )}
 
@@ -110,11 +117,14 @@ function DeadlineRow({ item, days }: { item: MemberDeadline; days: number }) {
 
 export default function ComplianceCalendar({ facts }: Props) {
   const now = new Date();
-  const { upcoming, lapsed, filteredOut, totalUpcoming } = deadlinesForMember(
-    facts,
-    now,
-    HOW_MANY_SHOWN,
-  );
+  const { upcoming, lapsed, totalUpcoming } = deadlinesForMember(facts, now, HOW_MANY_SHOWN);
+
+  // The questions still worth asking, and what answering them has done so far.
+  // `narrowing` counts upcoming calendar rows before and after the facts, which
+  // is the pair a member can check against the list in front of them.
+  const missing = missingPromptFacts("deadlines", facts);
+  const narrowing = deadlineNarrowing(facts, now);
+  const narrowed = narrowing.shown < narrowing.total;
 
   // Counted against the shared calendar only. Profile dates are the member's
   // own and say nothing about whether WCCC's list needs next year's dates.
@@ -123,9 +133,22 @@ export default function ComplianceCalendar({ facts }: Props) {
 
   return (
     <div>
+      {missing.length > 0 && (
+        <FactPrompt
+          surface="deadlines"
+          questions={missing}
+          tone="light"
+          intro={
+            narrowed
+              ? "Answer these and the list below narrows further to the filings that are yours."
+              : "Answer these and the list below narrows to the filings that are yours. Skip it and you'll see every filing, each labelled with who it's for."
+          }
+        />
+      )}
+
       <p className="text-sm leading-6 text-slate-600">
-        {filteredOut > 0
-          ? "Filing deadlines, narrowed to the ones that look like yours based on your Business Snapshot. Confirm your own dates with the agency."
+        {narrowed
+          ? "Filing deadlines, narrowed to the ones that look like yours based on your answers. Confirm your own dates with the agency."
           : "Wisconsin and federal filing deadlines. Not all of these apply to every business — each one says who it's for. Confirm your own dates with the agency."}
       </p>
 
@@ -158,13 +181,17 @@ export default function ComplianceCalendar({ facts }: Props) {
       )}
 
       {/* Filtering is stated, not silent: a member who can't tell that rows
-          were removed has no way to spot it being wrong. */}
-      {filteredOut > 0 && (
+          were removed has no way to spot it being wrong. Before-and-after on
+          the upcoming filings, so the numbers match what is on screen. */}
+      {narrowed && (
         <p className="mt-3 text-xs text-slate-500">
-          {filteredOut} filing{filteredOut === 1 ? "" : "s"} hidden because your profile says
-          {filteredOut === 1 ? " it doesn't" : " they don't"} apply to you.
+          Showing {narrowing.shown} of {narrowing.total} filings.{" "}
+          {narrowing.total - narrowing.shown === 1
+            ? "1 doesn't"
+            : `${narrowing.total - narrowing.shown} don't`}{" "}
+          apply to you, going by your answers.
           {totalUpcoming > upcoming.length &&
-            ` Showing the next ${upcoming.length} of ${totalUpcoming}.`}
+            ` Showing the next ${upcoming.length} of ${totalUpcoming} dates.`}
         </p>
       )}
 

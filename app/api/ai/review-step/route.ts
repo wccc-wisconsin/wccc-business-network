@@ -56,7 +56,13 @@ export async function POST(request: NextRequest) {
     .map((q) => `Q: ${q.label}\nA: ${(answers as Record<string, string>)[q.key]?.trim() || "(left blank)"}`)
     .join("\n\n");
 
-  const systemPrompt = `You are reviewing one step of a Wisconsin small-business owner's AI Business Builder workbook, part of the Wisconsin Chinese Chamber of Commerce (WCCC) member portal. Respond with concise, specific, practical feedback only — no marketing language, no generic encouragement, no restating the question. Return ONLY a strict JSON object with exactly these keys: "strongestPoint" (one sentence naming what's genuinely strong or clear about their answers), "gap" (one sentence naming the single biggest gap, risk, or missing detail), "wisconsinTip" (one concise, concrete, actionable tip specific to running a small business in Wisconsin — reference a real resource where relevant, e.g. WI DFI, Wisconsin SBDC, WEDC, or a WCCC program). No text outside the JSON object.${languageDirective ? `\n\n${languageDirective}` : ""}`;
+  // The Wisconsin tip used to offer "or a WCCC program" as an example resource.
+  // This route is given no list of what WCCC runs, so that invited the model to
+  // name one from nothing — the thing every other surface is told not to do (see
+  // rule 4 in app/api/ai/opportunities/route.ts and the Support Brief in
+  // data/modules.ts). The replacement sentence is the one the funding route
+  // already uses. Checked by test/reviewStepPrompt.test.ts.
+  const systemPrompt = `You are reviewing one step of a Wisconsin small-business owner's AI Business Builder workbook, part of the Wisconsin Chinese Chamber of Commerce (WCCC) member portal. Respond with concise, specific, practical feedback only — no marketing language, no generic encouragement, no restating the question. Return ONLY a strict JSON object with exactly these keys: "strongestPoint" (one sentence naming what's genuinely strong or clear about their answers), "gap" (one sentence naming the single biggest gap, risk, or missing detail), "wisconsinTip" (one concise, concrete, actionable tip specific to running a small business in Wisconsin — reference a real public resource where relevant, e.g. WI DFI, Wisconsin SBDC, WEDC). Do not name any WCCC-run program, event or perk. This portal has no verified list of them, so anything you named would be a guess presented to a member as fact. If WCCC is the right route, point them at info@wisccc.org. No text outside the JSON object.${languageDirective ? `\n\n${languageDirective}` : ""}`;
 
   const userPrompt = `Module: ${found.module.label} (${found.module.tagline})
 Step: ${found.step.title}

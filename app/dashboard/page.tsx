@@ -17,6 +17,7 @@ import {
   recordMemberSignIn,
 } from "@/lib/appStore";
 import { SAVED_DECISIONS_LIMIT } from "@/data/decisions";
+import { fundingNarrowing, missingPromptFacts } from "@/lib/pointOfNeed";
 import AICoach from "@/components/AICoach";
 import BusinessAssessmentCard from "@/components/BusinessAssessmentCard";
 import MemberProfileCard from "@/components/MemberProfileCard";
@@ -101,6 +102,14 @@ export default async function DashboardPage() {
     Object.entries(facts).map(([key, fact]) => [key, fact.value]),
   );
   const priorityModuleKey = businessAssessment?.priorityModuleKey ?? null;
+
+  // What the Funding panel should ask for, and what the member's answers have
+  // already done to the Wisconsin list. Resolved here because the panel is a
+  // client component and the filter (lib/wisconsinFit.ts) reads the verified
+  // catalog, which belongs on the server. The Deadlines panel does the same
+  // for itself, being a server component.
+  const fundingMissingFacts = missingPromptFacts("funding", facts);
+  const wisconsinFit = fundingNarrowing(facts, new Date());
 
   // Which roadmap(s) to show, from the journey picked at onboarding. The
   // matching lives in data/modules.ts (shared with the per-module detail page)
@@ -423,7 +432,11 @@ export default async function DashboardPage() {
         </div>
 
         <div id="funding">
-          <OpportunitiesPanel initialOpportunities={memberOpportunities} />
+          <OpportunitiesPanel
+            initialOpportunities={memberOpportunities}
+            missingFacts={fundingMissingFacts}
+            wisconsinFit={wisconsinFit}
+          />
         </div>
 
         <div id="community">

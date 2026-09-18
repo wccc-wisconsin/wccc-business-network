@@ -16,7 +16,7 @@ four-question sign-up, a member gets:
 | --- | --- |
 | **Business Snapshot** | Seven questions that set their stage and top priority |
 | **Roadmap** | Seven stages (Launch → Legacy) of guided steps, all open to every member |
-| **Deadlines** | Wisconsin and federal filings, narrowed to the ones that apply to them |
+| **Deadlines** | Wisconsin and federal filings, narrowed to the ones that apply to them — the few facts that do the narrowing are asked right there, only if missing |
 | **AI Coach** | Short answers that already know their business |
 | **Decision Grill** | Hard questions about a decision, then a written brief |
 | **Funding & Programs** | Up to five real funding or support matches, with why each fits |
@@ -143,8 +143,8 @@ costs a member a wasted application.
   use stand-ins for the AI. Problems with real replies (for example, a reply cut
   off by its length limit) have only been caught by people using the live site.
 - The step review and module summary don't use the shared member context or the
-  verified reference list. The step review's prompt still suggests naming "a WCCC
-  program", which conflicts with the rule above and should be removed.
+  verified reference list, so their Wisconsin tips rely on the model's general
+  knowledge of well-known public bodies (WI DFI, SBDC, WEDC).
 - Federal grants rarely appear in Funding & Programs for early-stage members:
   most don't fit, and the model has much less detail about them than about the
   Wisconsin programs.

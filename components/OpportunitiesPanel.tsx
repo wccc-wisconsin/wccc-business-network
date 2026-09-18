@@ -2,6 +2,9 @@
 
 import { useState, useTransition } from "react";
 import type { Opportunity } from "@/lib/appStore";
+import type { FactDefinition } from "@/data/facts";
+import type { Narrowing } from "@/lib/pointOfNeed";
+import FactPrompt from "@/components/FactPrompt";
 
 type Matches = { items: Opportunity[]; generatedAt: string } | null;
 
@@ -28,6 +31,13 @@ type Sources = {
 
 type Props = {
   initialOpportunities: Matches;
+  /**
+   * The facts the Wisconsin filter still lacks, resolved by the page from the
+   * member's profile (lib/pointOfNeed.ts). Empty means nothing to ask.
+   */
+  missingFacts: FactDefinition[];
+  /** Verified Wisconsin programs before and after the member's facts. */
+  wisconsinFit: Narrowing;
 };
 
 const typeStyles: Record<string, string> = {
@@ -77,7 +87,11 @@ function daysUntil(value: string) {
 // catalog, and every card links out to its own source so a member can check it.
 // Regenerating replaces the previous list (saveMemberOpportunities overwrites,
 // same as the module summary pattern).
-export default function OpportunitiesPanel({ initialOpportunities }: Props) {
+export default function OpportunitiesPanel({
+  initialOpportunities,
+  missingFacts,
+  wisconsinFit,
+}: Props) {
   const [matches, setMatches] = useState<Matches>(initialOpportunities);
   const [sources, setSources] = useState<Sources>(null);
   const [error, setError] = useState<string | null>(null);
@@ -124,6 +138,42 @@ export default function OpportunitiesPanel({ initialOpportunities }: Props) {
           {isPending ? "Finding…" : matches ? "Refresh matches" : "Find matches"}
         </button>
       </div>
+
+      {/* The two facts that screen the Wisconsin entries, asked here where the
+          answer changes the list, and only while they are missing. Saving
+          revalidates the dashboard, so the counts below update without a
+          generation — the filter runs in code, not in the model. */}
+      {missingFacts.length > 0 && (
+        <div className="mt-4">
+          <FactPrompt
+            surface="funding"
+            questions={missingFacts}
+            tone="dark"
+            intro="Answer these and the Wisconsin programs are narrowed to the ones that can actually help you. Skip it and every verified program stays in the list."
+          />
+        </div>
+      )}
+
+      {/* Before-and-after, stated whenever the member's answers have been
+          applied. When nothing was ruled out that is said too — otherwise a
+          member who just answered two questions sees no sign it did anything. */}
+      {wisconsinFit.shown < wisconsinFit.total ? (
+        <p className="mt-3 text-xs text-white/45">
+          Showing {wisconsinFit.shown} of {wisconsinFit.total} Wisconsin programs.{" "}
+          {wisconsinFit.total - wisconsinFit.shown === 1
+            ? "1 doesn't"
+            : `${wisconsinFit.total - wisconsinFit.shown} don't`}{" "}
+          apply to you, going by your answers.
+        </p>
+      ) : (
+        missingFacts.length === 0 &&
+        wisconsinFit.total > 0 && (
+          <p className="mt-3 text-xs text-white/45">
+            All {wisconsinFit.total} verified Wisconsin programs are open to you, going by your
+            answers.
+          </p>
+        )
+      )}
 
       {error && <p className="mt-3 text-xs font-semibold text-red-400">{error}</p>}
 

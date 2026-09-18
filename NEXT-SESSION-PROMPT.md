@@ -9,6 +9,30 @@ budgets were found to be too small, and the fixes are pushed.**
 
 ---
 
+## 2026-09-18 — facts asked where they pay off
+
+The five facts that narrow two lists are now asked inline, only when missing:
+`formation_date`, `formation_state`, `has_employees`, `pays_estimated_tax` at
+the top of the Deadlines list, and `ownership_basis`, `bank_account` under
+Funding & Programs. `lib/pointOfNeed.ts` (pure: which questions are still
+missing, before-and-after counts, the fact writes), `components/FactPrompt.tsx`
+(one Save, one Skip; skip is remembered in localStorage per list),
+`saveFactsAtPointOfNeedAction` in `app/actions.ts` (validates, then the same
+`upsertMemberFacts` the Snapshot uses, then revalidates the dashboard). Both
+filters are untouched. 31 tests, mutation-tested. Both lists now say "Showing
+1 of 8 filings. 7 don't apply to you" on upcoming rows rather than the old
+"9 filings hidden", which counted past rows too.
+
+Not matching the design notes: `formation_state` is a fourth deadline input
+(the filter reads it — a foreign entity files 31 March whatever its quarter);
+`seller_permit` is not read by anything yet. Golden Lotus narrows Funding to
+**8 of 8**, not 8 → 6 — minority-woman-owned with a bank account qualifies for
+both gated entries; 6 is what "none of these" plus "not yet" gives.
+
+Not verified: the save round trip on the live site (needs a signed-in session;
+the render, the counts and Skip were checked on a local throwaway page).
+`.env.local` and that page were removed afterwards — do not look for them.
+
 ## 2026-09-11 — pre-meeting run, read this before the section below
 
 Ran the demo pre-flight on the live site before a WCCC board meeting. Fixed,
@@ -26,6 +50,13 @@ finished (~25s), and the Coach, documents and Support Brief show no markdown.
 - **Documents 1400 → 3000.** Licences & Permits Action List stopped at item 5.
 - **Demo persona is now a single-member LLC**, on the live account and in
   `seed-demo-member.sql`.
+- **"Review my answers" no longer suggests "a WCCC program"** as a resource to
+  cite. It now carries the funding route's rule: name none, point at
+  info@wisccc.org. `test/reviewStepPrompt.test.ts` reads the prompt from the
+  route source and also checks no AI route lists a WCCC program in an "e.g."
+  list. Still open: review-step and summarize-module get neither the shared
+  member context nor the verified reference list.
+- **`HOW-IT-WORKS.md`** added — a reviewer-facing overview for WCCC members.
 
 Found and **not** fixed:
 
