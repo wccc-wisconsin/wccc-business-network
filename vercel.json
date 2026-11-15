@@ -4,5 +4,12 @@
       "path": "/api/cron/refresh-grants",
       "schedule": "0 9 * * *"
     }
+  ],
+  "redirects": [
+    {
+      "source": "/(.*)",
+      "destination": "https://connect.wisccc.org",
+      "permanent": true
+    }
   ]
 }
